@@ -16,6 +16,7 @@ const OUT = "public/icons.svg";
 const SOURCE: Partial<Record<(typeof ICONS)[number], string>> = {
   auto_awesome: "star_shine",
   insights: "monitoring",
+  system_update: "mobile_arrow_down",
 };
 
 const symbols = [...ICONS].sort().map((name) => {

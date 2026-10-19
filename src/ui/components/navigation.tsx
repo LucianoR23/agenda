@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { cx } from "../cx";
 import type { IconName } from "../icons";
+import { BrandMark } from "./brand";
 import { Icon } from "./icon";
 
 export const TABS: Array<{ key: string; label: string; icon: IconName; href: string }> = [
@@ -41,7 +42,10 @@ export function TabBar({ active }: { active: string }) {
 export function Sidebar({ active }: { active: string }) {
   return (
     <nav aria-label="Secciones" className="flex w-60 flex-col gap-1 border-r border-border bg-surface p-4">
-      <span className="px-3 pb-4 font-mono text-mono tracking-[.08em] text-muted">AGENDA</span>
+      <span className="flex items-center gap-2.5 px-3 pb-4">
+        <BrandMark />
+        <span className="text-[18px] font-semibold tracking-[-.01em] text-text">Agenda</span>
+      </span>
       {TABS.map((t) => {
         const on = t.key === active;
         return (

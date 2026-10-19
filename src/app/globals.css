@@ -22,6 +22,7 @@
   --on-accent: #0E1A15;
   --accent-soft: oklch(0.82 0.08 160 / .12);
   --call: oklch(0.84 0.12 70);
+  --mark-done: #5B5F5A; /* brand mark: the block already done */
   --on-call: #1A1406;
   --call-soft: oklch(0.84 0.12 70 / .14);
   --success: oklch(0.80 0.11 150);
@@ -67,6 +68,7 @@
     --on-accent: #FFFFFF;
     --accent-soft: oklch(0.48 0.08 160 / .08);
     --call: oklch(0.52 0.12 62);
+    --mark-done: #C9C8C1; /* brand mark: the block already done */
     --on-call: #FFFFFF;
     --call-soft: oklch(0.52 0.12 62 / .10);
     --success: oklch(0.50 0.11 150);
@@ -113,6 +115,7 @@
   --on-accent: #FFFFFF;
   --accent-soft: oklch(0.48 0.08 160 / .08);
   --call: oklch(0.52 0.12 62);
+  --mark-done: #C9C8C1; /* brand mark: the block already done */
   --on-call: #FFFFFF;
   --call-soft: oklch(0.52 0.12 62 / .10);
   --success: oklch(0.50 0.11 150);

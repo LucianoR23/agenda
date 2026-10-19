@@ -2,6 +2,7 @@
 
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useQueryClient } from "@tanstack/react-query";
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiProblem } from "@/client/api";
 import type { SessionState } from "@/client/types";
@@ -57,9 +58,7 @@ function Screen({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="flex size-12 items-center justify-center rounded-[14px] bg-accent-soft text-accent">
-        <Icon name="today" size={26} />
-      </span>
+      <Image src="/icons/icon-any.svg" width={56} height={56} alt="" unoptimized priority />
       <span className="font-mono text-mono tracking-[.08em] text-muted">AGENDA</span>
     </div>
   );

@@ -50,6 +50,7 @@ export const ICONS = [
   "cloud_off",
   "sync_problem",
   "sync",
+  "system_update",
   // tabs
   "today",
   "checklist",

@@ -4,7 +4,7 @@
  * - /api is never cached here: the app keeps its own IndexedDB cache + write outbox.
  * - Web Push: shows the notification and opens the right screen on tap.
  */
-const VERSION = "agenda-v1";
+const VERSION = "agenda-v2";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const SHELL_URLS = ["/", "/tareas", "/historial", "/metricas", "/ajustes", "/icons.svg", "/icons/icon-192.png", "/manifest.webmanifest"];

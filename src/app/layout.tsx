@@ -19,7 +19,13 @@ export const metadata: Metadata = {
   title: "Agenda",
   description: "Tu día, cargado por Agenbot.",
   appleWebApp: { capable: true, title: "Agenda", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  icons: {
+    icon: [
+      { url: "/icons/favicon.svg", type: "image/svg+xml" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
