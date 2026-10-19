@@ -1,0 +1,8 @@
+# `pnpm openapi:lint` — the spec is generated; these rules don't apply to a single-user private API.
+extends:
+  - recommended
+rules:
+  info-license: off
+  tag-description: off
+  no-server-example.com: off
+  operation-4xx-response: off

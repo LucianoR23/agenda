@@ -104,3 +104,57 @@ confirmation; the default is already applied and can be changed cheaply until ST
   `block.removed_from_calendar_at` set; the UI strikes it through with "Ya no está en Google Calendar" and it still
   counts in metrics. Untouched pending blocks are deleted. If the event comes back (same `externalId`), the
   timestamp is cleared. Migration `0002_block_removed_from_calendar.sql`.
+
+## API contract (STOP 2)
+
+- **D32 — Contract source.** Zod schemas in `src/contract/` + a route catalogue (`src/contract/routes/*`) where every
+  route carries paired request/response examples. `pnpm openapi` writes `openapi.yaml` and `docs/api-examples.md`;
+  every example is validated against its schema first. CI runs `pnpm openapi:check` (fails on invalid examples or
+  stale generated files) and `pnpm openapi:lint` (Redocly). Phase 3 adds contract tests validating real responses.
+- **D33 — `orNull(schema)` instead of `.nullable()` on named schemas.** zod-to-openapi 9 drops the `null` branch of a
+  `$ref` (`Lead | null` came out as `Lead`); an explicit union emits `anyOf: [$ref, {type: null}]`. Same reason
+  for `{...X.shape}` instead of `X.extend()`.
+- **D34 — `/api/openapi.json` is compact by default** (no examples, ~115 KB vs ~320 KB) to save Agenbot tokens;
+  `?examples=true` returns the full document, identical to `openapi.yaml`.
+- **D35 — Endpoints added to the spec's list** (needed by the UI): `GET /api/auth/session` (which screen to show),
+  `POST /api/auth/pin` (change PIN), `POST /api/auth/recovery-codes` (regenerate from Ajustes, PIN-confirmed),
+  `DELETE /api/auth/passkey` (disable fingerprint), `GET /api/webhook/status`, `GET /api/export`. Device
+  rename/revoke use `/api/auth/devices/{id}`.
+- **D36 — `PUT /days/{date}` returns `{ result: created|replaced|proposed, day, proposal }`** with 201 / 200 / 202.
+  It is **agent-only** (403 for me; I edit through the granular endpoints).
+- **D37 — Draft replace uses the same merge as accepting a proposal** (match calendar blocks by `externalId`,
+  agent blocks by `id`; my tracking fields survive). It is just applied immediately.
+- **D38 — Tasks inside `PUT`.** Optional `tasks[]` syncs agent-origin tasks for that date (match by `id`, then
+  `kind`+`title`; unmatched ones deleted unless done; mine untouched). See Q6.
+- **D39 — User-created blocks** get `userOverrides` = all schedule fields: the agent can only set their tracking
+  fields while pending.
+- **D40 — "Me atrasé" (`shift`)** moves pending, unlocked `agent|user` blocks of the chosen option starting at or after
+  `fromTime`; never calendar or `sleep` blocks. ±240 min. 422 `shift_out_of_range` if a start would leave 00:00–23:59.
+  Shifts by me add `start`/`end` to `userOverrides`; by the agent they don't.
+- **D41 — `choose`** allowed in `draft` and `chosen` (switch), not in `edited`/`closed`. Both actors may call it.
+- **D42 — A new proposal does not bump `Day.version`** (the day did not change); the client learns about it from the push
+  and `pendingProposal` in `GET /days/{date}`.
+- **D43 — ETag** is the strong `"<version>"`; `If-Match` also accepts `W/"<version>"`. Body `version` is the alternative.
+- **D44 — `by-external` has no version check**: the agent always writes the latest calendar state, to every copy.
+- **D45 — Proposal diff** is computed against my chosen option: `added`, `removed`, `moved`, `changed`,
+  `keptRemovedFromCalendar`, `preservedOverrides` (agent changes that will be ignored), `dayFields`.
+- **D46 — Problem details** carry extra members: `current` (on conflicts), `retryAfterSeconds`, `remainingAttempts`.
+  PIN lockout answers **429 `locked_out`** with `Retry-After`.
+- **D47 — Weeks are Monday–Sunday (ART)** for weekly habits, `weeklyGym`, metrics and streaks.
+- **D48 — Metric definitions.** Completion = done / total blocks of the chosen option (option A if never chosen).
+  Show-up rate = (with outcome − no_show − rescheduled) / (with outcome − rescheduled). Close rate = closed_won /
+  showed up. Gym and reading counts come from the habits linked to block types `gym` / `reading` (D29).
+- **D49 — Skipped patterns** (`/agent/context`): agent blocks with the same type and start hour, skipped ≥ 3 times
+  and in ≥ 50 % of occurrences over the last 14 days.
+- **D50 — Agent vs my tasks.** The agent cannot edit or delete tasks I created, except marking them done while not done.
+- **D51 — Habit routes accept id or slug** (`/api/habits/gym/logs`).
+- **D52 — `DELETE /api/push/subscribe`** takes `{ endpoint }` in the body.
+- **D53 — Re-plans on chosen days** may send only the chosen option; the body must include its label and omitted options
+  are kept unchanged.
+
+## Open questions (STOP 2)
+
+- **[OPEN] Q6 — Tasks in a `PUT` that becomes a proposal.** Default: the checklist is applied **immediately** (it is
+  not part of the schedule); only blocks/options/day fields wait for my accept. Alternative: tasks wait too.
+- **[OPEN] Q7 — Can Agenbot `choose` for me** ("elegí la B" by chat)? Default: yes, logged as `agent`, no webhook.
+- **[OPEN] Q8 — "Me atrasé" never moves `sleep` blocks.** OK, or should it?
