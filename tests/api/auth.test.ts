@@ -68,6 +68,26 @@ describe("PIN", () => {
     expect(rows[0]).toMatchObject({ failedCount: 0, lockoutCount: 0, lockedUntil: null });
   });
 
+  it("another browser's failures don't lock my phone (global threshold 20)", async () => {
+    const { user } = await setupUser();
+    const stranger = anon();
+    await stranger.get("/api/auth/session");
+    for (let i = 0; i < 5; i++) await stranger.post("/api/auth/unlock", { pin: "000000" });
+    expect((await stranger.post("/api/auth/unlock", { pin: PIN })).status).toBe(429);
+    const phone = anon();
+    await phone.get("/api/auth/session");
+    expect((await phone.post("/api/auth/unlock", { pin: PIN })).status).toBe(200);
+    expect((await user.get("/api/habits")).status).toBe(200);
+    for (let n = 0; n < 4; n++) { // my login above reset the global count
+      const b = anon();
+      await b.get("/api/auth/session");
+      for (let i = 0; i < 5; i++) await b.post("/api/auth/unlock", { pin: "000000" });
+    }
+    const late = anon();
+    await late.get("/api/auth/session");
+    expect((await late.post("/api/auth/unlock", { pin: PIN })).body.code).toBe("locked_out"); // 20 global failures
+  });
+
   it("a new device logs in with the PIN and appears in Dispositivos; rename and revoke", async () => {
     const { user } = await setupUser();
     const laptop = client("anon");

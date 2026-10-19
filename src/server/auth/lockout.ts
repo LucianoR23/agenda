@@ -4,7 +4,8 @@ import { authAttempt, authLockout } from "../db/schema";
 import type { Ctx } from "../http/context";
 import { ApiError } from "../http/errors";
 
-export const MAX_FAILURES = 5;
+/** Per device 5 (spec); globally 20, so a stranger's guesses lock their browser but not my phone (D72). */
+export const MAX_FAILURES = { device: 5, global: 20 } as const;
 const BASE_MS = 15 * 60_000;
 const CAP_MS = 24 * 3_600_000;
 
@@ -36,7 +37,7 @@ export async function assertNotLocked(ctx: Ctx) {
 export async function failAttempt(ctx: Ctx, method: Method, detail: string): Promise<never> {
   const db = getDb();
   await db.insert(authAttempt).values({ method, success: false, deviceKey: ctx.deviceKey || null, deviceId: ctx.sessionDevice?.id ?? null, ip: ctx.ip, userAgent: ctx.userAgent, at: ctx.now });
-  let remaining = MAX_FAILURES;
+  let remaining: number = MAX_FAILURES.device;
   let lockedUntil: Date | null = null;
   for (const k of keys(ctx)) {
     const [row] = await db
@@ -47,12 +48,12 @@ export async function failAttempt(ctx: Ctx, method: Method, detail: string): Pro
         set: { failedCount: sql`${authLockout.failedCount} + 1`, lastFailedAt: ctx.now },
       })
       .returning();
-    if (row.failedCount >= MAX_FAILURES) {
+    if (row.failedCount >= MAX_FAILURES[k.scope]) {
       const count = row.lockoutCount + 1;
       const until = new Date(ctx.now.getTime() + lockDuration(count));
       await db.update(authLockout).set({ failedCount: 0, lockoutCount: count, lockedUntil: until }).where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
       if (!lockedUntil || until > lockedUntil) lockedUntil = until;
-    } else remaining = Math.min(remaining, MAX_FAILURES - row.failedCount);
+    } else remaining = Math.min(remaining, MAX_FAILURES[k.scope] - row.failedCount);
   }
   if (lockedUntil) {
     const wait = Math.ceil((lockedUntil.getTime() - ctx.now.getTime()) / 1000);

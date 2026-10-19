@@ -211,7 +211,8 @@ Resolved 2026-10-19:
 - **D70 — Absent day fields in a `PUT` are left unchanged** (`notes`, `callsSummary`, `weeklyGym`).
 - **D71 — The agent can't write past days**: a `PUT` for a past date that never existed, task/habit/sleep writes for a
   past date → `409 day_closed`. Mine are allowed.
-- **D72 — Lockout counts per device and globally with the same threshold (5)**; success resets counters and the
+- **D72 — Lockout: 5 failures per device, 20 globally** (confirmed at STOP 3): someone guessing from another browser
+  locks that browser, not my phone; a distributed attack still hits the global lock. Success resets counters and the
   doubling. Setup code, PIN, recovery code, reset code and fingerprint failures all count.
 - **D73 — Undoing a linked block** (done → pending/skipped) removes the habit log only if no other done block of that
   type remains that day (a manual log on that same day would also be removed — accepted edge case).
