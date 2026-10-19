@@ -15,7 +15,9 @@
     "db:check": "drizzle-kit check",
     "openapi": "tsx scripts/openapi.ts",
     "openapi:check": "tsx scripts/openapi.ts --check",
-    "openapi:lint": "redocly lint openapi.yaml"
+    "openapi:lint": "redocly lint openapi.yaml",
+    "icons": "tsx scripts/icons.ts",
+    "icons:check": "tsx scripts/icons.ts --check"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
@@ -29,6 +31,8 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@material-symbols/svg-400": "^0.48.0",
+    "@playwright/test": "^1.64.1",
     "@redocly/cli": "^2.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",

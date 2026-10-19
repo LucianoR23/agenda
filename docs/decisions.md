@@ -185,3 +185,14 @@ Resolved 2026-10-19:
 - **D59 — Background jobs run in-process** (one container): a loop started from Next's `instrumentation.ts` every 30 s
   delivers the webhook outbox, the 10-min call reminders and the sleep reminder. Only close-day is an external
   Coolify scheduled task, as specified.
+
+## Design: Sistema Calma (see docs/design.md)
+
+- **D60 — "Armar mi día"**: `POST /api/days/{date}` (user) creates the day with one empty option `A` ("Mi día"),
+  already `chosen`. A later agent `PUT` becomes a proposal. 409 if the day exists.
+- **D61 — Per-block reminder** `block.remind` ("Avisarme 10 min antes"), mine, default true for calls. A push is sent
+  when the block is pending, `remind` is on and the device's reminder toggle is on (`drizzle/0004`).
+- **D62 — Metrics `range=year`** for the design's Semana · Mes · Año control.
+- **D63 — Icons as an SVG sprite** (`pnpm icons`, checked in CI) instead of the Material Symbols font.
+- **D64 — Theme**: system preference with dark as the base; per-device override stored client-side (localStorage).
+- **D65 — Morning-only sleep reminder** (confirmed): no bedtime nag.

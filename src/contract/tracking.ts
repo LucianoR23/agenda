@@ -122,7 +122,7 @@ const Rate = z.number().min(0).max(1).nullable();
 
 export const Metrics = z
   .strictObject({
-    range: z.enum(["week", "month"]),
+    range: z.enum(["week", "month", "year"]),
     from: LocalDate,
     to: LocalDate,
     gym: z.strictObject({

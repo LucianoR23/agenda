@@ -341,9 +341,9 @@ export const trackingRoutes: RouteDef[] = [
     path: "/api/metrics",
     tag: "Metrics",
     summary: "Metrics for a week or month",
-    description: "`week` = Monday–Sunday containing `anchor`; `month` = calendar month. Default anchor: today (ART).",
+    description: "`week` = Monday–Sunday containing `anchor`; `month` = calendar month; `year` = calendar year (Semana · Mes · Año). Default anchor: today (ART).",
     access: "agent+user",
-    query: z.strictObject({ range: z.enum(["week", "month"]), anchor: LocalDate.optional() }),
+    query: z.strictObject({ range: z.enum(["week", "month", "year"]), anchor: LocalDate.optional() }),
     responses: { 200: { description: "Metrics.", schema: Metrics } },
     exchanges: [
       {

@@ -70,7 +70,58 @@ const lauraMoved = (b: typeof lauraA) => ({
   updatedBy: "agent" as const,
 });
 
+// "Armar mi día": my own day when Agenbot has not loaded one yet.
+const ownDay = {
+  ...ex.dayDraft,
+  id: ex.uid(50),
+  date: "2026-10-20",
+  status: "chosen" as const,
+  chosenOptionId: ex.uid(51),
+  chosenOption: "A",
+  notes: null,
+  callsSummary: null,
+  weeklyGym: null,
+  options: [
+    {
+      id: ex.uid(51),
+      label: "A",
+      title: "Mi día",
+      description: null,
+      order: 0,
+      blocks: [],
+      version: 1,
+      createdAt: "2026-10-20T06:40:00.000-03:00",
+      updatedAt: "2026-10-20T06:40:00.000-03:00",
+      updatedBy: "user" as const,
+    },
+  ],
+  tasks: [],
+  sleep: { night: null, previousNight: ex.sleepTonightBed },
+  createdAt: "2026-10-20T06:40:00.000-03:00",
+  updatedAt: "2026-10-20T06:40:00.000-03:00",
+  updatedBy: "user" as const,
+};
+
 export const planningRoutes: RouteDef[] = [
+  {
+    operationId: "createOwnDay",
+    method: "post",
+    path: "/api/days/{date}",
+    tag: "Days",
+    summary: "\"Armar mi día\": create my own day (user)",
+    description:
+      "Creates the day with one empty option `A` (\"Mi día\"), already `chosen`, so I can add blocks before Agenbot loads it. A later agent `PUT` becomes a proposal. 409 if the day exists.",
+    access: "user",
+    params: DateParams,
+    body: z.strictObject({ title: z.string().min(1).max(200).optional() }).openapi("CreateOwnDayInput"),
+    responses: {
+      201: { description: "Created.", schema: Day, headers: ["ETag"] },
+      409: { description: "`invalid_transition`: the day already exists." },
+    },
+    exchanges: [
+      { name: "own", summary: "06:40 — Agenbot no cargó todavía; armo mi día", actor: "user", params: { date: "2026-10-20" }, body: {}, status: 201, response: ownDay, responseHeaders: etag(1) },
+    ],
+  },
   {
     operationId: "getDay",
     method: "get",

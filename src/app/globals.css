@@ -1,26 +1,263 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Sistema Calma v0.2 (design/Agenda - Sistema.dc.html). Every color is a semantic token; dark is the primary theme.
+ * Theme: follows the system; `data-theme="dark|light"` on <html> forces one (Ajustes → Apariencia).
+ * The attribute also scopes a theme to any subtree (used by the /dev/design gallery).
+ * Block type colors: dark oklch(0.78 0.06 hue), light oklch(0.50 0.08 hue); see src/ui/block-types.ts.
+ */
+:root,
+[data-theme="dark"] {
+  --bg: #111312;
+  --sunken: #0B0C0B;
+  --surface: #191B1A;
+  --surface2: #1F2220;
+  --raised: #262A27;
+  --border: #262927;
+  --border2: #3A3E3B;
+  --text: #ECEDEA;
+  --text2: #B8BCB6;
+  --muted: #9A9E98;
+  --accent: oklch(0.82 0.08 160);
+  --on-accent: #0E1A15;
+  --accent-soft: oklch(0.82 0.08 160 / .12);
+  --call: oklch(0.84 0.12 70);
+  --on-call: #1A1406;
+  --call-soft: oklch(0.84 0.12 70 / .14);
+  --success: oklch(0.80 0.11 150);
+  --on-success: #0C1A10;
+  --success-soft: oklch(0.80 0.11 150 / .14);
+  --warning: oklch(0.86 0.11 95);
+  --danger: oklch(0.74 0.13 25);
+  --danger-soft: oklch(0.74 0.13 25 / .12);
+  --inverse: #ECEDEA;
+  --on-inverse: #111312;
+  --accent-on-inverse: oklch(0.45 0.08 160);
+  --scrim: rgba(0,0,0,.55);
+  --shadow: 0 16px 40px -12px rgba(0,0,0,.6);
+  --t-call: var(--call);
+  --t-meeting: oklch(0.78 0.06 250);
+  --t-routine: oklch(0.78 0.06 195);
+  --t-gym: oklch(0.78 0.06 145);
+  --t-meal: oklch(0.78 0.06 85);
+  --t-reading: oklch(0.78 0.06 290);
+  --t-study: oklch(0.78 0.06 265);
+  --t-dogs: oklch(0.78 0.06 55);
+  --t-partner: oklch(0.78 0.06 350);
+  --t-sleep: oklch(0.78 0.06 225);
+  --t-local_work: oklch(0.78 0.06 210);
+  --t-padel: oklch(0.78 0.06 115);
+  --t-other: #9A9E98;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F7F6F2;
+    --sunken: #ECEBE6;
+    --surface: #FFFFFF;
+    --surface2: #F0EFEA;
+    --raised: #FFFFFF;
+    --border: #E4E3DD;
+    --border2: #C9C8C1;
+    --text: #1A1B18;
+    --text2: #3F413C;
+    --muted: #62655F;
+    --accent: oklch(0.48 0.08 160);
+    --on-accent: #FFFFFF;
+    --accent-soft: oklch(0.48 0.08 160 / .08);
+    --call: oklch(0.52 0.12 62);
+    --on-call: #FFFFFF;
+    --call-soft: oklch(0.52 0.12 62 / .10);
+    --success: oklch(0.50 0.11 150);
+    --on-success: #FFFFFF;
+    --success-soft: oklch(0.50 0.11 150 / .10);
+    --warning: oklch(0.55 0.11 85);
+    --danger: oklch(0.52 0.15 25);
+    --danger-soft: oklch(0.52 0.15 25 / .07);
+    --inverse: #1A1B18;
+    --on-inverse: #F7F6F2;
+    --accent-on-inverse: oklch(0.82 0.08 160);
+    --scrim: rgba(26,27,24,.35);
+    --shadow: 0 12px 32px -10px rgba(26,27,24,.22);
+    --t-call: var(--call);
+    --t-meeting: oklch(0.5 0.08 250);
+    --t-routine: oklch(0.5 0.08 195);
+    --t-gym: oklch(0.5 0.08 145);
+    --t-meal: oklch(0.5 0.08 85);
+    --t-reading: oklch(0.5 0.08 290);
+    --t-study: oklch(0.5 0.08 265);
+    --t-dogs: oklch(0.5 0.08 55);
+    --t-partner: oklch(0.5 0.08 350);
+    --t-sleep: oklch(0.5 0.08 225);
+    --t-local_work: oklch(0.5 0.08 210);
+    --t-padel: oklch(0.5 0.08 115);
+    --t-other: #62655F;
+    color-scheme: light;
   }
 }
 
+:root[data-theme="light"],
+[data-theme="light"] {
+  --bg: #F7F6F2;
+  --sunken: #ECEBE6;
+  --surface: #FFFFFF;
+  --surface2: #F0EFEA;
+  --raised: #FFFFFF;
+  --border: #E4E3DD;
+  --border2: #C9C8C1;
+  --text: #1A1B18;
+  --text2: #3F413C;
+  --muted: #62655F;
+  --accent: oklch(0.48 0.08 160);
+  --on-accent: #FFFFFF;
+  --accent-soft: oklch(0.48 0.08 160 / .08);
+  --call: oklch(0.52 0.12 62);
+  --on-call: #FFFFFF;
+  --call-soft: oklch(0.52 0.12 62 / .10);
+  --success: oklch(0.50 0.11 150);
+  --on-success: #FFFFFF;
+  --success-soft: oklch(0.50 0.11 150 / .10);
+  --warning: oklch(0.55 0.11 85);
+  --danger: oklch(0.52 0.15 25);
+  --danger-soft: oklch(0.52 0.15 25 / .07);
+  --inverse: #1A1B18;
+  --on-inverse: #F7F6F2;
+  --accent-on-inverse: oklch(0.82 0.08 160);
+  --scrim: rgba(26,27,24,.35);
+  --shadow: 0 12px 32px -10px rgba(26,27,24,.22);
+  --t-call: var(--call);
+  --t-meeting: oklch(0.5 0.08 250);
+  --t-routine: oklch(0.5 0.08 195);
+  --t-gym: oklch(0.5 0.08 145);
+  --t-meal: oklch(0.5 0.08 85);
+  --t-reading: oklch(0.5 0.08 290);
+  --t-study: oklch(0.5 0.08 265);
+  --t-dogs: oklch(0.5 0.08 55);
+  --t-partner: oklch(0.5 0.08 350);
+  --t-sleep: oklch(0.5 0.08 225);
+  --t-local_work: oklch(0.5 0.08 210);
+  --t-padel: oklch(0.5 0.08 115);
+  --t-other: #62655F;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sunken: var(--sunken);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-raised: var(--raised);
+  --color-border: var(--border);
+  --color-border2: var(--border2);
+  --color-text: var(--text);
+  --color-text2: var(--text2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-call: var(--call);
+  --color-on-call: var(--on-call);
+  --color-call-soft: var(--call-soft);
+  --color-success: var(--success);
+  --color-on-success: var(--on-success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-accent-on-inverse: var(--accent-on-inverse);
+  --color-scrim: var(--scrim);
+  --color-t-call: var(--t-call);
+  --color-t-meeting: var(--t-meeting);
+  --color-t-routine: var(--t-routine);
+  --color-t-gym: var(--t-gym);
+  --color-t-meal: var(--t-meal);
+  --color-t-reading: var(--t-reading);
+  --color-t-study: var(--t-study);
+  --color-t-dogs: var(--t-dogs);
+  --color-t-partner: var(--t-partner);
+  --color-t-sleep: var(--t-sleep);
+  --color-t-local_work: var(--t-local_work);
+  --color-t-padel: var(--t-padel);
+  --color-t-other: var(--t-other);
+
+  --font-sans: var(--font-instrument-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* type scale: display 32/600, title 22/600, headline 18/600, body 16/500, body-sm 14, caption 13, mono 12, micro 11/500 */
+  --text-display: 32px;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--line-height: 1.15;
+  --text-title: 22px;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.01em;
+  --text-title--line-height: 1.25;
+  --text-headline: 18px;
+  --text-headline--font-weight: 600;
+  --text-headline--line-height: 1.3;
+  --text-body: 16px;
+  --text-body--font-weight: 500;
+  --text-body--line-height: 1.35;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.45;
+  --text-caption: 13px;
+  --text-caption--line-height: 1.4;
+  --text-mono: 12px;
+  --text-mono--line-height: 1.4;
+  --text-micro: 11px;
+  --text-micro--font-weight: 500;
+  --text-micro--line-height: 1.3;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --shadow-calma: var(--shadow);
+
+  /* motion: instant 80 (toggles) · fast 120 (press, chips) · base 200 (cards, toast) · sheet 280 */
+  --ease-calma: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --default-transition-duration: 120ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@utility duration-instant {
+  transition-duration: 80ms;
+}
+@utility duration-base {
+  transition-duration: 200ms;
+}
+@utility duration-sheet {
+  transition-duration: 280ms;
+}
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+@utility pt-safe {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+
+html {
+  background: var(--bg);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
 }

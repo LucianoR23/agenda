@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,0&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#D9D8D3;font-family:'Instrument Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2F5D50}a:hover{color:#1E3D35}
+*{box-sizing:border-box}
+</style>
+</helmet>
+
+<section style="padding:64px 72px 120px;display:flex;flex-direction:column;gap:48px">
+  <div style="display:flex;flex-direction:column;gap:8px;max-width:960px">
+    <div style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.08em;color:#55574F">AGENDA · PASO 1 · TURNO 2 · v0.2</div>
+    <div style="font-size:44px;font-weight:600;letter-spacing:-.02em;color:#151613">Sistema Calma</div>
+    <div style="font-size:18px;line-height:1.5;color:#3C3E38;text-wrap:pretty">Basado en <a href="Agenda - Direcciones.dc.html#1a">1a</a>. Tokens, registro de tipos, estados y componentes. Todo lo de abajo usa solo variables de tema: la galería se renderiza dos veces, una por tema, desde el mismo marcado.</div>
+  </div>
+
+  <!-- Static artboards: tokens, registry, changelog -->
+  <div style="display:flex;gap:32px;align-items:flex-start">
+
+    <div style="width:760px;flex-shrink:0;background:#F4F3EF;border-radius:24px;padding:32px;display:flex;flex-direction:column;gap:28px;color:#151613">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">TOKENS · COLOR SEMÁNTICO</div>
+        <div style="font-size:14px;color:#3C3E38">Oscuro es el tema primario. Texto sobre fondo ≥ 4.5:1 en ambos temas.</div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="display:grid;grid-template-columns:150px 56px 56px 1fr;gap:12px;font-family:'Geist Mono',monospace;font-size:11px;color:#55574F;padding-bottom:8px;border-bottom:1px solid #DDDCD6"><span>token</span><span>oscuro</span><span>claro</span><span>uso</span></div>
+        <sc-for list="{{ tokens }}" as="tk" hint-placeholder-count="12">
+          <div style="display:grid;grid-template-columns:150px 56px 56px 1fr;gap:12px;align-items:center;min-height:40px;border-bottom:1px solid #E6E5E0">
+            <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ tk.name }}</span>
+            <div style="height:26px;border-radius:7px;background:{{ tk.dark }};border:1px solid rgba(0,0,0,.12)"></div>
+            <div style="height:26px;border-radius:7px;background:{{ tk.light }};border:1px solid rgba(0,0,0,.12)"></div>
+            <span style="font-size:13px;color:#3C3E38">{{ tk.use }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">TIPO · INSTRUMENT SANS / GEIST MONO</div>
+          <sc-for list="{{ typeScale }}" as="ty" hint-placeholder-count="8">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+              <span style="font-size:{{ ty.size }}px;font-weight:{{ ty.w }};font-family:{{ ty.ff }};letter-spacing:{{ ty.ls }}">{{ ty.sample }}</span>
+              <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#55574F;white-space:nowrap">{{ ty.name }} {{ ty.size }}/{{ ty.w }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">ESPACIADO · BASE 4</div>
+            <div style="display:flex;align-items:flex-end;gap:8px">
+              <sc-for list="{{ spacing }}" as="sp" hint-placeholder-count="8">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:{{ sp }}px;height:{{ sp }}px;background:oklch(0.48 0.08 160);border-radius:2px"></div><span style="font-family:'Geist Mono',monospace;font-size:10px;color:#55574F">{{ sp }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">RADIO</div>
+            <div style="display:flex;gap:10px">
+              <sc-for list="{{ radii }}" as="rd" hint-placeholder-count="6">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:44px;height:44px;border:1.5px solid #151613;border-radius:{{ rd.v }}px"></div><span style="font-family:'Geist Mono',monospace;font-size:10px;color:#55574F">{{ rd.n }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">ELEVACIÓN</div>
+            <div style="display:flex;gap:6px">
+              <div style="flex:1;height:44px;border-radius:10px;background:#111312;color:#9A9E98;font-family:'Geist Mono',monospace;font-size:10px;display:flex;align-items:flex-end;padding:6px">0 bg</div>
+              <div style="flex:1;height:44px;border-radius:10px;background:#191B1A;color:#9A9E98;font-family:'Geist Mono',monospace;font-size:10px;display:flex;align-items:flex-end;padding:6px">1 card</div>
+              <div style="flex:1;height:44px;border-radius:10px;background:#1F2220;color:#9A9E98;font-family:'Geist Mono',monospace;font-size:10px;display:flex;align-items:flex-end;padding:6px">2 sheet</div>
+              <div style="flex:1;height:44px;border-radius:10px;background:#262A27;color:#9A9E98;font-family:'Geist Mono',monospace;font-size:10px;display:flex;align-items:flex-end;padding:6px">3 drag</div>
+            </div>
+            <div style="font-size:12px;color:#3C3E38">Oscuro: por tono. Claro: blanco + sombra 0 8 24 / 8%.</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">MOVIMIENTO</div>
+            <sc-for list="{{ motion }}" as="mo" hint-placeholder-count="5">
+              <div style="display:flex;justify-content:space-between;font-size:13px"><span>{{ mo.n }}</span><span style="font-family:'Geist Mono',monospace;color:#55574F">{{ mo.v }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width:620px;flex-shrink:0;background:#F4F3EF;border-radius:24px;padding:32px;display:flex;flex-direction:column;gap:20px;color:#151613">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">REGISTRO DE TIPOS DE BLOQUE</div>
+        <div style="font-size:14px;color:#3C3E38;line-height:1.45;text-wrap:pretty">Un tipo nuevo es una fila de datos. El color sale del tono (hue) con L/C fijos por tema; llamada usa el token propio <span style="font-family:'Geist Mono',monospace">call</span> y siempre lleva acciones.</div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="display:grid;grid-template-columns:36px 1fr 140px 44px 44px 50px;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;color:#55574F;padding-bottom:8px;border-bottom:1px solid #DDDCD6"><span></span><span>key · label</span><span>icon</span><span>osc</span><span>claro</span><span>hue</span></div>
+        <sc-for list="{{ regList }}" as="r" hint-placeholder-count="13">
+          <div style="display:grid;grid-template-columns:36px 1fr 140px 44px 44px 50px;gap:10px;align-items:center;min-height:40px;border-bottom:1px solid #E6E5E0">
+            <div style="width:32px;height:32px;border-radius:9px;background:#111312;color:{{ r.dark }};display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:18px">{{ r.icon }}</div>
+            <span style="font-size:14px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#55574F">{{ r.key }}</span> · {{ r.label }}</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:#55574F">{{ r.icon }}</span>
+            <div style="height:22px;border-radius:6px;background:{{ r.dark }}"></div>
+            <div style="height:22px;border-radius:6px;background:{{ r.light }}"></div>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ r.hueLabel }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#111312;color:#ECEDEA;border-radius:14px;padding:16px 18px;font-family:'Geist Mono',monospace;font-size:12px;line-height:1.7;white-space:pre">{ key: "padel", label: "Pádel",
+  icon: "sports_tennis", hue: 115 }
+// oscuro → oklch(0.78 0.06 hue)
+// claro  → oklch(0.50 0.08 hue)
+// hue: null → tono neutro (otro)</div>
+    </div>
+
+    <div style="width:420px;flex-shrink:0;background:#F4F3EF;border-radius:24px;padding:32px;display:flex;flex-direction:column;gap:20px;color:#151613">
+      <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">CHANGELOG</div>
+      <sc-for list="{{ changelog }}" as="cl" hint-placeholder-count="2">
+        <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:16px;border-bottom:1px solid #DDDCD6">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:18px;font-weight:600">{{ cl.v }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#55574F">{{ cl.date }}</span></div>
+          <sc-for list="{{ cl.items }}" as="it">
+            <div style="display:flex;gap:8px;font-size:14px;line-height:1.45;color:#3C3E38"><span style="color:#55574F">—</span><span>{{ it }}</span></div>
+          </sc-for>
+        </div>
+      </sc-for>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:#55574F">PREGUNTAS ABIERTAS</div>
+        <sc-for list="{{ openQs }}" as="q" hint-placeholder-count="3">
+          <div style="display:flex;gap:8px;font-size:14px;line-height:1.45;color:#3C3E38"><span style="color:#55574F">?</span><span>{{ q }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- Themed galleries -->
+  <div style="display:flex;gap:32px;align-items:flex-start">
+  <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+    <div style="{{ th.vars }}">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-size:32px;font-weight:600;letter-spacing:-.02em;color:var(--text)">{{ th.name }}</span>
+        <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--muted)">COMPONENTES · {{ th.note }}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,460px);gap:24px;align-items:start">
+
+        <!-- BLOCK STATES -->
+        <div style="grid-row:span 3;background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">BLOQUE DE TIMELINE · ESTADOS</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">Hora · ícono de tipo · título · estado (ícono + texto) · meta · fuente. El slot inferior acepta metadatos futuros sin cambiar el alto base.</div>
+          </div>
+          <sc-for list="{{ samples }}" as="b" hint-placeholder-count="6">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted);padding-left:62px">{{ b.cap }}</div>
+              <div style="display:grid;grid-template-columns:50px 1fr;gap:12px;opacity:{{ b.op }}">
+                <div style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--muted);text-align:right;padding-top:16px">{{ b.s }}</div>
+                <div style="background:var(--surface);border:1px {{ b.bstyle }} {{ b.border }};border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span style="font-family:'Material Symbols Rounded';font-size:20px;color:{{ b.color }}">{{ b.icon }}</span>
+                    <div style="flex:1;font-size:16px;font-weight:500;color:var(--text);text-decoration:{{ b.deco }}">{{ b.t }}</div>
+                    <span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">{{ b.stIcon }}</span>
+                  </div>
+                  <sc-if value="{{ b.lead }}"><div style="font-size:22px;font-weight:600;letter-spacing:-.01em;color:var(--call)">{{ b.lead }}</div></sc-if>
+                  <div style="display:flex;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap"><span style="font-family:'Geist Mono',monospace">{{ b.s }}–{{ b.e }}</span><span>{{ b.d }}</span></div>
+                  <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex-wrap:wrap">
+                    <span style="font-family:'Material Symbols Rounded';font-size:14px">{{ b.srcIcon }}</span>{{ b.src }}<span>· {{ b.stLabel }}</span>
+                    <sc-if value="{{ b.lock }}"><span style="display:flex;align-items:center;gap:3px">· <span style="font-family:'Material Symbols Rounded';font-size:14px">lock</span>hora fija</span></sc-if>
+                    <sc-if value="{{ b.edited }}"><span style="display:flex;align-items:center;gap:3px;color:var(--accent)">· <span style="font-family:'Material Symbols Rounded';font-size:14px">edit</span>editado por vos</span></sc-if>
+                  </div>
+                  <sc-if value="{{ b.outcome }}">
+                    <div style="display:flex"><div style="height:28px;padding:0 10px;border-radius:14px;background:var(--call-soft);color:var(--call);display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500"><span style="font-family:'Material Symbols Rounded';font-size:15px">update</span>{{ b.outcome }}</div></div>
+                  </sc-if>
+                  <sc-if value="{{ b.meta }}">
+                    <div style="display:flex;gap:6px;padding-top:2px;border-top:1px dashed var(--border2);padding-top:8px">
+                      <div style="height:26px;padding:0 8px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2)"><span style="font-family:'Material Symbols Rounded';font-size:14px">attach_file</span>2</div>
+                      <div style="height:26px;padding:0 8px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2)"><span style="font-family:'Material Symbols Rounded';font-size:14px">sell</span>objeciones</div>
+                      <div style="height:26px;padding:0 8px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);font-family:'Geist Mono',monospace"><span style="font-family:'Material Symbols Rounded';font-size:14px">timer</span>25:00</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ b.callPending }}">
+                    <div style="display:flex;gap:8px;padding-top:4px">
+                      <div style="flex:1;height:44px;border-radius:12px;background:var(--call);color:var(--on-call);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;font-size:15px"><span style="font-family:'Material Symbols Rounded';font-size:18px">call</span>Llamar</div>
+                      <div style="flex:1;height:44px;border-radius:12px;border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500;font-size:15px"><span style="font-family:'Material Symbols Rounded';font-size:18px">chat</span>WhatsApp</div>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:50px;font-family:'Geist Mono',monospace;font-size:12px;font-weight:500;color:var(--accent);text-align:right">15:12</div>
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
+            <div style="flex:1;height:1px;background:var(--accent)"></div>
+            <span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">línea de ahora</span>
+          </div>
+        </div>
+
+        <!-- GESTURES -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">GESTOS</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">El color se revela con ícono y texto. Umbral de confirmación a 96 px; háptico al cruzarlo.</div>
+          </div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">DESLIZAR → HECHO</div>
+          <div style="position:relative;height:72px;border-radius:16px;overflow:hidden;background:var(--success)">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:104px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--on-success);font-weight:600;font-size:14px"><span style="font-family:'Material Symbols Rounded';font-size:20px">check_circle</span>Hecho</div>
+            <div style="position:absolute;top:0;bottom:0;left:104px;width:100%;background:var(--surface);border-radius:16px;padding:0 14px;display:flex;align-items:center;gap:10px;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--t-lectura)">menu_book</span><span style="font-size:16px;font-weight:500">Lectura</span></div>
+          </div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">DESLIZAR ← SALTEADO</div>
+          <div style="position:relative;height:72px;border-radius:16px;overflow:hidden;background:var(--raised)">
+            <div style="position:absolute;right:0;top:0;bottom:0;width:116px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--text);font-weight:600;font-size:14px"><span style="font-family:'Material Symbols Rounded';font-size:20px">do_not_disturb_on</span>Salteado</div>
+            <div style="position:absolute;top:0;bottom:0;right:116px;width:100%;background:var(--surface);border-radius:16px;padding:0 14px;display:flex;align-items:center;justify-content:flex-end;gap:10px;color:var(--text)"><span style="font-size:16px;font-weight:500">Gym · piernas</span><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--t-gym)">fitness_center</span></div>
+          </div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">MANTENER Y ARRASTRAR</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="height:64px;border-radius:16px;border:1.5px dashed var(--border2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted)">Soltá acá · 16:30</div>
+            <div style="height:64px;border-radius:16px;background:var(--raised);box-shadow:var(--shadow);transform:rotate(-1.2deg) translateY(-6px);padding:0 8px 0 14px;display:flex;align-items:center;gap:10px;color:var(--text)">
+              <span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--t-perras)">pets</span><span style="flex:1;font-size:16px;font-weight:500">Paseo con las perras</span>
+              <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:22px;color:var(--muted)">drag_indicator</div>
+            </div>
+          </div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">DESLIZAR ENTRE DÍAS</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;height:56px;border-radius:16px;background:var(--surface);padding:0 6px;color:var(--text)">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:22px;color:var(--muted)">chevron_left</div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="font-size:15px;font-weight:600">Martes 20</span><div style="display:flex;gap:4px"><div style="width:6px;height:6px;border-radius:3px;background:var(--border2)"></div><div style="width:16px;height:6px;border-radius:3px;background:var(--text)"></div><div style="width:6px;height:6px;border-radius:3px;background:var(--border2)"></div></div></div>
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:22px;color:var(--muted)">chevron_right</div>
+          </div>
+        </div>
+
+        <!-- OPTION CARD + STICKY -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">TARJETA DE OPCIÓN · BOTÓN FIJO</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">Carrusel horizontal; la siguiente opción asoma 24 px para invitar al swipe.</div>
+          </div>
+          <div style="display:flex;gap:12px;margin-right:-60px">
+            <div style="width:340px;flex-shrink:0;background:var(--surface);border:1px solid var(--accent);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--accent)">OPCIÓN A</span><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--accent)">radio_button_checked</span></div>
+              <div style="font-size:22px;font-weight:600;letter-spacing:-.01em;color:var(--text)">Cierre primero</div>
+              <div style="font-size:14px;line-height:1.45;color:var(--text2)">Gym temprano, local hasta las 14 y las dos llamadas a la tarde con lectura en el medio.</div>
+              <div style="display:flex;gap:4px;height:8px;border-radius:4px;overflow:hidden">
+                <div style="flex:1;background:var(--t-rutina)"></div><div style="flex:1;background:var(--t-gym)"></div><div style="flex:4;background:var(--t-local)"></div><div style="flex:1;background:var(--call)"></div><div style="flex:1;background:var(--t-lectura)"></div><div style="flex:1;background:var(--call)"></div><div style="flex:2;background:var(--t-padel)"></div>
+              </div>
+              <div style="font-size:13px;color:var(--muted)">11 bloques · 2 llamadas · gym ✓</div>
+            </div>
+            <div style="width:340px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:12px">
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--muted)">OPCIÓN B</span>
+              <div style="font-size:22px;font-weight:600;color:var(--text)">Mañana libre</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:center;gap:4px"><div style="width:16px;height:6px;border-radius:3px;background:var(--text)"></div><div style="width:6px;height:6px;border-radius:3px;background:var(--border2)"></div></div>
+          <div style="height:52px;border-radius:14px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">Elegir esta</div>
+          <div style="font-size:12px;color:var(--muted);text-align:center">Botón fijo · 52 px · sobre safe-area inferior</div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px">
+          <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">CONTROLES</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:12px;color:var(--muted)">Chips · filtro y estado</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="height:36px;padding:0 14px;border-radius:18px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;gap:6px;font-size:14px;font-weight:500"><span style="font-family:'Material Symbols Rounded';font-size:16px">check</span>Todo</div>
+              <div style="height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;font-size:14px">Llamadas</div>
+              <div style="height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;font-size:14px">Hábitos</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="height:28px;padding:0 10px;border-radius:14px;background:var(--surface2);color:var(--text2);display:flex;align-items:center;gap:5px;font-size:13px"><span style="font-family:'Material Symbols Rounded';font-size:15px">radio_button_unchecked</span>Pendiente</div>
+              <div style="height:28px;padding:0 10px;border-radius:14px;background:var(--success-soft);color:var(--success);display:flex;align-items:center;gap:5px;font-size:13px"><span style="font-family:'Material Symbols Rounded';font-size:15px">check_circle</span>Hecho</div>
+              <div style="height:28px;padding:0 10px;border-radius:14px;background:var(--surface2);color:var(--muted);display:flex;align-items:center;gap:5px;font-size:13px;text-decoration:line-through"><span style="font-family:'Material Symbols Rounded';font-size:15px">do_not_disturb_on</span>Salteado</div>
+              <div style="height:28px;padding:0 10px;border-radius:14px;background:var(--surface2);color:var(--text2);display:flex;align-items:center;gap:5px;font-size:13px"><span style="font-family:'Material Symbols Rounded';font-size:15px">event</span>Calendar</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:12px;color:var(--muted)">Control segmentado</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);height:44px;padding:4px;border-radius:14px;background:var(--surface2)">
+              <div style="border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted)">Semana</div>
+              <div style="border-radius:10px;background:var(--raised);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--text)">Mes</div>
+              <div style="border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted)">Año</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(var(--accent) 0 66%, var(--surface2) 66% 100%);display:flex;align-items:center;justify-content:center"><div style="width:52px;height:52px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:14px;color:var(--text)">2/3</div></div>
+              <span style="font-size:12px;color:var(--muted)">Anillo</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="height:36px;padding:0 12px;border-radius:18px;background:var(--call-soft);color:var(--call);display:flex;align-items:center;gap:5px;font-size:14px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:18px">local_fire_department</span>12 días</div>
+              <span style="font-size:12px;color:var(--muted)">Racha</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="display:flex;gap:8px">
+                <div style="width:52px;height:32px;border-radius:16px;background:var(--accent);padding:3px;display:flex;justify-content:flex-end"><div style="width:26px;height:26px;border-radius:50%;background:var(--on-accent)"></div></div>
+                <div style="width:52px;height:32px;border-radius:16px;background:var(--surface2);border:1px solid var(--border2);padding:2px;display:flex"><div style="width:26px;height:26px;border-radius:50%;background:var(--muted)"></div></div>
+              </div>
+              <span style="font-size:12px;color:var(--muted)">Toggle on / off</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="width:56px;height:56px;border-radius:18px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:26px">add</div>
+              <span style="font-size:12px;color:var(--muted)">FAB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTTOM SHEET -->
+        <div style="grid-row:span 2;background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">BOTTOM SHEET · FILAS · TOGGLE</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">Bloque de Calendar: la hora no se edita acá; solo estado, resultado y nota.</div>
+          </div>
+          <div style="border-radius:20px;overflow:hidden;background:var(--scrim);padding-top:56px">
+            <div style="background:var(--surface2);border-radius:28px 28px 0 0;padding:10px 20px 20px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)">
+              <div style="align-self:center;width:36px;height:4px;border-radius:2px;background:var(--border2)"></div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)"><span style="font-family:'Material Symbols Rounded';font-size:16px;color:var(--call)">call</span>Llamada · 15:30–16:15 · <span style="font-family:'Material Symbols Rounded';font-size:14px">event</span>Calendar</div>
+                <div style="font-size:22px;font-weight:600;color:var(--text)">Martín Ríos</div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);height:44px;padding:4px;border-radius:14px;background:var(--bg)">
+                <div style="border-radius:10px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:14px;color:var(--muted)">Pendiente</div>
+                <div style="border-radius:10px;background:var(--raised);display:flex;align-items:center;justify-content:center;gap:4px;font-size:14px;font-weight:600;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:16px">check</span>Hecho</div>
+                <div style="border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted)">Salteado</div>
+              </div>
+              <div style="display:flex;flex-direction:column;border-radius:16px;background:var(--surface);overflow:hidden">
+                <div style="min-height:56px;padding:0 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">flag</span><span style="flex:1;font-size:15px;color:var(--text)">Resultado</span><span style="font-size:15px;color:var(--call)">Seguimiento</span><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">chevron_right</span></div>
+                <div style="min-height:56px;padding:0 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">notes</span><span style="flex:1;font-size:15px;color:var(--muted)">Agregá una nota…</span></div>
+                <div style="min-height:56px;padding:0 14px;display:flex;align-items:center;gap:12px"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">notifications</span><span style="flex:1;font-size:15px;color:var(--text)">Avisarme 10 min antes</span><div style="width:52px;height:32px;border-radius:16px;background:var(--accent);padding:3px;display:flex;justify-content:flex-end"><div style="width:26px;height:26px;border-radius:50%;background:var(--on-accent)"></div></div></div>
+              </div>
+              <div style="min-height:44px;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--accent)"><span style="font-family:'Material Symbols Rounded';font-size:18px">open_in_new</span>Editar en Google Calendar</div>
+              <div style="height:52px;border-radius:14px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">Guardar</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BANNERS + TOAST -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:12px">
+          <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted);padding-bottom:4px">BANNERS · TOAST</div>
+          <div style="border-radius:16px;background:var(--surface);padding:14px;display:flex;gap:12px;align-items:flex-start;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--text2)">info</span><div style="flex:1;font-size:14px;line-height:1.45">Agenbot cargó tu día a las 07:00.</div></div>
+          <div style="border-radius:16px;background:var(--accent-soft);border:1px solid var(--accent);padding:14px;display:flex;gap:12px;align-items:center;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--accent)">auto_awesome</span><div style="flex:1;font-size:14px;line-height:1.45"><b style="font-weight:600">Agenbot propone 2 cambios</b><br>Mover llamada con Sofía a las 19:00.</div><div style="height:44px;padding:0 14px;border-radius:12px;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;font-size:14px;font-weight:600">Ver</div></div>
+          <div style="border-radius:16px;background:var(--surface2);padding:14px;display:flex;gap:12px;align-items:flex-start;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--warning)">cloud_off</span><div style="flex:1;font-size:14px;line-height:1.45">Sin conexión. Guardamos tus cambios y los subimos cuando vuelvas.</div></div>
+          <div style="border-radius:16px;background:var(--danger-soft);border:1px solid var(--danger);padding:14px;display:flex;gap:12px;align-items:center;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--danger)">sync_problem</span><div style="flex:1;font-size:14px;line-height:1.45">Tu versión y la del servidor no coinciden.</div><div style="height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--danger);color:var(--danger);display:flex;align-items:center;font-size:14px;font-weight:600">Resolver</div></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:2px 0"><div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);border-top-color:var(--accent)"></div>Sincronizando… · última vez 15:10</div>
+          <div style="border-radius:14px;background:var(--inverse);color:var(--on-inverse);min-height:52px;padding:0 6px 0 16px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)"><span style="font-family:'Material Symbols Rounded';font-size:20px">check_circle</span><span style="flex:1;font-size:14px">Gym marcado como hecho</span><div style="height:44px;padding:0 12px;display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--accent-on-inverse)">Deshacer</div></div>
+        </div>
+
+        <!-- STATS + CHARTS -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">STAT CARD · GRÁFICOS</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">Patrón chart card: título, período, gráfico, lectura en texto.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="background:var(--surface);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:var(--muted)">Bloques hechos</span><span style="font-size:30px;font-weight:600;letter-spacing:-.02em;color:var(--text)">78%</span><span style="font-size:12px;color:var(--success)">▲ 6 pts vs semana pasada</span></div>
+            <div style="background:var(--surface);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:var(--muted)">Llamadas cerradas</span><span style="font-size:30px;font-weight:600;letter-spacing:-.02em;color:var(--text)">4 / 11</span><span style="font-size:12px;color:var(--muted)">esta semana</span></div>
+          </div>
+          <div style="background:var(--surface);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text)">Llamadas por día</span><span style="color:var(--muted)">Semana</span></div>
+            <div style="display:flex;align-items:flex-end;gap:10px;height:84px">
+              <sc-for list="{{ bars }}" as="bar" hint-placeholder-count="7">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:{{ bar.h }}px;border-radius:6px 6px 2px 2px;background:var(--call);opacity:{{ bar.op }}"></div><span style="font-family:'Geist Mono',monospace;font-size:10px;color:var(--muted)">{{ bar.d }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:var(--surface);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text)">Páginas leídas</span><span style="color:var(--muted)">30 días</span></div>
+            <svg viewBox="0 0 300 70" style="width:100%;height:70px"><polyline points="0,58 25,50 50,54 75,40 100,44 125,30 150,36 175,26 200,30 225,18 250,22 275,12 300,16" fill="none" style="stroke:var(--t-lectura)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline></svg>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text)">Celdas de heatmap</span><span style="color:var(--muted)">0 → 4</span></div>
+            <div style="display:grid;grid-template-columns:repeat(14,1fr);gap:4px">
+              <sc-for list="{{ heat }}" as="hc" hint-placeholder-count="28">
+                <div style="aspect-ratio:1;border-radius:5px;background:var(--surface2);overflow:hidden"><div style="width:100%;height:100%;background:var(--accent);opacity:{{ hc }}"></div></div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- EMPTY + SKELETON -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px">
+          <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">VACÍO · CARGANDO</div>
+          <div style="background:var(--surface);border-radius:20px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+            <div style="width:56px;height:56px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:26px;color:var(--muted)">schedule</div>
+            <div style="font-size:18px;font-weight:600;color:var(--text)">Agenbot todavía no cargó tu día</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2);max-width:300px">Suele llegar a las 07:00. Podés esperarlo o armarlo vos.</div>
+            <div style="display:flex;gap:8px;padding-top:6px">
+              <div style="height:44px;padding:0 16px;border-radius:12px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;font-size:14px;font-weight:600">Armar mi día</div>
+              <div style="height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;font-size:14px">Reintentar</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ skel }}" as="sk" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:50px 1fr;gap:12px">
+                <div style="height:10px;width:36px;justify-self:end;margin-top:16px;border-radius:5px;background:var(--surface2)"></div>
+                <div style="height:{{ sk }}px;border-radius:16px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:8px"><div style="height:12px;width:60%;border-radius:6px;background:var(--surface2)"></div><div style="height:10px;width:35%;border-radius:5px;background:var(--surface2)"></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- PIN -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px;align-items:center">
+          <div style="align-self:stretch;font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">TECLADO PIN</div>
+          <div style="font-size:18px;font-weight:600;color:var(--text)">Ingresá tu PIN</div>
+          <div style="display:flex;gap:14px"><div style="width:14px;height:14px;border-radius:50%;background:var(--text)"></div><div style="width:14px;height:14px;border-radius:50%;background:var(--text)"></div><div style="width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2)"></div><div style="width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2)"></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,72px);gap:14px 28px">
+            <sc-for list="{{ keys }}" as="k" hint-placeholder-count="12">
+              <div style="width:72px;height:72px;border-radius:50%;background:{{ k.bg }};color:{{ k.fg }};display:flex;align-items:center;justify-content:center;font-family:{{ k.ff }};font-size:{{ k.fs }}px;font-weight:500">{{ k.l }}</div>
+            </sc-for>
+          </div>
+          <div style="min-height:44px;display:flex;align-items:center;font-size:14px;color:var(--accent)">Usar código de recuperación</div>
+        </div>
+
+        <!-- NAV -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">BARRA DE PESTAÑAS · ESCALADO</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">Hasta 5 secciones: todas visibles. Con 6 o más, la 5ª pestaña pasa a ser Más y abre una hoja con el resto. En escritorio la barra lateral muestra todas.</div>
+          </div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">5 SECCIONES · HOY</div>
+          <div style="height:72px;border-radius:16px;background:var(--surface);border:1px solid var(--border);display:grid;grid-template-columns:repeat(5,1fr)">
+            <sc-for list="{{ tabs5 }}" as="tb" hint-placeholder-count="5">
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ tb.fg }}"><div style="width:56px;height:30px;border-radius:15px;background:{{ tb.pill }};display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:22px">{{ tb.icon }}</div><div style="font-size:11px;font-weight:500">{{ tb.label }}</div></div>
+            </sc-for>
+          </div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">6+ SECCIONES · MÁS ABIERTO</div>
+          <div style="border-radius:16px;background:var(--surface2);padding:8px;display:flex;flex-direction:column">
+            <div style="min-height:48px;padding:0 10px;display:flex;align-items:center;gap:12px;font-size:15px;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">settings</span>Ajustes</div>
+            <div style="min-height:48px;padding:0 10px;display:flex;align-items:center;gap:12px;font-size:15px;color:var(--text)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">contacts</span>Leads <span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">módulo futuro</span></div>
+          </div>
+          <div style="height:72px;border-radius:16px;background:var(--surface);border:1px solid var(--border);display:grid;grid-template-columns:repeat(5,1fr)">
+            <sc-for list="{{ tabs6 }}" as="tb" hint-placeholder-count="5">
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ tb.fg }}"><div style="width:56px;height:30px;border-radius:15px;background:{{ tb.pill }};display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:22px">{{ tb.icon }}</div><div style="font-size:11px;font-weight:500">{{ tb.label }}</div></div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- PATTERNS -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--muted)">PATRONES PARA MÓDULOS NUEVOS</div>
+            <div style="font-size:14px;line-height:1.45;color:var(--text2)">Section card para widgets en Hoy y fila de ajustes. Un módulo nuevo entra como contenido del slot.</div>
+          </div>
+          <div style="background:var(--surface);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--t-gym)">fitness_center</span><span style="flex:1;font-size:15px;font-weight:600;color:var(--text)">Hábitos de hoy</span><span style="min-height:44px;display:flex;align-items:center;font-size:14px;color:var(--accent)">Ver todo</span></div>
+            <div style="height:72px;border-radius:12px;border:1.5px dashed var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:12px;color:var(--muted)">slot · contenido del módulo</div>
+          </div>
+          <div style="display:flex;flex-direction:column;border-radius:16px;background:var(--surface);overflow:hidden">
+            <div style="min-height:64px;padding:0 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)"><div style="width:36px;height:36px;border-radius:10px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:20px;color:var(--text2)">lock</div><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:15px;color:var(--text)">Seguridad</span><span style="font-size:13px;color:var(--muted)">PIN, huella, dispositivos</span></div><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">chevron_right</span></div>
+            <div style="min-height:64px;padding:0 14px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:10px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:20px;color:var(--text2)">auto_awesome</div><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:15px;color:var(--text)">Agenbot</span><span style="font-size:13px;color:var(--muted)">Carga diaria a las 07:00</span></div><span style="font-size:14px;color:var(--muted)">Activo</span><span style="font-family:'Material Symbols Rounded';font-size:20px;color:var(--muted)">chevron_right</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </sc-for>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const REG = [
+  ['llamada','Llamada','call',null,true],['reunion','Reunión','groups',250],['rutina','Rutina','self_improvement',195],
+  ['gym','Gym','fitness_center',145],['comida','Comida','restaurant',85],['lectura','Lectura','menu_book',290],
+  ['estudio','Estudio','school',265],['perras','Perras','pets',55],['pareja','Pareja','favorite',350],
+  ['sueno','Sueño','bedtime',225],['local','Trabajo en el local','storefront',210],['padel','Pádel','sports_tennis',115],
+  ['otro','Otro','more_horiz',null]
+];
+const T = {
+  dark:{bg:'#111312',sunken:'#0B0C0B',surface:'#191B1A',surface2:'#1F2220',raised:'#262A27',border:'#262927',border2:'#3A3E3B',
+    text:'#ECEDEA',text2:'#B8BCB6',muted:'#9A9E98',accent:'oklch(0.82 0.08 160)','on-accent':'#0E1A15','accent-soft':'oklch(0.82 0.08 160 / .12)',
+    call:'oklch(0.84 0.12 70)','on-call':'#1A1406','call-soft':'oklch(0.84 0.12 70 / .14)',success:'oklch(0.80 0.11 150)','on-success':'#0C1A10','success-soft':'oklch(0.80 0.11 150 / .14)',
+    warning:'oklch(0.86 0.11 95)',danger:'oklch(0.74 0.13 25)','danger-soft':'oklch(0.74 0.13 25 / .12)',inverse:'#ECEDEA','on-inverse':'#111312','accent-on-inverse':'oklch(0.45 0.08 160)',
+    scrim:'rgba(0,0,0,.55)',shadow:'0 16px 40px -12px rgba(0,0,0,.6)',L:0.78,C:0.06,neutral:'#9A9E98'},
+  light:{bg:'#F7F6F2',sunken:'#ECEBE6',surface:'#FFFFFF',surface2:'#F0EFEA',raised:'#FFFFFF',border:'#E4E3DD',border2:'#C9C8C1',
+    text:'#1A1B18',text2:'#3F413C',muted:'#62655F',accent:'oklch(0.48 0.08 160)','on-accent':'#FFFFFF','accent-soft':'oklch(0.48 0.08 160 / .08)',
+    call:'oklch(0.52 0.12 62)','on-call':'#FFFFFF','call-soft':'oklch(0.52 0.12 62 / .10)',success:'oklch(0.50 0.11 150)','on-success':'#FFFFFF','success-soft':'oklch(0.50 0.11 150 / .10)',
+    warning:'oklch(0.55 0.11 85)',danger:'oklch(0.52 0.15 25)','danger-soft':'oklch(0.52 0.15 25 / .07)',inverse:'#1A1B18','on-inverse':'#F7F6F2','accent-on-inverse':'oklch(0.82 0.08 160)',
+    scrim:'rgba(26,27,24,.35)',shadow:'0 12px 32px -10px rgba(26,27,24,.22)',L:0.50,C:0.08,neutral:'#62655F'}
+};
+const typeColor = (t, r) => r[4] ? t.call : r[3]==null ? t.neutral : `oklch(${t.L} ${t.C} ${r[3]})`;
+const themeVars = (k, t) => {
+  const v = {width:'1476px',flexShrink:0,background:t.sunken,borderRadius:'28px',padding:'40px',display:'flex',flexDirection:'column',gap:'28px',fontFamily:"'Instrument Sans',sans-serif"};
+  Object.keys(t).forEach(n => { if (!['L','C','neutral'].includes(n)) v['--'+n] = t[n]; });
+  REG.forEach(r => v['--t-'+r[0]] = typeColor(t, r));
+  return v;
+};
+const TOK = [
+  ['bg','Fondo de pantalla'],['surface','Tarjetas, bloques'],['surface2','Sheets, campos, pistas'],['border','Divisores'],['border2','Bordes de control'],
+  ['text','Texto principal'],['text2','Texto secundario'],['muted','Meta, horas, labels'],['accent','Acción, ahora, Agenbot'],['call','Llamadas (exclusivo)'],
+  ['success','Hecho'],['warning','Offline, atención'],['danger','Conflicto, error'],['inverse','Botón primario']
+];
+const sv = (o) => ({cap:'',lead:'',d:'',lock:false,edited:false,outcome:'',meta:false,callPending:false,op:1,deco:'none',bstyle:'solid',border:'var(--border)',...o});
+const SAMPLES = [
+  sv({cap:'PENDIENTE · AGENBOT',s:'16:30',e:'17:00',t:'Lectura',d:'20 págs · Hábitos atómicos',color:'var(--t-lectura)',icon:'menu_book',stIcon:'radio_button_unchecked',stLabel:'Pendiente',src:'Agenbot',srcIcon:'auto_awesome'}),
+  sv({cap:'HECHO',s:'08:30',e:'09:30',t:'Gym · tren superior',d:'Sesión 2 de 3',color:'var(--t-gym)',icon:'fitness_center',stIcon:'check_circle',stLabel:'Hecho',src:'Agenbot',srcIcon:'auto_awesome',op:0.55}),
+  sv({cap:'SALTEADO',s:'14:00',e:'14:45',t:'Almuerzo',d:'',color:'var(--t-comida)',icon:'restaurant',stIcon:'do_not_disturb_on',stLabel:'Salteado',src:'Agenbot',srcIcon:'auto_awesome',op:0.5,deco:'line-through',bstyle:'dashed',border:'var(--border2)'}),
+  sv({cap:'CALENDAR · HORA BLOQUEADA',s:'10:00',e:'14:00',t:'Turno en el local',d:'Apertura y caja',color:'var(--t-local)',icon:'storefront',stIcon:'radio_button_unchecked',stLabel:'Pendiente',src:'Calendar',srcIcon:'event',lock:true}),
+  sv({cap:'EDITADO POR VOS',s:'07:45',e:'08:30',t:'Paseo con las perras',d:'Movido de 07:30',color:'var(--t-perras)',icon:'pets',stIcon:'radio_button_unchecked',stLabel:'Pendiente',src:'yo',srcIcon:'person',edited:true}),
+  sv({cap:'LLAMADA · PENDIENTE',s:'15:30',e:'16:15',t:'Llamada de cierre',lead:'Martín Ríos',d:'Mentoría · USD 3.000 · 2ª llamada',color:'var(--call)',icon:'call',stIcon:'radio_button_unchecked',stLabel:'Pendiente',src:'Calendar',srcIcon:'event',lock:true,callPending:true,border:'var(--call)'}),
+  sv({cap:'LLAMADA · CON RESULTADO',s:'11:00',e:'11:45',t:'Llamada de cierre',lead:'Sofía Benítez',d:'1ª llamada',color:'var(--call)',icon:'call',stIcon:'check_circle',stLabel:'Hecho',src:'Calendar',srcIcon:'event',lock:true,outcome:'Seguimiento · jueves'}),
+  sv({cap:'CON METADATOS (FUTURO)',s:'17:00',e:'17:45',t:'Estudio',d:'Guion de objeciones',color:'var(--t-estudio)',icon:'school',stIcon:'radio_button_unchecked',stLabel:'Pendiente',src:'yo',srcIcon:'person',meta:true})
+];
+const TABS = [['today','Hoy'],['checklist','Tareas'],['calendar_month','Historial'],['insights','Métricas']];
+class Component extends DCLogic {
+  renderVals() {
+    const tab = (list) => list.map((t,i) => ({icon:t[0],label:t[1],fg:i===0?'var(--text)':'var(--muted)',pill:i===0?'var(--raised)':'transparent'}));
+    const digit = l => ({l,bg:'var(--surface)',fg:'var(--text)',ff:"'Instrument Sans',sans-serif",fs:26});
+    const icon = l => ({l,bg:'transparent',fg:'var(--text2)',ff:"'Material Symbols Rounded'",fs:28});
+    return {
+      themes:[{name:'Oscuro',note:'TEMA PRIMARIO',vars:themeVars('dark',T.dark)},{name:'Claro',note:'MISMO MARCADO',vars:themeVars('light',T.light)}],
+      tokens: TOK.map(([n,use]) => ({name:n,use,dark:T.dark[n],light:T.light[n]})),
+      regList: REG.map(r => ({key:r[0],label:r[1],icon:r[2],hueLabel:r[4]?'call':r[3]==null?'—':String(r[3]),dark:typeColor(T.dark,r),light:typeColor(T.light,r)})),
+      typeScale:[
+        {name:'display',size:32,w:600,sample:'Hoy',ls:'-.02em',ff:"'Instrument Sans'"},
+        {name:'title',size:22,w:600,sample:'Martín Ríos',ls:'-.01em',ff:"'Instrument Sans'"},
+        {name:'headline',size:18,w:600,sample:'Cierre del día',ls:'0',ff:"'Instrument Sans'"},
+        {name:'body',size:16,w:500,sample:'Llamada de cierre',ls:'0',ff:"'Instrument Sans'"},
+        {name:'body-sm',size:14,w:400,sample:'Mentoría · 2ª llamada',ls:'0',ff:"'Instrument Sans'"},
+        {name:'caption',size:13,w:400,sample:'Agenbot · Pendiente',ls:'0',ff:"'Instrument Sans'"},
+        {name:'mono',size:12,w:400,sample:'15:30–16:15',ls:'0',ff:"'Geist Mono'"},
+        {name:'micro',size:11,w:500,sample:'Historial',ls:'0',ff:"'Instrument Sans'"}
+      ],
+      spacing:[4,8,12,16,20,24,32,40],
+      radii:[{n:'8',v:8},{n:'12',v:12},{n:'16',v:16},{n:'20',v:20},{n:'28',v:28},{n:'pill',v:22}],
+      motion:[{n:'instant · toggles',v:'80 ms'},{n:'fast · press, chips',v:'120 ms'},{n:'base · cards, toast',v:'200 ms'},{n:'sheet · entrar/salir',v:'280 ms'},{n:'easing',v:'cubic-bezier(.2,.8,.2,1)'}],
+      samples:SAMPLES,
+      bars:[['L',3],['M',4],['M',2],['J',5],['V',3],['S',1],['D',0]].map(([d,n],i)=>({d,h:Math.max(4,n*14),op:i===1?1:0.55})),
+      heat:[0,.25,.5,.75,1,.5,0,.25,1,.75,.5,0,.25,.75,1,.5,.75,.25,0,.5,1,.75,.25,.5,1,0,.75,.5],
+      skel:[64,86,64],
+      keys:[...'123456789'].map(digit).concat([icon('fingerprint'),digit('0'),icon('backspace')]),
+      tabs5: tab([...TABS,['settings','Ajustes']]),
+      tabs6: tab([...TABS,['more_horiz','Más']]).map((t,i)=>i===4?{...t,fg:'var(--text)',pill:'var(--raised)'}:{...t,pill:'transparent',fg:'var(--muted)'}),
+      changelog:[
+        {v:'v0.2 · Sistema Calma',date:'19 oct 2026',items:['Tokens semánticos oscuro + claro','Registro de tipos como datos (13 tipos)','Estados de bloque, gestos y componentes base','Patrón de navegación con Más para 6+ secciones']},
+        {v:'v0.1 · Direcciones',date:'19 oct 2026',items:['1a Calma y 1b Pulso en móvil y escritorio','Elegida: 1a Calma']}
+      ],
+      openQs:['¿Los bloques hechos deben bajar de opacidad o solo cambiar el ícono?','¿Deslizar ← en un bloque de Calendar también lo marca salteado?','¿Querés huella como desbloqueo por defecto o PIN primero?']
+    };
+  }
+}
+</script>
+</body>
+</html>

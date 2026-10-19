@@ -155,6 +155,8 @@ export const block = pgTable(
     outcome: callOutcomeEnum(),
     note: text(),
     locked: boolean().notNull().default(false),
+    // "Avisarme 10 min antes" (mine). The API defaults it to true for calls, false otherwise.
+    remind: boolean().notNull().default(false),
     userOverrides: text()
       .array()
       .$type<ScheduleField[]>()

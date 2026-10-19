@@ -107,6 +107,7 @@ export const Block = z
     outcome: orNull(CallOutcome),
     note: z.string().nullable(),
     locked: z.boolean(),
+    remind: z.boolean().openapi({ description: "Push 10 min before start (\"Avisarme 10 min antes\"). Mine; default true for calls." }),
     userOverrides: z.array(ScheduleField).openapi({
       description: "Schedule fields I edited; the agent cannot change them until the day closes.",
     }),
@@ -137,6 +138,7 @@ export const BlockCreate = z
     ...blockScheduleShape,
     ...calendarShape,
     locked: z.boolean().optional().openapi({ description: "User only." }),
+    remind: z.boolean().optional().openapi({ description: "Default: true for calls, false otherwise." }),
   })
   .superRefine(refineBlock)
   .openapi("BlockCreate");
@@ -154,6 +156,7 @@ export const BlockPatch = z
     outcome: orNull(CallOutcome).optional(),
     note: z.string().max(4000).nullable().optional(),
     locked: z.boolean().optional().openapi({ description: "User only." }),
+    remind: z.boolean().optional().openapi({ description: "Mine; the agent may not change it." }),
     version: ExpectedVersion,
     force: z.boolean().optional().openapi({
       description:

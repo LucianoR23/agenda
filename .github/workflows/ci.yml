@@ -23,3 +23,5 @@ jobs:
       - name: Contract drift (examples valid, openapi.yaml + docs/api-examples.md up to date)
         run: pnpm openapi:check
       - run: pnpm openapi:lint
+      - name: Icon sprite up to date
+        run: pnpm icons:check

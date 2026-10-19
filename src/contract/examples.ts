@@ -39,8 +39,8 @@ const calendarBlocks: BlockInputT[] = [
     start: "10:00",
     end: "10:45",
     type: "call",
-    title: "Llamada · Martín Gómez",
-    detail: "Llamada de cierre — programa de 12 semanas",
+    title: "Llamada de cierre",
+    detail: "Programa de 12 semanas · 2ª llamada",
     lead: {
       name: "Martín Gómez",
       phone: "+5491155550101",
@@ -57,7 +57,7 @@ const calendarBlocks: BlockInputT[] = [
     start: "14:00",
     end: "14:45",
     type: "call",
-    title: "Llamada · Laura Pérez",
+    title: "Primera llamada",
     lead: {
       name: "Laura Pérez",
       whatsapp: "5493515550202",
@@ -87,7 +87,7 @@ const calendarBlocks: BlockInputT[] = [
 ];
 
 const agentCommon: BlockInputT[] = [
-  { source: "agent", start: "07:15", end: "07:45", type: "dogs", title: "Paseo con los perros" },
+  { source: "agent", start: "07:15", end: "07:45", type: "dogs", title: "Paseo con las perras" },
   { source: "agent", start: "08:00", end: "08:30", type: "meal", title: "Desayuno" },
   { source: "agent", start: "09:00", end: "09:50", type: "study", title: "Repasar guion de cierre", detail: "Objeción de precio: practicar reencuadre de inversión." },
   { source: "agent", start: "11:00", end: "11:30", type: "reading", title: "Lectura (30 min)" },
@@ -159,6 +159,7 @@ function materializeBlock(b: BlockInputT, optionId: string, order: number, at = 
     outcome: null,
     note: null,
     locked: false,
+    remind: b.type === "call",
     userOverrides: [],
     order: b.order ?? order,
     version: 1,
@@ -194,10 +195,10 @@ const findBlock = (opt: z.infer<typeof PlanOption>, title: string) => {
   return b;
 };
 
-export const blockMartinA = findBlock(optionA, "Llamada · Martín Gómez");
+export const blockMartinA = optionA.blocks.find((b) => b.lead?.name === "Martín Gómez")!;
 export const blockGymA = findBlock(optionA, "Gym — tren superior");
 export const blockReadingA = findBlock(optionA, "Lectura (30 min)");
-export const blockDogsA = findBlock(optionA, "Paseo con los perros");
+export const blockDogsA = findBlock(optionA, "Paseo con las perras");
 
 export const tasks0700: TaskT[] = dayInput0700.tasks!.map((t, i) => ({
   id: uid(200 + i),

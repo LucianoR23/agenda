@@ -221,7 +221,7 @@ export const webhookExample = {
       id: dayEditedWithProposal.options[0].blocks.find((b) => b.type === "call")!.id,
       action: "update",
       fields: { status: { from: "pending", to: "done" }, outcome: { from: null, to: "follow_up" }, note: { from: null, to: "Le interesa, pide hablar con la pareja. Volver a llamar el jueves 18:00." } },
-      block: { title: "Llamada · Martín Gómez", type: "call", start: "10:00", externalId: "4f2k9q0d1m7b8s6t3u1v0a2c3e", outcome: "follow_up" },
+      block: { title: "Llamada de cierre", type: "call", start: "10:00", externalId: "4f2k9q0d1m7b8s6t3u1v0a2c3e", outcome: "follow_up" },
       at: "2026-10-19T10:48:03.551-03:00",
     },
     {
