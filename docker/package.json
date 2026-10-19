@@ -1,0 +1,12 @@
+{
+  "name": "agenda",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "start": "node server.js",
+    "db:migrate": "node cli/migrate.mjs",
+    "auth:reset-pin": "node cli/auth-reset-pin.mjs",
+    "auth:recovery-codes": "node cli/auth-recovery-codes.mjs",
+    "agent:token": "node cli/agent-token.mjs"
+  }
+}

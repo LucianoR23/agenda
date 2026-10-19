@@ -248,3 +248,16 @@ Resolved 2026-10-19:
   with controlled timestamps, and shifts only `Date` in the browser (Playwright's clock also fakes
   `requestAnimationFrame`, which stalls exit animations). The WebAuthn flow uses Chrome's virtual authenticator.
 
+## Deploy
+
+- **D85 — Image**: `node:24-alpine` multi-stage, Next `standalone`, non-root user, `HEALTHCHECK` on `/api/health`.
+  Built natively by Coolify on the ARM64 server; CI cross-builds `linux/arm64` with QEMU to catch breakage.
+  `@node-rs/argon2` ships a prebuilt `linux-arm64-musl` binary, so no compiler is needed.
+- **D86 — Migrations on container start** (`docker/entrypoint.sh`, idempotent); `SKIP_MIGRATIONS=1` when Coolify runs
+  `pnpm db:migrate` as a pre-deploy command instead.
+- **D87 — Maintenance CLIs in the image** are bundled with esbuild to plain `.mjs` (`dist-cli`, no TypeScript/tsx at
+  runtime). `pnpm` is prepared at build time (corepack, `COREPACK_HOME=/opt/corepack`) and the runtime workspace
+  disables pnpm 11's pre-run dependency check, so `pnpm auth:reset-pin` works offline in the Coolify terminal.
+- **D88 — Close-day task** is a Coolify scheduled task calling the internal endpoint from inside the container with
+  `wget` (busybox), at 00:05 ART (`5 3 * * *` on a UTC server).
+

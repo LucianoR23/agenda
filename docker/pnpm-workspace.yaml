@@ -1,0 +1,2 @@
+# runtime image: no dependency install/check before `pnpm <script>`
+verifyDepsBeforeRun: false
