@@ -58,6 +58,26 @@ async function swipe(p: Page, testId: string, dx: number) {
   await p.mouse.up();
 }
 
+/** A real finger (CDP touch events: the browser scrolls, long-presses and cancels like on the phone). */
+async function finger(p: Page, from: { x: number; y: number }, to: { x: number; y: number }, holdMs = 0, steps = 12) {
+  // the page's own CDP session: opening/closing extra ones disturbs the virtual WebAuthn authenticator
+  const c = p === page ? cdp : await p.context().newCDPSession(p);
+  const at = (q: { x: number; y: number }) => [{ x: Math.round(q.x), y: Math.round(q.y) }];
+  await c.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(from) });
+  if (holdMs) await p.waitForTimeout(holdMs);
+  for (let i = 1; i <= steps; i++) {
+    await c.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at({ x: from.x + ((to.x - from.x) * i) / steps, y: from.y + ((to.y - from.y) * i) / steps }) });
+    await p.waitForTimeout(16);
+  }
+  return {
+    end: async () => {
+      await c.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      if (c !== cdp) await c.detach();
+    },
+  };
+}
+const center = (b: { x: number; y: number; width: number; height: number }) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
@@ -164,6 +184,57 @@ test("agent block editor, add block, Me atrasé", async () => {
   await expect(page.getByText("Desde las")).toBeVisible();
   await shot("12-me-atrase");
   await page.keyboard.press("Escape");
+});
+
+test("touch: long press lifts a block without scrolling; a quick move scrolls", async () => {
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const card = page.getByTestId("timeline").locator('[data-testid^="block-"]', { hasText: "Lectura (30 min)" });
+  // mid-screen, so the drag stays away from the edges (where dnd-kit auto-scrolls on purpose)
+  await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(100);
+  const box = (await card.boundingBox())!;
+  // no hold: a plain scroll, nothing lifts
+  const scrolled = await page.evaluate(() => window.scrollY);
+  const flick = await finger(page, center(box), { x: center(box).x, y: center(box).y + 200 });
+  await flick.end();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(scrolled);
+  await expect(page.getByText(/^Soltá acá/)).toHaveCount(0);
+  await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(100);
+  const scrollY0 = await page.evaluate(() => window.scrollY);
+  const before = await card.innerText();
+  const drag = await finger(page, center(box), { x: center(box).x, y: center(box).y + 110 }, 600);
+  await expect(page.getByText(/^Soltá acá/)).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollY0);
+  await drag.end();
+  await expect.poll(() => card.innerText()).not.toBe(before); // dropped at a new time
+
+});
+
+test("touch: the sheet closes swiping down anywhere and the page behind it doesn't scroll", async () => {
+  await page.getByText("Lectura (30 min)").first().click();
+  const sheet = page.getByTestId("block-editor");
+  await expect(sheet).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe("hidden");
+  await page.waitForTimeout(400); // slide-up animation
+  const box = (await page.getByRole("dialog").boundingBox())!;
+  const scrollY0 = await page.evaluate(() => window.scrollY);
+  // on the scrim: nothing moves behind
+  const scrim = await finger(page, { x: 200, y: 60 }, { x: 200, y: 360 });
+  await scrim.end();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollY0);
+  await expect(sheet).toBeVisible();
+  // in the middle of the sheet, not on the handle
+  const down = await finger(page, { x: center(box).x, y: box.y + 160 }, { x: center(box).x, y: box.y + 420 });
+  await down.end();
+  await expect(sheet).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe("");
+});
+
+test("call block: only WhatsApp, no prefilled message", async () => {
+  const call = page.getByTestId("timeline").locator('[data-testid^="block-"]', { hasText: "Laura Pérez" });
+  await expect(call.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/\d+$/);
+  await expect(call.getByRole("link", { name: "Llamar" })).toHaveCount(0);
 });
 
 test("Agenbot re-plan → proposal banner → diff → accept", async () => {

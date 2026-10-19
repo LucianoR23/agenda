@@ -270,3 +270,8 @@ Resolved 2026-10-19:
   draws it 15 % larger so it reads at 48 px. In-app: unlock/setup screens use the icon, the desktop sidebar the
   theme-aware mark (`--mark-done` token), Ajustes gets the install card and *Acerca de* (version, installed, check
   for updates). The create-next-app leftovers (Next favicon, sample SVGs) are gone.
+- **D91 — Touch gestures (feedback from the S26).** Long-press drag uses dnd-kit's `TouchSensor` (+ `MouseSensor` on
+  desktop) instead of `PointerSensor`: with `touch-action: pan-y` the browser started scrolling and fired
+  `pointercancel`, dropping the block. Bottom sheets close by swiping down anywhere while their content is at the
+  top (not only on the handle), and lock the page behind them. Call blocks show a single **WhatsApp** button that
+  opens the chat with no prefilled message (no *Llamar*). E2E covers all three with real CDP touch events.

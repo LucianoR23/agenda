@@ -42,9 +42,8 @@ export function localHHmm(iso: string): string {
   }).format(new Date(iso));
 }
 
-/** WhatsApp link with the prefilled confirmation message. */
-export function whatsappLink(number: string, leadName: string, start: string): string {
-  const first = leadName.split(" ")[0];
-  const text = `Hola ${first}! Te confirmo nuestra llamada de hoy a las ${blockTime(start).text}. ¿Seguimos en pie?`;
-  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+/** Opens the chat with the lead (WhatsApp number, else the phone), no prefilled message. */
+export function whatsappLink(lead: { whatsapp?: string | null; phone?: string | null }): string | null {
+  const digits = (lead.whatsapp ?? lead.phone ?? "").replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : null;
 }

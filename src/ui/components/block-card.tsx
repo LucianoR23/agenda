@@ -37,7 +37,7 @@ export function BlockCard({ block, onOpen }: { block: BlockData; onOpen?: () => 
   const fixedTime = block.source === "calendar" || block.locked;
   const editedByMe = block.source !== "user" && block.userOverrides.length > 0;
   const start = blockTime(block.start);
-  const contact = block.lead?.whatsapp ?? block.lead?.phone?.replace(/\D/g, "");
+  const chat = block.lead ? whatsappLink(block.lead) : null;
 
   return (
     <div className={cx("grid grid-cols-[50px_1fr] gap-3", done && "opacity-55", skipped && "opacity-50")}>
@@ -101,21 +101,11 @@ export function BlockCard({ block, onOpen }: { block: BlockData; onOpen?: () => 
           </div>
         )}
 
-        {isCall && block.status === "pending" && !removed && contact && (
-          <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-            <Button variant="call" icon="call" className="flex-1" href={`tel:${block.lead?.phone ?? `+${contact}`}`}>
-              Llamar
+        {isCall && block.status === "pending" && !removed && chat && (
+          <div className="flex pt-1" onClick={(e) => e.stopPropagation()}>
+            <Button variant="call" icon="chat" className="flex-1" href={chat}>
+              WhatsApp
             </Button>
-            {block.lead?.whatsapp && (
-              <Button
-                variant="secondary"
-                icon="chat"
-                className="flex-1"
-                href={whatsappLink(block.lead.whatsapp, block.lead.name, block.start)}
-              >
-                WhatsApp
-              </Button>
-            )}
           </div>
         )}
       </div>

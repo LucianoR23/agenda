@@ -176,19 +176,10 @@ export function BlockEditor({
         />
       )}
 
-      {isCall && block?.lead && block.status === "pending" && (
-        <div className="flex gap-2">
-          {(block.lead.phone || block.lead.whatsapp) && (
-            <Button variant="call" icon="call" className="flex-1" href={`tel:${block.lead.phone ?? `+${block.lead.whatsapp}`}`}>
-              Llamar
-            </Button>
-          )}
-          {block.lead.whatsapp && (
-            <Button variant="secondary" icon="chat" className="flex-1" href={whatsappLink(block.lead.whatsapp, block.lead.name, block.start)}>
-              WhatsApp
-            </Button>
-          )}
-        </div>
+      {isCall && block?.lead && block.status === "pending" && whatsappLink(block.lead) && (
+        <Button variant="call" icon="chat" href={whatsappLink(block.lead)!}>
+          WhatsApp
+        </Button>
       )}
 
       {calendar && block?.externalUrl && (

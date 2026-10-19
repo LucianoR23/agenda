@@ -6,7 +6,8 @@ import {
   type DragOverEvent,
   DragOverlay,
   type DragStartEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -110,7 +111,8 @@ function SortableBlock({ block, onOpen, onSwipe, placeholder }: { block: Block; 
       </div>
     );
   return (
-    <div ref={setNodeRef} style={style} {...listeners} className="touch-pan-y select-none">
+    // no long-press callout / context menu (Android shows one on links), it would steal the gesture
+    <div ref={setNodeRef} style={style} {...listeners} onContextMenu={(e) => movable && e.preventDefault()} className="touch-pan-y select-none [-webkit-touch-callout:none]">
       <Swipeable block={block} onSwipe={onSwipe}>
         <BlockCard block={block} onOpen={onOpen} />
       </Swipeable>
@@ -152,7 +154,12 @@ export function Timeline({
   const [order, setOrder] = useState<string[] | null>(null);
   const [active, setActive] = useState<Block | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 350, tolerance: 6 } }));
+  // Touch: long press (350 ms, finger still) lifts the card; moving earlier is a normal scroll. TouchSensor (not
+  // PointerSensor) because once lifted it cancels the touchmove, so the browser neither scrolls nor fires pointercancel.
+  const sensors = useSensors(
+    useSensor(TouchSensor, { activationConstraint: { delay: 350, tolerance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { delay: 350, tolerance: 6 } }),
+  );
 
   const ids = order ?? blocks.map((b) => b.id);
   const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
