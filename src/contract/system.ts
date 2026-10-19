@@ -17,6 +17,7 @@ export const SessionState = z
     passkeyEnabled: z.boolean().openapi({ description: "This device has a fingerprint passkey." }),
     lockedUntil: orNull(Timestamp).openapi({ description: "Set while PIN entry is locked out." }),
     device: z.strictObject({ id: Uuid, name: z.string() }).nullable(),
+    vapidPublicKey: z.string().nullable().openapi({ description: "Web Push application server key; null when push is not configured." }),
   })
   .openapi("SessionState");
 

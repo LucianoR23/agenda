@@ -11733,7 +11733,8 @@ Content-Type: application/json
   "device": {
     "id": "019a0a6e-1c00-7000-8000-000000000320",
     "name": "Galaxy S26 Ultra · Chrome"
-  }
+  },
+  "vapidPublicKey": "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U"
 }
 ```
 
@@ -11752,7 +11753,8 @@ Content-Type: application/json
   "state": "setup_required",
   "passkeyEnabled": false,
   "lockedUntil": null,
-  "device": null
+  "device": null,
+  "vapidPublicKey": null
 }
 ```
 

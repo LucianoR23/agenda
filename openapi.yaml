@@ -2275,11 +2275,17 @@ components:
             - id
             - name
           additionalProperties: false
+        vapidPublicKey:
+          type:
+            - string
+            - "null"
+          description: Web Push application server key; null when push is not configured.
       required:
         - state
         - passkeyEnabled
         - lockedUntil
         - device
+        - vapidPublicKey
       additionalProperties: false
     SetupInput:
       type: object
@@ -14556,6 +14562,7 @@ paths:
                     device:
                       id: 019a0a6e-1c00-7000-8000-000000000320
                       name: Galaxy S26 Ultra · Chrome
+                    vapidPublicKey: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
                 setup:
                   summary: Fresh install
                   value:
@@ -14563,6 +14570,7 @@ paths:
                     passkeyEnabled: false
                     lockedUntil: null
                     device: null
+                    vapidPublicKey: null
               schema:
                 $ref: "#/components/schemas/SessionState"
   /api/auth/setup:

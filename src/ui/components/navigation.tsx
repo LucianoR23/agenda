@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cx } from "../cx";
 import type { IconName } from "../icons";
 import { Icon } from "./icon";
@@ -12,22 +13,42 @@ export const TABS: Array<{ key: string; label: string; icon: IconName; href: str
   { key: "settings", label: "Ajustes", icon: "settings", href: "/ajustes" },
 ];
 
+/** Active tab from the pathname. */
+export const tabFor = (pathname: string) => TABS.find((t) => (t.href === "/" ? pathname === "/" : pathname.startsWith(t.href)))?.key ?? "today";
+
 /**
  * Bottom tab bar (72 px). Up to 5 sections all visible; with 6+ the 5th becomes "Más" (sheet with the rest).
- * Desktop uses a sidebar with all sections.
+ * Desktop uses the sidebar with all sections.
  */
 export function TabBar({ active }: { active: string }) {
   return (
-    <nav aria-label="Secciones" className="grid h-[72px] grid-cols-5 border-t border-border bg-surface pb-safe">
+    <nav aria-label="Secciones" className="grid h-[calc(72px+env(safe-area-inset-bottom))] grid-cols-5 border-t border-border bg-surface pb-safe">
       {TABS.map((t) => {
         const on = t.key === active;
         return (
-          <a key={t.key} href={t.href} aria-current={on ? "page" : undefined} className={cx("flex flex-col items-center justify-center gap-0.5", on ? "text-text" : "text-muted")}>
-            <span className={cx("flex h-[30px] w-14 items-center justify-center rounded-[15px]", on && "bg-raised")}>
+          <Link key={t.key} href={t.href} aria-current={on ? "page" : undefined} className={cx("flex flex-col items-center justify-center gap-0.5", on ? "text-text" : "text-muted")}>
+            <span className={cx("flex h-[30px] w-14 items-center justify-center rounded-[15px] transition-colors", on && "bg-raised")}>
               <Icon name={t.icon} size={22} />
             </span>
             <span className="text-micro">{t.label}</span>
-          </a>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function Sidebar({ active }: { active: string }) {
+  return (
+    <nav aria-label="Secciones" className="flex w-60 flex-col gap-1 border-r border-border bg-surface p-4">
+      <span className="px-3 pb-4 font-mono text-mono tracking-[.08em] text-muted">AGENDA</span>
+      {TABS.map((t) => {
+        const on = t.key === active;
+        return (
+          <Link key={t.key} href={t.href} aria-current={on ? "page" : undefined} className={cx("flex min-h-11 items-center gap-3 rounded-md px-3 text-[15px]", on ? "bg-raised font-semibold text-text" : "text-text2")}>
+            <Icon name={t.icon} size={22} />
+            {t.label}
+          </Link>
         );
       })}
     </nav>

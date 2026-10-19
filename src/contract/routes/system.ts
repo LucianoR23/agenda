@@ -67,8 +67,8 @@ const authRoutes: RouteDef[] = [
     access: "preauth",
     responses: { 200: { description: "State.", schema: SessionState } },
     exchanges: [
-      { name: "locked", summary: "Phone unused for 8 days", actor: "anonymous", status: 200, response: { state: "locked", passkeyEnabled: true, lockedUntil: null, device: { id: phone.id, name: phone.name } } },
-      { name: "setup", summary: "Fresh install", actor: "anonymous", status: 200, response: { state: "setup_required", passkeyEnabled: false, lockedUntil: null, device: null } },
+      { name: "locked", summary: "Phone unused for 8 days", actor: "anonymous", status: 200, response: { state: "locked", passkeyEnabled: true, lockedUntil: null, device: { id: phone.id, name: phone.name }, vapidPublicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" } },
+      { name: "setup", summary: "Fresh install", actor: "anonymous", status: 200, response: { state: "setup_required", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null } },
     ],
   },
   {

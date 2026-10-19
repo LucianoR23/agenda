@@ -227,7 +227,7 @@ export function BarChart({ bars, color = "var(--call)", highlight }: { bars: Arr
       {bars.map((b, i) => (
         <div key={i} className="flex flex-1 flex-col items-center gap-1">
           <div
-            className="w-full rounded-t-md rounded-b-sm"
+            className="w-full max-w-12 rounded-t-md rounded-b-sm"
             style={{ height: Math.max(4, (b.value / max) * 70), background: color, opacity: highlight === undefined || highlight === i ? 1 : 0.55 }}
           />
           <span className="font-mono text-[10px] text-muted">{b.label}</span>

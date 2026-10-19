@@ -78,6 +78,7 @@ export async function sessionState(ctx: Ctx) {
     passkeyEnabled: !!pk,
     lockedUntil,
     device: d ? { id: d.id, name: d.name } : null,
+    vapidPublicKey: env().VAPID_PUBLIC_KEY || null,
   };
 }
 

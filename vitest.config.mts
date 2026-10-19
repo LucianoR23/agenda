@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/unit/**/*.test.ts", "tests/api/**/*.test.ts"],
     globalSetup: ["tests/helpers/global-setup.ts"],
     setupFiles: ["tests/helpers/env.ts"],
     // one shared test database: run files one after another

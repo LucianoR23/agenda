@@ -224,3 +224,27 @@ Resolved 2026-10-19:
 - **D76 — Day versions**: a new day starts at version 1; my own day ("Armar mi día") is created at version 2
   (insert + choose).
 
+## UI and PWA (STOP 4)
+
+- **D77 — Hand-written service worker** (`public/sw.js`) instead of Serwist (its plugin targets webpack; this
+  project builds with Turbopack). Navigations network-first with the cached shell offline, `/_next/static`
+  cache-first, `/api` never cached by the SW. Registered in production builds only.
+- **D78 — Offline data**: IndexedDB (Dexie) holds the last good response per query (pruned after 14 days) and the
+  write outbox. On start the query cache is filled from IndexedDB (shown immediately, marked stale → revalidated).
+  Writes are optimistic, queued with their `Idempotency-Key`, and carry the `version` they were made against; a 409
+  parks the item and opens the conflict sheet ("Mantener el mío" re-sends against the server's version, "Usar
+  servidor" drops it). Other 4xx drop the item with a toast.
+- **D79 — The app shell is client-rendered behind the auth gate**, so `(app)` segments set `instant = false`
+  (Next 16 instant-navigation validation has nothing to check before the gate).
+- **D80 — Drag to move**: long-press 350 ms (dnd-kit pointer sensor, agent/user pending unlocked blocks only). The
+  drop time is right after the previous block (snap 15 min) keeping the duration; same start → `reorder`.
+- **D81 — Swipe**: motion drag on the card, threshold 96 px with haptic at the crossing; done/skipped with an undo
+  toast; a call marked done opens the outcome picker.
+- **D82 — VAPID public key** comes from `GET /api/auth/session` (`vapidPublicKey`), so push works without a rebuild.
+  Push prefs (call/sleep reminders) are per device, stored with the subscription.
+- **D83 — App icons** are rendered from the design glyph with headless Chromium (`pnpm pwa:icons`; `sharp` builds
+  are disabled in this repo).
+- **D84 — E2E** runs the production build on its own database (`agenda_e2e`), seeds history through the domain code
+  with controlled timestamps, and shifts only `Date` in the browser (Playwright's clock also fakes
+  `requestAnimationFrame`, which stalls exit animations). The WebAuthn flow uses Chrome's virtual authenticator.
+

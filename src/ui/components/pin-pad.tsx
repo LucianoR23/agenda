@@ -16,6 +16,7 @@ export function PinPad({
   onBackspace,
   onFingerprint,
   onRecover,
+  recoverLabel = "Usar código de recuperación",
 }: {
   title?: string;
   filled: number;
@@ -26,6 +27,8 @@ export function PinPad({
   onBackspace?: () => void;
   onFingerprint?: () => void;
   onRecover?: () => void;
+  /** null hides the link (setup, new PIN). */
+  recoverLabel?: string | null;
 }) {
   const key = "flex size-[72px] items-center justify-center rounded-full";
   return (
@@ -59,9 +62,11 @@ export function PinPad({
           <Icon name="backspace" size={28} />
         </button>
       </div>
-      <button type="button" onClick={onRecover} className="flex min-h-11 items-center text-body-sm text-accent">
-        Usar código de recuperación
-      </button>
+      {recoverLabel && (
+        <button type="button" onClick={onRecover} className="flex min-h-11 items-center text-body-sm text-accent">
+          {recoverLabel}
+        </button>
+      )}
     </div>
   );
 }

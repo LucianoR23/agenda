@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Sans } from "next/font/google";
+import { THEME_BOOT } from "@/ui/theme";
 import "./globals.css";
 
 const instrumentSans = Instrument_Sans({
@@ -17,6 +18,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Agenda",
   description: "Tu día, cargado por Agenbot.",
+  appleWebApp: { capable: true, title: "Agenda", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
@@ -31,7 +34,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es-AR" className={`${instrumentSans.variable} ${geistMono.variable} h-full`}>
+    <html lang="es-AR" className={`${instrumentSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
+      <head>
+        {/* saved theme before first paint (no flash) */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
