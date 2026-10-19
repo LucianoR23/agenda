@@ -53,6 +53,7 @@ erDiagram
         text external_id "required if calendar"
         text external_url
         calendar_kind calendar "work|personal"
+        timestamptz removed_from_calendar_at "kept after Google deletion"
         block_status status "pending|done|skipped"
         timestamptz status_at
         call_outcome outcome "call only"

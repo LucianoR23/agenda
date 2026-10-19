@@ -1,0 +1,2 @@
+ALTER TABLE "block" ADD COLUMN "removed_from_calendar_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "block" ADD CONSTRAINT "block_removed_only_calendar" CHECK ("block"."removed_from_calendar_at" IS NULL OR "block"."source" = 'calendar');

@@ -15,6 +15,13 @@
       "when": 1792419378477,
       "tag": "0001_row_version_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792420950846,
+      "tag": "0002_block_removed_from_calendar",
+      "breakpoints": true
     }
   ]
 }

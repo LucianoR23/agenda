@@ -86,18 +86,21 @@ confirmation; the default is already applied and can be changed cheaply until ST
 - **D25 — 10-min call reminder toggle is per device** (`push_subscription.call_reminders`).
 - **D26 — Agent rate limit (120 req/min) is in-memory** — single container, no Redis.
 
-## Open questions
+## Resolved at STOP 1 (2026-10-19)
 
-- **[OPEN] Q1 — What bumps `Day.version` (`dayVersion` in the webhook / `ETag` of `GET /days/{date}`)?**
-  Default: any write to the day row, its options or its blocks. Tasks and habit logs have their own versions and do
-  **not** bump the day (so toggling a task doesn't make a pending day `If-Match` fail).
-- **[OPEN] Q2 — `PATCH /blocks/by-external/{externalId}` on a `draft` day** (the event exists once per option):
-  default = apply to every option's copy; on `chosen|edited` days only the chosen option's copy.
-- **[OPEN] Q3 — Habit ↔ block link.** I added `habit.slug` (stable key the agent can use, e.g. `gym`) and an
-  optional `habit.block_type`: marking a `gym` block done auto-logs the `gym` habit for that date (and undoing
-  it removes the auto-log). Without this, "gym 2/3" would need the agent or me to log the habit separately. Keep?
-- **[OPEN] Q4 — `edited` status.** Default: a `chosen` day becomes `edited` on my first schedule-field change
-  (add/move/delete/edit block, shift, reorder). Tracking-field changes (done/skipped/outcome) keep it `chosen`.
-- **[OPEN] Q5 — Calendar blocks the agent stops sending** (event cancelled in Google) on a `chosen|edited` day: they
-  appear as "removed" in the proposal diff; if I already marked one done, accept keeps it (status preserved) or drops it?
-  Default: drop it but keep the ChangeLog entry.
+- **D27 — `Day.version` scope (Q1).** Bumped by any write to the day row, its options or its blocks. Tasks and
+  habit logs have their own versions and do **not** bump the day.
+- **D28 — `PATCH /blocks/by-external/{externalId}` (Q2).** Agenbot never writes to Google Calendar: I edit events by
+  hand and Agenbot mirrors what it reads. The mirror goes to **every copy** of the event: all options on a `draft`
+  day, and on `chosen|edited` days too (the non-chosen copies are kept consistent for history).
+- **D29 — Habit ↔ block link (Q3).** `habit.slug` is the stable key for the agent (e.g. `gym`).
+  `habit.block_type` is optional: marking a block of that type `done` upserts the habit log for that date with
+  `source` = the actor; undoing removes the log only if that block created it. One log per habit per day, however
+  many matching blocks there are. Habits done outside the plan are logged by hand.
+- **D30 — `chosen → edited` (Q4).** Triggered by my first schedule-field change (add/move/delete/edit block,
+  shift, reorder). Tracking-field changes (done/skipped/outcome/note) keep the day `chosen`.
+- **D31 — Calendar events that disappear (Q5).** When an agent replace (or an accepted proposal) no longer contains
+  a calendar block: if I already tracked it (status ≠ `pending`, or `outcome`/`note` set), it is **kept** with
+  `block.removed_from_calendar_at` set; the UI strikes it through with "Ya no está en Google Calendar" and it still
+  counts in metrics. Untouched pending blocks are deleted. If the event comes back (same `externalId`), the
+  timestamp is cleared. Migration `0002_block_removed_from_calendar.sql`.

@@ -148,6 +148,8 @@ export const block = pgTable(
     externalId: text(),
     externalUrl: text(),
     calendar: calendarKindEnum(),
+    // set when the event vanished from Google after I tracked it; the block is kept for history/metrics
+    removedFromCalendarAt: timestamp({ withTimezone: true }),
     status: blockStatusEnum().notNull().default("pending"),
     statusAt: timestamp({ withTimezone: true }),
     outcome: callOutcomeEnum(),
@@ -178,6 +180,10 @@ export const block = pgTable(
     check(
       "block_calendar_requires_external_id",
       sql`${t.source} <> 'calendar' OR ${t.externalId} IS NOT NULL`,
+    ),
+    check(
+      "block_removed_only_calendar",
+      sql`${t.removedFromCalendarAt} IS NULL OR ${t.source} = 'calendar'`,
     ),
     check("block_outcome_only_calls", sql`${t.outcome} IS NULL OR ${t.type} = 'call'`),
     check("block_lead_only_calls", sql`${t.lead} IS NULL OR ${t.type} = 'call'`),
