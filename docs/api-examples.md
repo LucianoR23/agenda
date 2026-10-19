@@ -16,6 +16,7 @@ Errors common to every route (400 `validation_error`, 401, 403, 409 `idempotency
 - **Tasks**: `GET /api/tasks`, `POST /api/tasks`, `PATCH /api/tasks/{id}`, `DELETE /api/tasks/{id}`
 - **Metrics**: `GET /api/metrics`
 - **Agent**: `GET /api/agent/context`, `GET /api/changelog`, `GET /api/webhook/status`
+- **Sleep**: `GET /api/sleep`, `POST /api/sleep/events`, `PUT /api/sleep/{date}`
 - **Ops**: `GET /api/health`, `GET /api/openapi.json`, `GET /api/export`, `POST /api/internal/close-day`
 - **Auth**: `GET /api/auth/session`, `POST /api/auth/setup`, `POST /api/auth/unlock`, `POST /api/auth/recover`, `POST /api/auth/pin`, `POST /api/auth/recovery-codes`, `POST /api/auth/passkey/register/options`, `POST /api/auth/passkey/register/verify`, `POST /api/auth/passkey/auth/options`, `POST /api/auth/passkey/auth/verify`, `DELETE /api/auth/passkey`, `GET /api/auth/devices`, `PATCH /api/auth/devices/{id}`, `DELETE /api/auth/devices/{id}`, `POST /api/auth/logout`
 - **Push**: `POST /api/push/subscribe`, `DELETE /api/push/subscribe`
@@ -821,6 +822,26 @@ ETag: "1"
   ],
   "habitLogs": [],
   "pendingProposal": null,
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    }
+  },
   "version": 1,
   "createdAt": "2026-10-19T07:00:04.812-03:00",
   "updatedAt": "2026-10-19T07:00:04.812-03:00",
@@ -1824,6 +1845,26 @@ ETag: "4"
         }
       ],
       "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00."
+    }
+  },
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
     }
   },
   "version": 4,
@@ -2942,6 +2983,26 @@ ETag: "1"
     ],
     "habitLogs": [],
     "pendingProposal": null,
+    "sleep": {
+      "night": null,
+      "previousNight": {
+        "id": "019a0a6e-1c00-7000-8000-00000000015e",
+        "date": "2026-10-18",
+        "bedAt": "2026-10-19T00:05:00.000-03:00",
+        "bedSource": "user",
+        "wokeAt": "2026-10-19T06:55:00.000-03:00",
+        "wakeSource": "user",
+        "durationMinutes": 410,
+        "plannedStart": "23:30",
+        "plannedEnd": "07:00",
+        "bedDelayMinutes": 35,
+        "note": null,
+        "version": 2,
+        "createdAt": "2026-10-19T00:05:00.000-03:00",
+        "updatedAt": "2026-10-19T06:55:00.000-03:00",
+        "updatedBy": "user"
+      }
+    },
     "version": 1,
     "createdAt": "2026-10-19T07:00:04.812-03:00",
     "updatedAt": "2026-10-19T07:00:04.812-03:00",
@@ -4104,6 +4165,26 @@ Content-Type: application/json
           }
         ],
         "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00."
+      }
+    },
+    "sleep": {
+      "night": null,
+      "previousNight": {
+        "id": "019a0a6e-1c00-7000-8000-00000000015e",
+        "date": "2026-10-18",
+        "bedAt": "2026-10-19T00:05:00.000-03:00",
+        "bedSource": "user",
+        "wokeAt": "2026-10-19T06:55:00.000-03:00",
+        "wakeSource": "user",
+        "durationMinutes": 410,
+        "plannedStart": "23:30",
+        "plannedEnd": "07:00",
+        "bedDelayMinutes": 35,
+        "note": null,
+        "version": 2,
+        "createdAt": "2026-10-19T00:05:00.000-03:00",
+        "updatedAt": "2026-10-19T06:55:00.000-03:00",
+        "updatedBy": "user"
       }
     },
     "version": 4,
@@ -5483,6 +5564,26 @@ ETag: "6"
   ],
   "habitLogs": [],
   "pendingProposal": null,
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    }
+  },
   "version": 6,
   "createdAt": "2026-10-19T07:00:04.812-03:00",
   "updatedAt": "2026-10-19T22:40:00.000-03:00",
@@ -6327,6 +6428,26 @@ ETag: "2"
   ],
   "habitLogs": [],
   "pendingProposal": null,
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    }
+  },
   "version": 2,
   "createdAt": "2026-10-19T07:00:04.812-03:00",
   "updatedAt": "2026-10-19T07:42:10.002-03:00",
@@ -6367,7 +6488,7 @@ Content-Type: application/problem+json
 
 Access: **agent+user**
 
-Moves pending, unlocked `agent`/`user` blocks of the chosen option starting at or after `fromTime`. Calendar and `sleep` blocks never move. When the user shifts, `start`/`end` are added to `userOverrides`.
+Moves pending, unlocked `agent`/`user` blocks of the chosen option starting at or after `fromTime`, `sleep` included; calendar blocks never move. Blocks can pass midnight (`24:15` = 00:15 next day). When I shift, `start`/`end` join `userOverrides`. Recorded as a `shift` ChangeLog entry and a `shift` webhook change.
 
 #### 11:04 — +30 min from 11:00
 _user_
@@ -6724,8 +6845,8 @@ ETag: "3"
         {
           "id": "019a0a6e-1c00-7000-8000-00000000006d",
           "optionId": "019a0a6e-1c00-7000-8000-000000000002",
-          "start": "23:30",
-          "end": "07:00",
+          "start": "24:00",
+          "end": "07:30",
           "title": "Dormir",
           "type": "sleep",
           "detail": null,
@@ -6740,12 +6861,15 @@ ETag: "3"
           "outcome": null,
           "note": null,
           "locked": false,
-          "userOverrides": [],
+          "userOverrides": [
+            "start",
+            "end"
+          ],
           "order": 9,
-          "version": 1,
+          "version": 2,
           "createdAt": "2026-10-19T07:00:04.812-03:00",
-          "updatedAt": "2026-10-19T07:00:04.812-03:00",
-          "updatedBy": "agent"
+          "updatedAt": "2026-10-19T11:04:00.000-03:00",
+          "updatedBy": "user"
         }
       ],
       "version": 1,
@@ -7179,6 +7303,26 @@ ETag: "3"
   ],
   "habitLogs": [],
   "pendingProposal": null,
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    }
+  },
   "version": 3,
   "createdAt": "2026-10-19T07:00:04.812-03:00",
   "updatedAt": "2026-10-19T11:04:00.000-03:00",
@@ -7188,7 +7332,7 @@ ETag: "3"
 
 </details>
 
-#### +60 at night would push pádel past midnight
+#### 21:20 — +45 from 21:00: pareja 22:30, dormir pasa a 24:15 (00:15 del martes); pádel (calendar) no se mueve
 _user_
 
 ```http
@@ -7197,24 +7341,829 @@ Cookie: agenda_session=<session>
 Content-Type: application/json
 
 {
-  "fromTime": "21:30",
-  "minutes": 180
+  "fromTime": "21:00",
+  "minutes": 45
 }
 ```
+
+<details><summary>Response 200</summary>
 
 ```http
-HTTP/1.1 422 Unprocessable Content
-Content-Type: application/problem+json
+HTTP/1.1 200 OK
+Content-Type: application/json
+ETag: "3"
 
 {
-  "type": "https://agenda.lemydev.com/problems/shift_out_of_range",
-  "title": "Shift would cross midnight",
-  "status": 422,
-  "detail": "\"Tiempo en pareja\" would start at 00:45.",
-  "code": "shift_out_of_range",
-  "requestId": "req_01JA9X7Q2M8K"
+  "id": "019a0a6e-1c00-7000-8000-000000000001",
+  "date": "2026-10-19",
+  "status": "edited",
+  "chosenOptionId": "019a0a6e-1c00-7000-8000-000000000002",
+  "chosenOption": "A",
+  "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+  "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+  "weeklyGym": {
+    "done": 0,
+    "target": 3
+  },
+  "review": null,
+  "reviewedAt": null,
+  "closedAt": null,
+  "options": [
+    {
+      "id": "019a0a6e-1c00-7000-8000-000000000002",
+      "label": "A",
+      "title": "Gym al mediodía",
+      "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+      "order": 0,
+      "blocks": [
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000068",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "07:15",
+          "end": "07:45",
+          "title": "Paseo con los perros",
+          "type": "dogs",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 4,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000069",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "08:00",
+          "end": "08:30",
+          "title": "Desayuno",
+          "type": "meal",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 5,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000006a",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "09:00",
+          "end": "09:50",
+          "title": "Repasar guion de cierre",
+          "type": "study",
+          "detail": "Objeción de precio: practicar reencuadre de inversión.",
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 6,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000064",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "10:00",
+          "end": "10:45",
+          "title": "Llamada · Martín Gómez",
+          "type": "call",
+          "detail": "Llamada de cierre — programa de 12 semanas",
+          "lead": {
+            "name": "Martín Gómez",
+            "phone": "+5491155550101",
+            "whatsapp": "5491155550101",
+            "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+            "crmUrl": "https://crm.example.com/leads/8812"
+          },
+          "source": "calendar",
+          "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+          "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+          "calendar": "work",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 0,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000006b",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "11:00",
+          "end": "11:30",
+          "title": "Lectura (30 min)",
+          "type": "reading",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 7,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000006e",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "12:00",
+          "end": "13:00",
+          "title": "Gym — tren superior",
+          "type": "gym",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 10,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000006f",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "13:10",
+          "end": "13:40",
+          "title": "Almuerzo",
+          "type": "meal",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 11,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000065",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "14:00",
+          "end": "14:45",
+          "title": "Llamada · Laura Pérez",
+          "type": "call",
+          "detail": null,
+          "lead": {
+            "name": "Laura Pérez",
+            "whatsapp": "5493515550202",
+            "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+          },
+          "source": "calendar",
+          "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+          "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+          "calendar": "work",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 1,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000066",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "16:00",
+          "end": "20:00",
+          "title": "Turno en el local",
+          "type": "local_work",
+          "detail": null,
+          "lead": null,
+          "source": "calendar",
+          "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+          "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+          "calendar": "work",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 2,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000067",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "20:30",
+          "end": "21:30",
+          "title": "Clase de pádel",
+          "type": "padel",
+          "detail": null,
+          "lead": null,
+          "source": "calendar",
+          "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+          "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+          "calendar": "personal",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 3,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000006c",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "22:30",
+          "end": "23:30",
+          "title": "Tiempo en pareja",
+          "type": "partner",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [
+            "start",
+            "end"
+          ],
+          "order": 8,
+          "version": 2,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T21:20:00.000-03:00",
+          "updatedBy": "user"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000006d",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+          "start": "24:15",
+          "end": "07:45",
+          "title": "Dormir",
+          "type": "sleep",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [
+            "start",
+            "end"
+          ],
+          "order": 9,
+          "version": 2,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T21:20:00.000-03:00",
+          "updatedBy": "user"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedBy": "agent"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-000000000003",
+      "label": "B",
+      "title": "Gym temprano",
+      "description": "Gym antes de los perros; mediodía libre para preparar a Laura.",
+      "order": 1,
+      "blocks": [
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000074",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "06:15",
+          "end": "07:05",
+          "title": "Gym — tren superior",
+          "type": "gym",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 4,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000075",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "07:15",
+          "end": "07:45",
+          "title": "Paseo con los perros",
+          "type": "dogs",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 5,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000076",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "08:00",
+          "end": "08:30",
+          "title": "Desayuno",
+          "type": "meal",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 6,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000077",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "09:00",
+          "end": "09:50",
+          "title": "Repasar guion de cierre",
+          "type": "study",
+          "detail": "Objeción de precio: practicar reencuadre de inversión.",
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 7,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000070",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "10:00",
+          "end": "10:45",
+          "title": "Llamada · Martín Gómez",
+          "type": "call",
+          "detail": "Llamada de cierre — programa de 12 semanas",
+          "lead": {
+            "name": "Martín Gómez",
+            "phone": "+5491155550101",
+            "whatsapp": "5491155550101",
+            "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+            "crmUrl": "https://crm.example.com/leads/8812"
+          },
+          "source": "calendar",
+          "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+          "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+          "calendar": "work",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 0,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000078",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "11:00",
+          "end": "11:30",
+          "title": "Lectura (30 min)",
+          "type": "reading",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 8,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000007b",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "12:30",
+          "end": "13:15",
+          "title": "Almuerzo",
+          "type": "meal",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 11,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000007c",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "13:15",
+          "end": "13:45",
+          "title": "Preparar llamada con Laura",
+          "type": "study",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 12,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000071",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "14:00",
+          "end": "14:45",
+          "title": "Llamada · Laura Pérez",
+          "type": "call",
+          "detail": null,
+          "lead": {
+            "name": "Laura Pérez",
+            "whatsapp": "5493515550202",
+            "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+          },
+          "source": "calendar",
+          "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+          "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+          "calendar": "work",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 1,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000072",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "16:00",
+          "end": "20:00",
+          "title": "Turno en el local",
+          "type": "local_work",
+          "detail": null,
+          "lead": null,
+          "source": "calendar",
+          "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+          "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+          "calendar": "work",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 2,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000073",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "20:30",
+          "end": "21:30",
+          "title": "Clase de pádel",
+          "type": "padel",
+          "detail": null,
+          "lead": null,
+          "source": "calendar",
+          "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+          "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+          "calendar": "personal",
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 3,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-000000000079",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "21:45",
+          "end": "22:45",
+          "title": "Tiempo en pareja",
+          "type": "partner",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 9,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        },
+        {
+          "id": "019a0a6e-1c00-7000-8000-00000000007a",
+          "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+          "start": "23:30",
+          "end": "07:00",
+          "title": "Dormir",
+          "type": "sleep",
+          "detail": null,
+          "lead": null,
+          "source": "agent",
+          "externalId": null,
+          "externalUrl": null,
+          "calendar": null,
+          "removedFromCalendarAt": null,
+          "status": "pending",
+          "statusAt": null,
+          "outcome": null,
+          "note": null,
+          "locked": false,
+          "userOverrides": [],
+          "order": 10,
+          "version": 1,
+          "createdAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedAt": "2026-10-19T07:00:04.812-03:00",
+          "updatedBy": "agent"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedBy": "agent"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "019a0a6e-1c00-7000-8000-0000000000c8",
+      "date": "2026-10-19",
+      "title": "Confirmar por WhatsApp a Martín (10:00)",
+      "kind": "whatsapp_confirm",
+      "origin": "agent",
+      "done": false,
+      "doneAt": null,
+      "relatedBlockId": "019a0a6e-1c00-7000-8000-000000000064",
+      "order": 0,
+      "version": 1,
+      "createdAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedBy": "agent"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-0000000000c9",
+      "date": "2026-10-19",
+      "title": "Confirmar por WhatsApp a Laura (14:00)",
+      "kind": "whatsapp_confirm",
+      "origin": "agent",
+      "done": false,
+      "doneAt": null,
+      "relatedBlockId": "019a0a6e-1c00-7000-8000-000000000065",
+      "order": 1,
+      "version": 1,
+      "createdAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedBy": "agent"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-0000000000ca",
+      "date": "2026-10-19",
+      "title": "Leer notas de descubrimiento de Martín en el CRM",
+      "kind": "lead_context",
+      "origin": "agent",
+      "done": false,
+      "doneAt": null,
+      "relatedBlockId": null,
+      "order": 2,
+      "version": 1,
+      "createdAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedBy": "agent"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-0000000000cb",
+      "date": "2026-10-19",
+      "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+      "kind": "follow_up",
+      "origin": "agent",
+      "done": false,
+      "doneAt": null,
+      "relatedBlockId": null,
+      "order": 3,
+      "version": 1,
+      "createdAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedAt": "2026-10-19T07:00:04.812-03:00",
+      "updatedBy": "agent"
+    }
+  ],
+  "habitLogs": [],
+  "pendingProposal": null,
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    }
+  },
+  "version": 3,
+  "createdAt": "2026-10-19T07:00:04.812-03:00",
+  "updatedAt": "2026-10-19T21:20:00.000-03:00",
+  "updatedBy": "user"
 }
 ```
+
+</details>
 
 ### `GET /api/days` — Day summaries for history
 
@@ -8318,6 +9267,26 @@ ETag: "5"
   ],
   "habitLogs": [],
   "pendingProposal": null,
+  "sleep": {
+    "night": null,
+    "previousNight": {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    }
+  },
   "version": 5,
   "createdAt": "2026-10-19T07:00:04.812-03:00",
   "updatedAt": "2026-10-19T12:41:30.120-03:00",
@@ -9801,6 +10770,51 @@ Content-Type: application/json
     "showUpRate": 0.86,
     "closeRate": 0.33
   },
+  "sleep": {
+    "nightsLogged": 6,
+    "nightsTotal": 7,
+    "avgDurationMinutes": 418,
+    "avgBedtime": "24:02",
+    "avgWakeTime": "07:01",
+    "avgBedDelayMinutes": 32,
+    "nights": [
+      {
+        "date": "2026-10-12",
+        "durationMinutes": 425,
+        "bedDelayMinutes": 25
+      },
+      {
+        "date": "2026-10-13",
+        "durationMinutes": 395,
+        "bedDelayMinutes": 50
+      },
+      {
+        "date": "2026-10-14",
+        "durationMinutes": 440,
+        "bedDelayMinutes": 10
+      },
+      {
+        "date": "2026-10-15",
+        "durationMinutes": null,
+        "bedDelayMinutes": 40
+      },
+      {
+        "date": "2026-10-16",
+        "durationMinutes": 380,
+        "bedDelayMinutes": 55
+      },
+      {
+        "date": "2026-10-17",
+        "durationMinutes": 455,
+        "bedDelayMinutes": 15
+      },
+      {
+        "date": "2026-10-18",
+        "durationMinutes": 410,
+        "bedDelayMinutes": 35
+      }
+    ]
+  },
   "habits": [
     {
       "slug": "gym",
@@ -9909,6 +10923,23 @@ Content-Type: application/json
     "mood": 4,
     "text": null
   },
+  "lastNightSleep": {
+    "id": "019a0a6e-1c00-7000-8000-00000000015e",
+    "date": "2026-10-18",
+    "bedAt": "2026-10-19T00:05:00.000-03:00",
+    "bedSource": "user",
+    "wokeAt": "2026-10-19T06:55:00.000-03:00",
+    "wakeSource": "user",
+    "durationMinutes": 410,
+    "plannedStart": "23:30",
+    "plannedEnd": "07:00",
+    "bedDelayMinutes": 35,
+    "note": null,
+    "version": 2,
+    "createdAt": "2026-10-19T00:05:00.000-03:00",
+    "updatedAt": "2026-10-19T06:55:00.000-03:00",
+    "updatedBy": "user"
+  },
   "skippedPatterns": [
     {
       "type": "reading",
@@ -10001,6 +11032,228 @@ Content-Type: application/json
   },
   "queued": 0,
   "failedLast7Days": 0
+}
+```
+
+## Sleep
+
+### `GET /api/sleep` — Sleep logs in a date range
+
+Access: **agent+user**
+
+Default: last 14 nights. Max 400.
+
+#### Last two nights
+_user_
+
+```http
+GET /api/sleep?from=2026-10-18&to=2026-10-19
+Cookie: agenda_session=<session>
+```
+
+<details><summary>Response 200</summary>
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "logs": [
+    {
+      "id": "019a0a6e-1c00-7000-8000-00000000015e",
+      "date": "2026-10-18",
+      "bedAt": "2026-10-19T00:05:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": "2026-10-19T06:55:00.000-03:00",
+      "wakeSource": "user",
+      "durationMinutes": 410,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 35,
+      "note": null,
+      "version": 2,
+      "createdAt": "2026-10-19T00:05:00.000-03:00",
+      "updatedAt": "2026-10-19T06:55:00.000-03:00",
+      "updatedBy": "user"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-00000000015f",
+      "date": "2026-10-19",
+      "bedAt": "2026-10-20T00:20:00.000-03:00",
+      "bedSource": "user",
+      "wokeAt": null,
+      "wakeSource": null,
+      "durationMinutes": null,
+      "plannedStart": "23:30",
+      "plannedEnd": "07:00",
+      "bedDelayMinutes": 50,
+      "note": null,
+      "version": 1,
+      "createdAt": "2026-10-20T00:20:00.000-03:00",
+      "updatedAt": "2026-10-20T00:20:00.000-03:00",
+      "updatedBy": "user"
+    }
+  ]
+}
+```
+
+</details>
+
+### `POST /api/sleep/events` — "Me voy a dormir" / "Me levanté"
+
+Access: **agent+user**
+
+Sets `bedAt` or `wokeAt` (now, or `at`). Night = previous day if the time is before 12:00. `bed` also marks the pending `sleep` block of that day done. The agent can only fill an empty half.
+
+#### 00:20 — I tap "Me voy a dormir" (night of the 19th)
+_user_
+
+```http
+POST /api/sleep/events
+Cookie: agenda_session=<session>
+Content-Type: application/json
+
+{
+  "type": "bed"
+}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "id": "019a0a6e-1c00-7000-8000-00000000015f",
+  "date": "2026-10-19",
+  "bedAt": "2026-10-20T00:20:00.000-03:00",
+  "bedSource": "user",
+  "wokeAt": null,
+  "wakeSource": null,
+  "durationMinutes": null,
+  "plannedStart": "23:30",
+  "plannedEnd": "07:00",
+  "bedDelayMinutes": 50,
+  "note": null,
+  "version": 1,
+  "createdAt": "2026-10-20T00:20:00.000-03:00",
+  "updatedAt": "2026-10-20T00:20:00.000-03:00",
+  "updatedBy": "user"
+}
+```
+
+#### 07:05 — I tap "Me levanté"
+_user_
+
+```http
+POST /api/sleep/events
+Cookie: agenda_session=<session>
+Content-Type: application/json
+
+{
+  "type": "wake"
+}
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "id": "019a0a6e-1c00-7000-8000-00000000015f",
+  "date": "2026-10-19",
+  "bedAt": "2026-10-20T00:20:00.000-03:00",
+  "bedSource": "user",
+  "wokeAt": "2026-10-20T07:05:00.000-03:00",
+  "wakeSource": "user",
+  "durationMinutes": 405,
+  "plannedStart": "23:30",
+  "plannedEnd": "07:00",
+  "bedDelayMinutes": 50,
+  "note": null,
+  "version": 2,
+  "createdAt": "2026-10-20T00:20:00.000-03:00",
+  "updatedAt": "2026-10-20T07:05:00.000-03:00",
+  "updatedBy": "user"
+}
+```
+
+#### I tell Agenbot "anoche me dormí a las 00:20"
+_agent_
+
+```http
+POST /api/sleep/events
+Authorization: Bearer <agent token>
+Content-Type: application/json
+
+{
+  "type": "bed",
+  "at": "2026-10-20T00:20:00.000-03:00"
+}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "id": "019a0a6e-1c00-7000-8000-00000000015f",
+  "date": "2026-10-19",
+  "bedAt": "2026-10-20T00:20:00.000-03:00",
+  "bedSource": "agent",
+  "wokeAt": null,
+  "wakeSource": null,
+  "durationMinutes": null,
+  "plannedStart": "23:30",
+  "plannedEnd": "07:00",
+  "bedDelayMinutes": 50,
+  "note": null,
+  "version": 1,
+  "createdAt": "2026-10-20T08:30:00.000-03:00",
+  "updatedAt": "2026-10-20T08:30:00.000-03:00",
+  "updatedBy": "agent"
+}
+```
+
+### `PUT /api/sleep/{date}` — Load or correct a night by hand
+
+Access: **agent+user**
+
+Used by the morning reminder card when I forgot the buttons. I can edit any night, closed days included.
+
+#### 10:00 reminder → I load last night: 23:50 → 07:00
+_user_
+
+```http
+PUT /api/sleep/2026-10-18
+Cookie: agenda_session=<session>
+Content-Type: application/json
+
+{
+  "bedAt": "2026-10-18T23:50:00.000-03:00",
+  "wokeAt": "2026-10-19T07:00:00.000-03:00"
+}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "id": "019a0a6e-1c00-7000-8000-00000000015e",
+  "date": "2026-10-18",
+  "bedAt": "2026-10-18T23:50:00.000-03:00",
+  "bedSource": "user",
+  "wokeAt": "2026-10-19T07:00:00.000-03:00",
+  "wakeSource": "user",
+  "durationMinutes": 430,
+  "plannedStart": "23:30",
+  "plannedEnd": "07:00",
+  "bedDelayMinutes": 20,
+  "note": null,
+  "version": 1,
+  "createdAt": "2026-10-19T10:02:00.000-03:00",
+  "updatedAt": "2026-10-19T10:02:00.000-03:00",
+  "updatedBy": "user"
 }
 ```
 
@@ -10771,7 +12024,8 @@ Content-Type: application/json
     "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
     "auth": "tBHItJI5svbpez7KI4CCXg"
   },
-  "callReminders": true
+  "callReminders": true,
+  "sleepReminders": true
 }
 ```
 
@@ -10784,6 +12038,7 @@ Content-Type: application/json
   "deviceId": "019a0a6e-1c00-7000-8000-000000000320",
   "endpoint": "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b",
   "callReminders": true,
+  "sleepReminders": true,
   "createdAt": "2026-10-19T07:41:30.000-03:00"
 }
 ```
@@ -10812,6 +12067,8 @@ HTTP/1.1 204 No Content
 ## Webhook
 
 ### `POST ${AGENT_WEBHOOK_URL}` — my changes, sent to Agenbot
+
+#### Martín's call done + reading moved
 
 <details><summary>Request</summary>
 
@@ -10882,6 +12139,72 @@ Content-Type: application/json
     "blocksTotal": 12,
     "weeklyGym": {
       "done": 0,
+      "target": 3
+    }
+  },
+  "dayUrl": "https://agenda.lemydev.com/api/days/2026-10-19"
+}
+```
+
+</details>
+
+#### "Me atrasé" +45 at night, then "Me voy a dormir" at 00:20
+
+<details><summary>Request</summary>
+
+```http
+POST ${AGENT_WEBHOOK_URL}
+Authorization: Bearer ${AGENT_WEBHOOK_TOKEN}
+Idempotency-Key: 019a0a6e-1c00-7000-8000-000000000385
+Content-Type: application/json
+
+{
+  "event": "day.updated_by_user",
+  "batchId": "019a0a6e-1c00-7000-8000-000000000385",
+  "date": "2026-10-19",
+  "dayVersion": 8,
+  "changes": [
+    {
+      "entity": "day",
+      "id": "019a0a6e-1c00-7000-8000-000000000001",
+      "action": "shift",
+      "shift": {
+        "fromTime": "21:00",
+        "minutes": 45,
+        "blocks": [
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006c",
+            "title": "Tiempo en pareja",
+            "from": "21:45",
+            "to": "22:30"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006d",
+            "title": "Dormir",
+            "from": "23:30",
+            "to": "24:15"
+          }
+        ]
+      },
+      "at": "2026-10-19T21:20:00.000-03:00"
+    },
+    {
+      "entity": "sleep_log",
+      "id": "019a0a6e-1c00-7000-8000-00000000015f",
+      "action": "create",
+      "sleep": {
+        "night": "2026-10-19",
+        "bedAt": "2026-10-20T00:20:00.000-03:00",
+        "wokeAt": null
+      },
+      "at": "2026-10-20T00:20:00.000-03:00"
+    }
+  ],
+  "summary": {
+    "blocksDone": 11,
+    "blocksTotal": 12,
+    "weeklyGym": {
+      "done": 1,
       "target": 3
     }
   },

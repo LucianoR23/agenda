@@ -27,6 +27,15 @@ export const LocalTime = z
     example: "09:30",
   });
 
+export const BlockTime = z
+  .string()
+  .regex(/^([01][0-9]|2[0-9]):[0-5][0-9]$/, "Expected HH:mm (00:00–29:59)")
+  .openapi("BlockTime", {
+    description:
+      "Block time on the block's day, `HH:mm`, 00:00–29:59. `24:00`–`29:59` = after midnight (shown as `00:15 (+1)`); the block still belongs to the day it starts. For `end`, a value lower than `start` also means the next day (sleep `23:30`→`07:00`).",
+    example: "24:15",
+  });
+
 export const Timestamp = z.iso.datetime({ offset: true }).openapi("Timestamp", {
   description: "ISO 8601 timestamp with offset (the API always answers in -03:00).",
   example: "2026-10-19T07:00:12.345-03:00",

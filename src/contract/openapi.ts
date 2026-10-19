@@ -199,7 +199,7 @@ export function buildRegistry() {
         content: {
           "application/json": {
             schema: WebhookPayload,
-            examples: { afterCall: { summary: "Martín's call done + reading moved", value: webhookExample } },
+            examples: Object.fromEntries(webhookExamples.map((w) => [w.name, { summary: w.summary, value: w.value }])),
           },
         },
       },
@@ -237,6 +237,47 @@ export const webhookExample = {
   dayUrl: "https://agenda.lemydev.com/api/days/2026-10-19",
 };
 
+const sleepBlock = dayEditedWithProposal.options[0].blocks.find((b) => b.type === "sleep")!;
+const partnerBlock = dayEditedWithProposal.options[0].blocks.find((b) => b.type === "partner")!;
+
+/** "Me atrasé" at night + "Me voy a dormir": shows the shift record and the sleep log in the webhook. */
+export const webhookShiftExample = {
+  event: "day.updated_by_user",
+  batchId: "019a0a6e-1c00-7000-8000-000000000385",
+  date: "2026-10-19",
+  dayVersion: 8,
+  changes: [
+    {
+      entity: "day",
+      id: dayEditedWithProposal.id,
+      action: "shift",
+      shift: {
+        fromTime: "21:00",
+        minutes: 45,
+        blocks: [
+          { id: partnerBlock.id, title: partnerBlock.title, from: "21:45", to: "22:30" },
+          { id: sleepBlock.id, title: sleepBlock.title, from: "23:30", to: "24:15" },
+        ],
+      },
+      at: "2026-10-19T21:20:00.000-03:00",
+    },
+    {
+      entity: "sleep_log",
+      id: "019a0a6e-1c00-7000-8000-00000000015f",
+      action: "create",
+      sleep: { night: "2026-10-19", bedAt: "2026-10-20T00:20:00.000-03:00", wokeAt: null },
+      at: "2026-10-20T00:20:00.000-03:00",
+    },
+  ],
+  summary: { blocksDone: 11, blocksTotal: 12, weeklyGym: { done: 1, target: 3 } },
+  dayUrl: "https://agenda.lemydev.com/api/days/2026-10-19",
+};
+
+export const webhookExamples = [
+  { name: "afterCall", summary: "Martín's call done + reading moved", value: webhookExample },
+  { name: "shiftAndSleep", summary: "\"Me atrasé\" +45 at night, then \"Me voy a dormir\" at 00:20", value: webhookShiftExample },
+];
+
 export function generateOpenApiDocument() {
   const generator = new OpenApiGeneratorV31(buildRegistry().definitions, { sortComponents: "alphabetically" });
   return generator.generateDocument({
@@ -262,6 +303,7 @@ export function generateOpenApiDocument() {
       { name: "Blocks" },
       { name: "Habits" },
       { name: "Tasks" },
+      { name: "Sleep" },
       { name: "Metrics" },
       { name: "Agent" },
       { name: "Auth" },
@@ -302,8 +344,10 @@ export function validateExamples(): string[] {
       else if (e.response !== undefined) failures.push(`${at}: ${e.status} has no body schema`);
     }
   }
-  const wh = WebhookPayload.safeParse(webhookExample);
-  if (!wh.success) failures.push(`webhook: ${wh.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+  for (const w of webhookExamples) {
+    const wh = WebhookPayload.safeParse(w.value);
+    if (!wh.success) failures.push(`webhook/${w.name}: ${wh.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+  }
   return failures;
 }
 

@@ -41,8 +41,8 @@ confirmation; the default is already applied and can be changed cheaply until ST
 - **D6 — `version` and `updated_at` maintained by DB triggers** (`drizzle/0001_row_version_triggers.sql`).
   Every UPDATE on `day, plan_option, block, habit, habit_log, task` sets `version = OLD.version + 1`; values the app
   sends are ignored. Optimistic concurrency = `UPDATE … WHERE id = $1 AND version = $expected`; 0 rows → 409.
-- **D7 — Times stored as `text` `HH:mm`** with a CHECK regex (00:00–23:59) rather than `time`, so they round-trip
-  exactly as the API contract and sort lexicographically.
+- **D7 — Times stored as `text` `HH:mm`** with a CHECK regex rather than `time`, so they round-trip exactly as the
+  API contract and sort lexicographically. Block times allow 00:00–29:59 (see D54).
 - **D8 — `end < start` means the block ends after midnight** (e.g. sleep 23:30→07:00). The block belongs to the
   day it starts. No overnight logic beyond that.
 - **D9 — `Day.weeklyGym` and `Day.review` stored as columns** (`weekly_gym_done/target`, `review_energy/mood/text`
@@ -129,8 +129,10 @@ confirmation; the default is already applied and can be changed cheaply until ST
 - **D39 — User-created blocks** get `userOverrides` = all schedule fields: the agent can only set their tracking
   fields while pending.
 - **D40 — "Me atrasé" (`shift`)** moves pending, unlocked `agent|user` blocks of the chosen option starting at or after
-  `fromTime`; never calendar or `sleep` blocks. ±240 min. 422 `shift_out_of_range` if a start would leave 00:00–23:59.
-  Shifts by me add `start`/`end` to `userOverrides`; by the agent they don't.
+  `fromTime`, `sleep` included (Q8); never calendar blocks. ±240 min. Blocks may pass midnight (D54), so in practice it
+  never fails; 422 `shift_out_of_range` only if a start would leave 00:00–29:59. Shifts by me add `start`/`end` to
+  `userOverrides`; by the agent they don't. Every shift is one `shift` ChangeLog entry (`{ fromTime, minutes,
+  blocks: [{ id, from, to }] }`) and one `shift` webhook change.
 - **D41 — `choose`** allowed in `draft` and `chosen` (switch), not in `edited`/`closed`. Both actors may call it.
 - **D42 — A new proposal does not bump `Day.version`** (the day did not change); the client learns about it from the push
   and `pendingProposal` in `GET /days/{date}`.
@@ -154,7 +156,32 @@ confirmation; the default is already applied and can be changed cheaply until ST
 
 ## Open questions (STOP 2)
 
-- **[OPEN] Q6 — Tasks in a `PUT` that becomes a proposal.** Default: the checklist is applied **immediately** (it is
-  not part of the schedule); only blocks/options/day fields wait for my accept. Alternative: tasks wait too.
-- **[OPEN] Q7 — Can Agenbot `choose` for me** ("elegí la B" by chat)? Default: yes, logged as `agent`, no webhook.
-- **[OPEN] Q8 — "Me atrasé" never moves `sleep` blocks.** OK, or should it?
+Resolved 2026-10-19:
+
+- **Q6 → A.** Tasks in a `PUT` apply immediately; only blocks/options/day fields wait for the proposal.
+- **Q7 → A.** Agenbot may `choose` ("elegí la B"); logged as `agent`, no webhook.
+- **Q8 → B, without errors.** "Me atrasé" moves `sleep` too; times past midnight are allowed and every shift is
+  recorded (D40, D54). Plus actual sleep tracking with a reminder (D55–D58).
+
+## Late times and sleep (after STOP 2 feedback)
+
+- **D54 — Block times go up to 29:59.** `24:00`–`29:59` = after midnight, on the block's day (GTFS-style), shown as
+  `00:15 (+1)`. Sorting stays lexicographic. `end < start` still means "ends the next day" (`23:30`→`07:00`).
+  New contract type `BlockTime`; DB CHECKs updated (`drizzle/0003`). Plain `LocalTime` (00:00–23:59) remains for
+  non-block times.
+- **D55 — `sleep_log`: actual sleep per night.** `date` = the night starting that day; `bedAt` / `wokeAt` timestamps,
+  each with its own source (`agent | user`) so ownership is per half: the agent may only fill an empty half.
+  Derived in the API: `durationMinutes`, `plannedStart/End` (the `sleep` block of the chosen option),
+  `bedDelayMinutes`. CHECK: wake after bed, < 20 h.
+- **D56 — Quick buttons** `POST /api/sleep/events { type: bed | wake, at? }` ("Me voy a dormir" / "Me levanté");
+  the night is the previous day when the time is before 12:00. `bed` marks that day's pending `sleep` block done
+  (`statusAt` = bedAt). Manual load/correction: `PUT /api/sleep/{date}`, allowed on closed days. The agent can log
+  it too ("anoche me dormí 00:20").
+- **D57 — Morning reminder.** At `SLEEP_REMINDER_TIME` (default 10:00 ART), if last night has no `bedAt` or no `wokeAt`,
+  push "¿A qué hora te dormiste / levantaste?"; per device toggle `push_subscription.sleep_reminders`. "Hoy" shows
+  the same card until it is filled (`Day.sleep.previousNight`).
+- **D58 — Where sleep shows up.** `Day.sleep { night, previousNight }`, `AgentContext.lastNightSleep`, `Metrics.sleep`
+  (nights logged, avg duration, avg bed/wake time, avg delay vs plan), webhook `sleep_log` changes.
+- **D59 — Background jobs run in-process** (one container): a loop started from Next's `instrumentation.ts` every 30 s
+  delivers the webhook outbox, the 10-min call reminders and the sleep reminder. Only close-day is an external
+  Coolify scheduled task, as specified.

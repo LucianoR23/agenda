@@ -26,6 +26,7 @@ export const changeActionEnum = pgEnum("change_action", [
   "propose",
   "accept",
   "reject",
+  "shift", // "Me atrasé": diff = { fromTime, minutes, blocks: [{ id, from, to }] }
 ]);
 
 export const webhookStatusEnum = pgEnum("webhook_status", [

@@ -17,7 +17,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { HHMM_REGEX, createdAt, id, mutable } from "./common";
+import { BLOCK_TIME_REGEX, createdAt, id, mutable } from "./common";
 
 export const dayStatusEnum = pgEnum("day_status", ["draft", "chosen", "edited", "closed"]);
 
@@ -175,8 +175,8 @@ export const block = pgTable(
       .where(sql`${t.externalId} IS NOT NULL`),
     index("block_day_external_idx").on(t.dayId, t.externalId),
     index("block_option_order_idx").on(t.optionId, t.order),
-    check("block_start_format", sql`${t.start} ~ '${sql.raw(HHMM_REGEX)}'`),
-    check("block_end_format", sql`${t.end} IS NULL OR ${t.end} ~ '${sql.raw(HHMM_REGEX)}'`),
+    check("block_start_format", sql`${t.start} ~ '${sql.raw(BLOCK_TIME_REGEX)}'`),
+    check("block_end_format", sql`${t.end} IS NULL OR ${t.end} ~ '${sql.raw(BLOCK_TIME_REGEX)}'`),
     check(
       "block_calendar_requires_external_id",
       sql`${t.source} <> 'calendar' OR ${t.externalId} IS NOT NULL`,

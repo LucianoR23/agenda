@@ -52,8 +52,15 @@ sequenceDiagram
     API-->>Me: 200 · v5 · Laura 15:00 · lectura stays 11:15 · Martín stays done
     API-)Bot: webhook (immediate): proposal accepted
 
+    Note over Me,API: 21:20 — "Me atrasé" +45
+    Me->>API: POST /days/2026-10-19/shift {fromTime: 21:00, minutes: 45}
+    API-->>Me: 200 · pareja 22:30 · dormir 24:15 (00:15 +1) · ChangeLog shift
     Note over API: 00:05 — Coolify scheduled task
     API->>API: POST /api/internal/close-day → 2026-10-19 closed
+    Me->>API: 00:20 POST /sleep/events {type: bed} → night of the 19th · sleep block done
+    API-)Bot: webhook batch: shift + sleep_log
+    Me->>API: 07:05 POST /sleep/events {type: wake} → 405 min
+    Note over API,Me: 10:00 — if a night is incomplete: push "¿A qué hora te dormiste / levantaste?"
 ```
 
 Alternatives: on **reject** the day is untouched and the webhook reports `proposal / reject`. If Agenbot sends another PUT

@@ -21,6 +21,7 @@ tags:
   - name: Blocks
   - name: Habits
   - name: Tasks
+  - name: Sleep
   - name: Metrics
   - name: Agent
   - name: Auth
@@ -196,6 +197,11 @@ components:
                 - mood
               additionalProperties: false
             - type: "null"
+        lastNightSleep:
+          anyOf:
+            - $ref: "#/components/schemas/SleepLog"
+            - type: "null"
+          description: Night before `date` (may be incomplete).
         skippedPatterns:
           type: array
           items:
@@ -239,6 +245,7 @@ components:
         - streaksAtRisk
         - yesterday
         - lastReview
+        - lastNightSleep
         - skippedPatterns
         - pendingProposal
       additionalProperties: false
@@ -251,10 +258,10 @@ components:
         optionId:
           $ref: "#/components/schemas/Uuid"
         start:
-          $ref: "#/components/schemas/LocalTime"
+          $ref: "#/components/schemas/BlockTime"
         end:
           anyOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - type: "null"
         title:
           type: string
@@ -357,10 +364,10 @@ components:
             - $ref: "#/components/schemas/BlockSource"
             - description: Defaults to the actor (`agent` | `user`). Only the agent may create `calendar` blocks.
         start:
-          $ref: "#/components/schemas/LocalTime"
+          $ref: "#/components/schemas/BlockTime"
         end:
           anyOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - type: "null"
           description: Optional end. `end < start` means the block ends after midnight.
         title:
@@ -411,10 +418,10 @@ components:
       type: object
       properties:
         start:
-          $ref: "#/components/schemas/LocalTime"
+          $ref: "#/components/schemas/BlockTime"
         end:
           anyOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - type: "null"
         title:
           type: string
@@ -466,10 +473,10 @@ components:
             - calendar
             - agent
         start:
-          $ref: "#/components/schemas/LocalTime"
+          $ref: "#/components/schemas/BlockTime"
         end:
           anyOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - type: "null"
           description: Optional end. `end < start` means the block ends after midnight.
         title:
@@ -518,10 +525,10 @@ components:
       type: object
       properties:
         start:
-          $ref: "#/components/schemas/LocalTime"
+          $ref: "#/components/schemas/BlockTime"
         end:
           anyOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - type: "null"
         title:
           type: string
@@ -580,10 +587,10 @@ components:
         type:
           $ref: "#/components/schemas/BlockType"
         start:
-          $ref: "#/components/schemas/LocalTime"
+          $ref: "#/components/schemas/BlockTime"
         end:
           anyOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - type: "null"
       required:
         - id
@@ -605,6 +612,11 @@ components:
         - pending
         - done
         - skipped
+    BlockTime:
+      type: string
+      pattern: ^([01][0-9]|2[0-9]):[0-5][0-9]$
+      description: Block time on the block's day, `HH:mm`, 00:00–29:59. `24:00`–`29:59` = after midnight (shown as `00:15 (+1)`); the block still belongs to the day it starts. For `end`, a value lower than `start` also means the next day (sleep `23:30`→`07:00`).
+      example: 24:15
     BlockType:
       type: string
       enum:
@@ -646,6 +658,7 @@ components:
         - propose
         - accept
         - reject
+        - shift
     ChangeLogEntry:
       type: object
       properties:
@@ -784,6 +797,8 @@ components:
           anyOf:
             - $ref: "#/components/schemas/Proposal"
             - type: "null"
+        sleep:
+          $ref: "#/components/schemas/DaySleep"
         version:
           type: integer
           minimum: 1
@@ -809,6 +824,7 @@ components:
         - tasks
         - habitLogs
         - pendingProposal
+        - sleep
         - version
         - createdAt
         - updatedAt
@@ -883,6 +899,23 @@ components:
           type: integer
           minimum: 1
           description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `version_conflict`.
+      additionalProperties: false
+    DaySleep:
+      type: object
+      properties:
+        night:
+          anyOf:
+            - $ref: "#/components/schemas/SleepLog"
+            - type: "null"
+          description: Sleep for the night starting on this day.
+        previousNight:
+          anyOf:
+            - $ref: "#/components/schemas/SleepLog"
+            - type: "null"
+          description: Last night; incomplete → "¿A qué hora te dormiste / levantaste?" card.
+      required:
+        - night
+        - previousNight
       additionalProperties: false
     DayStatus:
       type: string
@@ -1614,6 +1647,61 @@ components:
             - showUpRate
             - closeRate
           additionalProperties: false
+        sleep:
+          type: object
+          properties:
+            nightsLogged:
+              type: integer
+              description: Nights with both bed and wake times.
+            nightsTotal:
+              type: integer
+            avgDurationMinutes:
+              type:
+                - integer
+                - "null"
+            avgBedtime:
+              anyOf:
+                - $ref: "#/components/schemas/BlockTime"
+                - type: "null"
+              description: Average bedtime, `24:xx` when after midnight.
+            avgWakeTime:
+              anyOf:
+                - $ref: "#/components/schemas/LocalTime"
+                - type: "null"
+            avgBedDelayMinutes:
+              type:
+                - integer
+                - "null"
+              description: Average bedtime vs planned `sleep` block start.
+            nights:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    $ref: "#/components/schemas/LocalDate"
+                  durationMinutes:
+                    type:
+                      - integer
+                      - "null"
+                  bedDelayMinutes:
+                    type:
+                      - integer
+                      - "null"
+                required:
+                  - date
+                  - durationMinutes
+                  - bedDelayMinutes
+                additionalProperties: false
+          required:
+            - nightsLogged
+            - nightsTotal
+            - avgDurationMinutes
+            - avgBedtime
+            - avgWakeTime
+            - avgBedDelayMinutes
+            - nights
+          additionalProperties: false
         habits:
           type: array
           items:
@@ -1647,6 +1735,7 @@ components:
         - reading
         - blocks
         - calls
+        - sleep
         - habits
       additionalProperties: false
       description: Computed over closed + current days of the chosen option (option A if never chosen). Gym and reading come from the habits linked to block types `gym` / `reading`.
@@ -1869,10 +1958,10 @@ components:
                 type: object
                 properties:
                   start:
-                    $ref: "#/components/schemas/LocalTime"
+                    $ref: "#/components/schemas/BlockTime"
                   end:
                     anyOf:
-                      - $ref: "#/components/schemas/LocalTime"
+                      - $ref: "#/components/schemas/BlockTime"
                       - type: "null"
                 required:
                   - start
@@ -1882,10 +1971,10 @@ components:
                 type: object
                 properties:
                   start:
-                    $ref: "#/components/schemas/LocalTime"
+                    $ref: "#/components/schemas/BlockTime"
                   end:
                     anyOf:
-                      - $ref: "#/components/schemas/LocalTime"
+                      - $ref: "#/components/schemas/BlockTime"
                       - type: "null"
                 required:
                   - start
@@ -1978,6 +2067,9 @@ components:
         callReminders:
           type: boolean
           description: 10-minute reminder before each call block.
+        sleepReminders:
+          type: boolean
+          description: Morning reminder (SLEEP_REMINDER_TIME, default 10:00) when last night's bed or wake time is missing.
       required:
         - endpoint
         - keys
@@ -1993,6 +2085,8 @@ components:
           type: string
         callReminders:
           type: boolean
+        sleepReminders:
+          type: boolean
         createdAt:
           $ref: "#/components/schemas/Timestamp"
       required:
@@ -2000,6 +2094,7 @@ components:
         - deviceId
         - endpoint
         - callReminders
+        - sleepReminders
         - createdAt
       additionalProperties: false
     PushUnsubscribeInput:
@@ -2199,8 +2294,9 @@ components:
       properties:
         fromTime:
           allOf:
-            - $ref: "#/components/schemas/LocalTime"
+            - $ref: "#/components/schemas/BlockTime"
             - description: Shift blocks starting at or after this time.
+              example: 21:00
         minutes:
           type: integer
           minimum: -240
@@ -2214,7 +2310,128 @@ components:
         - fromTime
         - minutes
       additionalProperties: false
-      description: Shifts my pending, unlocked agent/user blocks of the chosen option. Calendar blocks are untouched. 422 `shift_out_of_range` if a block would cross 00:00/23:59.
+      description: '"Me atrasé": shifts my pending, unlocked agent/user blocks of the chosen option (including `sleep`). Calendar blocks are untouched. Blocks may move past midnight (`24:15`); nothing is lost and the shift is recorded as a `shift` ChangeLog entry and webhook change. 422 `shift_out_of_range` only if a start would leave 00:00–29:59.'
+    SleepEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - bed
+            - wake
+          description: '`bed` = "Me voy a dormir", `wake` = "Me levanté".'
+        at:
+          allOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - description: 'Default: now. Lets me (or the agent) back-date: "me dormí a las 00:20".'
+      required:
+        - type
+      additionalProperties: false
+      description: "Quick button / agent shortcut. The night is resolved from the time: before 12:00 → the previous day's night, otherwise today's."
+    SleepLog:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        date:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: The night that starts on this day (bed on this date's evening or after midnight).
+        bedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: When I actually went to bed.
+        bedSource:
+          anyOf:
+            - $ref: "#/components/schemas/SleepSource"
+            - type: "null"
+        wokeAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: When I actually got up.
+        wakeSource:
+          anyOf:
+            - $ref: "#/components/schemas/SleepSource"
+            - type: "null"
+        durationMinutes:
+          type:
+            - integer
+            - "null"
+          description: wokeAt − bedAt, when both are set.
+        plannedStart:
+          anyOf:
+            - $ref: "#/components/schemas/BlockTime"
+            - type: "null"
+          description: Start of the `sleep` block in the chosen option, if any.
+        plannedEnd:
+          anyOf:
+            - $ref: "#/components/schemas/BlockTime"
+            - type: "null"
+        bedDelayMinutes:
+          type:
+            - integer
+            - "null"
+          description: bedAt − planned start (positive = later than planned).
+        note:
+          type:
+            - string
+            - "null"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/Actor"
+      required:
+        - id
+        - date
+        - bedAt
+        - bedSource
+        - wokeAt
+        - wakeSource
+        - durationMinutes
+        - plannedStart
+        - plannedEnd
+        - bedDelayMinutes
+        - note
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+      description: Actual sleep for one night. Setting `bedAt` also marks that day's pending `sleep` block as done. The agent may only fill a half (bed / wake) that is still empty.
+    SleepSource:
+      type: string
+      enum:
+        - agent
+        - user
+    SleepUpsert:
+      type: object
+      properties:
+        bedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        wokeAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        note:
+          type:
+            - string
+            - "null"
+          maxLength: 1000
+        version:
+          type: integer
+          minimum: 1
+          description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `version_conflict`.
+      additionalProperties: false
+      description: Manual load or correction. Times may not be in the future; the night lasts < 20 h.
     Task:
       type: object
       properties:
@@ -2373,6 +2590,7 @@ components:
             - task
             - habit_log
             - proposal
+            - sleep_log
         id:
           $ref: "#/components/schemas/Uuid"
         action:
@@ -2393,7 +2611,7 @@ components:
             type:
               $ref: "#/components/schemas/BlockType"
             start:
-              $ref: "#/components/schemas/LocalTime"
+              $ref: "#/components/schemas/BlockTime"
             externalId:
               type:
                 - string
@@ -2429,6 +2647,56 @@ components:
           required:
             - slug
             - name
+          additionalProperties: false
+        shift:
+          type: object
+          properties:
+            fromTime:
+              $ref: "#/components/schemas/BlockTime"
+            minutes:
+              type: integer
+            blocks:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    $ref: "#/components/schemas/Uuid"
+                  title:
+                    type: string
+                  from:
+                    $ref: "#/components/schemas/BlockTime"
+                  to:
+                    $ref: "#/components/schemas/BlockTime"
+                required:
+                  - id
+                  - title
+                  - from
+                  - to
+                additionalProperties: false
+          required:
+            - fromTime
+            - minutes
+            - blocks
+          additionalProperties: false
+          description: 'On `action: shift` ("Me atrasé").'
+        sleep:
+          type: object
+          properties:
+            night:
+              $ref: "#/components/schemas/LocalDate"
+            bedAt:
+              anyOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+            wokeAt:
+              anyOf:
+                - $ref: "#/components/schemas/Timestamp"
+                - type: "null"
+          required:
+            - night
+            - bedAt
+            - wokeAt
           additionalProperties: false
         at:
           $ref: "#/components/schemas/Timestamp"
@@ -3318,6 +3586,24 @@ paths:
                         updatedBy: agent
                     habitLogs: []
                     pendingProposal: null
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
                     version: 1
                     createdAt: 2026-10-19T07:00:04.812-03:00
                     updatedAt: 2026-10-19T07:00:04.812-03:00
@@ -4179,6 +4465,24 @@ paths:
                           - title: Seguimiento a Diego (pidió propuesta el viernes)
                             kind: follow_up
                         reason: La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
                     version: 4
                     createdAt: 2026-10-19T07:00:04.812-03:00
                     updatedAt: 2026-10-19T10:50:12.000-03:00
@@ -5511,6 +5815,24 @@ paths:
                           updatedBy: agent
                       habitLogs: []
                       pendingProposal: null
+                      sleep:
+                        night: null
+                        previousNight:
+                          id: 019a0a6e-1c00-7000-8000-00000000015e
+                          date: 2026-10-18
+                          bedAt: 2026-10-19T00:05:00.000-03:00
+                          bedSource: user
+                          wokeAt: 2026-10-19T06:55:00.000-03:00
+                          wakeSource: user
+                          durationMinutes: 410
+                          plannedStart: 23:30
+                          plannedEnd: 07:00
+                          bedDelayMinutes: 35
+                          note: null
+                          version: 2
+                          createdAt: 2026-10-19T00:05:00.000-03:00
+                          updatedAt: 2026-10-19T06:55:00.000-03:00
+                          updatedBy: user
                       version: 1
                       createdAt: 2026-10-19T07:00:04.812-03:00
                       updatedAt: 2026-10-19T07:00:04.812-03:00
@@ -6382,6 +6704,24 @@ paths:
                             - title: Seguimiento a Diego (pidió propuesta el viernes)
                               kind: follow_up
                           reason: La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.
+                      sleep:
+                        night: null
+                        previousNight:
+                          id: 019a0a6e-1c00-7000-8000-00000000015e
+                          date: 2026-10-18
+                          bedAt: 2026-10-19T00:05:00.000-03:00
+                          bedSource: user
+                          wokeAt: 2026-10-19T06:55:00.000-03:00
+                          wakeSource: user
+                          durationMinutes: 410
+                          plannedStart: 23:30
+                          plannedEnd: 07:00
+                          bedDelayMinutes: 35
+                          note: null
+                          version: 2
+                          createdAt: 2026-10-19T00:05:00.000-03:00
+                          updatedAt: 2026-10-19T06:55:00.000-03:00
+                          updatedBy: user
                       version: 4
                       createdAt: 2026-10-19T07:00:04.812-03:00
                       updatedAt: 2026-10-19T10:50:12.000-03:00
@@ -7369,6 +7709,24 @@ paths:
                         updatedBy: agent
                     habitLogs: []
                     pendingProposal: null
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
                     version: 6
                     createdAt: 2026-10-19T07:00:04.812-03:00
                     updatedAt: 2026-10-19T22:40:00.000-03:00
@@ -8188,6 +8546,24 @@ paths:
                         updatedBy: agent
                     habitLogs: []
                     pendingProposal: null
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
                     version: 2
                     createdAt: 2026-10-19T07:00:04.812-03:00
                     updatedAt: 2026-10-19T07:42:10.002-03:00
@@ -8252,7 +8628,7 @@ paths:
         - Days
       summary: '"Me atrasé": shift my pending blocks'
       description: |-
-        Moves pending, unlocked `agent`/`user` blocks of the chosen option starting at or after `fromTime`. Calendar and `sleep` blocks never move. When the user shifts, `start`/`end` are added to `userOverrides`.
+        Moves pending, unlocked `agent`/`user` blocks of the chosen option starting at or after `fromTime`, `sleep` included; calendar blocks never move. Blocks can pass midnight (`24:15` = 00:15 next day). When I shift, `start`/`end` join `userOverrides`. Recorded as a `shift` ChangeLog entry and a `shift` webhook change.
 
         **Actors:** agent, user.
       security:
@@ -8280,11 +8656,11 @@ paths:
                 value:
                   fromTime: 11:00
                   minutes: 30
-              outOfRange:
-                summary: +60 at night would push pádel past midnight
+              pastMidnight:
+                summary: "21:20 — +45 from 21:00: pareja 22:30, dormir pasa a 24:15 (00:15 del martes); pádel (calendar) no se mueve"
                 value:
-                  fromTime: 21:30
-                  minutes: 180
+                  fromTime: 21:00
+                  minutes: 45
             schema:
               $ref: "#/components/schemas/ShiftInput"
       responses:
@@ -8603,8 +8979,8 @@ paths:
                             updatedBy: user
                           - id: 019a0a6e-1c00-7000-8000-00000000006d
                             optionId: 019a0a6e-1c00-7000-8000-000000000002
-                            start: 23:30
-                            end: 07:00
+                            start: 24:00
+                            end: 07:30
                             title: Dormir
                             type: sleep
                             detail: null
@@ -8619,12 +8995,14 @@ paths:
                             outcome: null
                             note: null
                             locked: false
-                            userOverrides: []
+                            userOverrides:
+                              - start
+                              - end
                             order: 9
-                            version: 1
+                            version: 2
                             createdAt: 2026-10-19T07:00:04.812-03:00
-                            updatedAt: 2026-10-19T07:00:04.812-03:00
-                            updatedBy: agent
+                            updatedAt: 2026-10-19T11:04:00.000-03:00
+                            updatedBy: user
                         version: 1
                         createdAt: 2026-10-19T07:00:04.812-03:00
                         updatedAt: 2026-10-19T07:00:04.812-03:00
@@ -9014,9 +9392,761 @@ paths:
                         updatedBy: agent
                     habitLogs: []
                     pendingProposal: null
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
                     version: 3
                     createdAt: 2026-10-19T07:00:04.812-03:00
                     updatedAt: 2026-10-19T11:04:00.000-03:00
+                    updatedBy: user
+                pastMidnight:
+                  summary: "21:20 — +45 from 21:00: pareja 22:30, dormir pasa a 24:15 (00:15 del martes); pádel (calendar) no se mueve"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000001
+                    date: 2026-10-19
+                    status: edited
+                    chosenOptionId: 019a0a6e-1c00-7000-8000-000000000002
+                    chosenOption: A
+                    notes: "Turno en el local 16–20: no hay hueco para gym a la tarde."
+                    callsSummary: "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00."
+                    weeklyGym:
+                      done: 0
+                      target: 3
+                    review: null
+                    reviewedAt: null
+                    closedAt: null
+                    options:
+                      - id: 019a0a6e-1c00-7000-8000-000000000002
+                        label: A
+                        title: Gym al mediodía
+                        description: Gym entre la llamada de Martín y la de Laura; lectura temprano.
+                        order: 0
+                        blocks:
+                          - id: 019a0a6e-1c00-7000-8000-000000000068
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 07:15
+                            end: 07:45
+                            title: Paseo con los perros
+                            type: dogs
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 4
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000069
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 08:00
+                            end: 08:30
+                            title: Desayuno
+                            type: meal
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 5
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000006a
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 09:00
+                            end: 09:50
+                            title: Repasar guion de cierre
+                            type: study
+                            detail: "Objeción de precio: practicar reencuadre de inversión."
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 6
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000064
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 10:00
+                            end: 10:45
+                            title: Llamada · Martín Gómez
+                            type: call
+                            detail: Llamada de cierre — programa de 12 semanas
+                            lead:
+                              name: Martín Gómez
+                              phone: "+5491155550101"
+                              whatsapp: "5491155550101"
+                              notes: "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio."
+                              crmUrl: https://crm.example.com/leads/8812
+                            source: calendar
+                            externalId: 4f2k9q0d1m7b8s6t3u1v0a2c3e
+                            externalUrl: https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U
+                            calendar: work
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 0
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000006b
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 11:00
+                            end: 11:30
+                            title: Lectura (30 min)
+                            type: reading
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 7
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000006e
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 12:00
+                            end: 13:00
+                            title: Gym — tren superior
+                            type: gym
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 10
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000006f
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 13:10
+                            end: 13:40
+                            title: Almuerzo
+                            type: meal
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 11
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000065
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 14:00
+                            end: 14:45
+                            title: Llamada · Laura Pérez
+                            type: call
+                            detail: null
+                            lead:
+                              name: Laura Pérez
+                              whatsapp: "5493515550202"
+                              notes: Personal trainer presencial, quiere pasar a online. Primera llamada.
+                            source: calendar
+                            externalId: 7h3n1p5r8s2t4v6x9z0b1d3f5g
+                            externalUrl: https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc
+                            calendar: work
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 1
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000066
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 16:00
+                            end: 20:00
+                            title: Turno en el local
+                            type: local_work
+                            detail: null
+                            lead: null
+                            source: calendar
+                            externalId: 2a4c6e8g0i2k4m6o8q0s2u4w6y
+                            externalUrl: https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk
+                            calendar: work
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 2
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000067
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 20:30
+                            end: 21:30
+                            title: Clase de pádel
+                            type: padel
+                            detail: null
+                            lead: null
+                            source: calendar
+                            externalId: 9b8c7d6e5f4g3h2i1j0k9l8m7n
+                            externalUrl: https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24
+                            calendar: personal
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 3
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000006c
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 22:30
+                            end: 23:30
+                            title: Tiempo en pareja
+                            type: partner
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides:
+                              - start
+                              - end
+                            order: 8
+                            version: 2
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T21:20:00.000-03:00
+                            updatedBy: user
+                          - id: 019a0a6e-1c00-7000-8000-00000000006d
+                            optionId: 019a0a6e-1c00-7000-8000-000000000002
+                            start: 24:15
+                            end: 07:45
+                            title: Dormir
+                            type: sleep
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides:
+                              - start
+                              - end
+                            order: 9
+                            version: 2
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T21:20:00.000-03:00
+                            updatedBy: user
+                        version: 1
+                        createdAt: 2026-10-19T07:00:04.812-03:00
+                        updatedAt: 2026-10-19T07:00:04.812-03:00
+                        updatedBy: agent
+                      - id: 019a0a6e-1c00-7000-8000-000000000003
+                        label: B
+                        title: Gym temprano
+                        description: Gym antes de los perros; mediodía libre para preparar a Laura.
+                        order: 1
+                        blocks:
+                          - id: 019a0a6e-1c00-7000-8000-000000000074
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 06:15
+                            end: 07:05
+                            title: Gym — tren superior
+                            type: gym
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 4
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000075
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 07:15
+                            end: 07:45
+                            title: Paseo con los perros
+                            type: dogs
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 5
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000076
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 08:00
+                            end: 08:30
+                            title: Desayuno
+                            type: meal
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 6
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000077
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 09:00
+                            end: 09:50
+                            title: Repasar guion de cierre
+                            type: study
+                            detail: "Objeción de precio: practicar reencuadre de inversión."
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 7
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000070
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 10:00
+                            end: 10:45
+                            title: Llamada · Martín Gómez
+                            type: call
+                            detail: Llamada de cierre — programa de 12 semanas
+                            lead:
+                              name: Martín Gómez
+                              phone: "+5491155550101"
+                              whatsapp: "5491155550101"
+                              notes: "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio."
+                              crmUrl: https://crm.example.com/leads/8812
+                            source: calendar
+                            externalId: 4f2k9q0d1m7b8s6t3u1v0a2c3e
+                            externalUrl: https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U
+                            calendar: work
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 0
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000078
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 11:00
+                            end: 11:30
+                            title: Lectura (30 min)
+                            type: reading
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 8
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000007b
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 12:30
+                            end: 13:15
+                            title: Almuerzo
+                            type: meal
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 11
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000007c
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 13:15
+                            end: 13:45
+                            title: Preparar llamada con Laura
+                            type: study
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 12
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000071
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 14:00
+                            end: 14:45
+                            title: Llamada · Laura Pérez
+                            type: call
+                            detail: null
+                            lead:
+                              name: Laura Pérez
+                              whatsapp: "5493515550202"
+                              notes: Personal trainer presencial, quiere pasar a online. Primera llamada.
+                            source: calendar
+                            externalId: 7h3n1p5r8s2t4v6x9z0b1d3f5g
+                            externalUrl: https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc
+                            calendar: work
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 1
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000072
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 16:00
+                            end: 20:00
+                            title: Turno en el local
+                            type: local_work
+                            detail: null
+                            lead: null
+                            source: calendar
+                            externalId: 2a4c6e8g0i2k4m6o8q0s2u4w6y
+                            externalUrl: https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk
+                            calendar: work
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 2
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000073
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 20:30
+                            end: 21:30
+                            title: Clase de pádel
+                            type: padel
+                            detail: null
+                            lead: null
+                            source: calendar
+                            externalId: 9b8c7d6e5f4g3h2i1j0k9l8m7n
+                            externalUrl: https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24
+                            calendar: personal
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 3
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-000000000079
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 21:45
+                            end: 22:45
+                            title: Tiempo en pareja
+                            type: partner
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 9
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                          - id: 019a0a6e-1c00-7000-8000-00000000007a
+                            optionId: 019a0a6e-1c00-7000-8000-000000000003
+                            start: 23:30
+                            end: 07:00
+                            title: Dormir
+                            type: sleep
+                            detail: null
+                            lead: null
+                            source: agent
+                            externalId: null
+                            externalUrl: null
+                            calendar: null
+                            removedFromCalendarAt: null
+                            status: pending
+                            statusAt: null
+                            outcome: null
+                            note: null
+                            locked: false
+                            userOverrides: []
+                            order: 10
+                            version: 1
+                            createdAt: 2026-10-19T07:00:04.812-03:00
+                            updatedAt: 2026-10-19T07:00:04.812-03:00
+                            updatedBy: agent
+                        version: 1
+                        createdAt: 2026-10-19T07:00:04.812-03:00
+                        updatedAt: 2026-10-19T07:00:04.812-03:00
+                        updatedBy: agent
+                    tasks:
+                      - id: 019a0a6e-1c00-7000-8000-0000000000c8
+                        date: 2026-10-19
+                        title: Confirmar por WhatsApp a Martín (10:00)
+                        kind: whatsapp_confirm
+                        origin: agent
+                        done: false
+                        doneAt: null
+                        relatedBlockId: 019a0a6e-1c00-7000-8000-000000000064
+                        order: 0
+                        version: 1
+                        createdAt: 2026-10-19T07:00:04.812-03:00
+                        updatedAt: 2026-10-19T07:00:04.812-03:00
+                        updatedBy: agent
+                      - id: 019a0a6e-1c00-7000-8000-0000000000c9
+                        date: 2026-10-19
+                        title: Confirmar por WhatsApp a Laura (14:00)
+                        kind: whatsapp_confirm
+                        origin: agent
+                        done: false
+                        doneAt: null
+                        relatedBlockId: 019a0a6e-1c00-7000-8000-000000000065
+                        order: 1
+                        version: 1
+                        createdAt: 2026-10-19T07:00:04.812-03:00
+                        updatedAt: 2026-10-19T07:00:04.812-03:00
+                        updatedBy: agent
+                      - id: 019a0a6e-1c00-7000-8000-0000000000ca
+                        date: 2026-10-19
+                        title: Leer notas de descubrimiento de Martín en el CRM
+                        kind: lead_context
+                        origin: agent
+                        done: false
+                        doneAt: null
+                        relatedBlockId: null
+                        order: 2
+                        version: 1
+                        createdAt: 2026-10-19T07:00:04.812-03:00
+                        updatedAt: 2026-10-19T07:00:04.812-03:00
+                        updatedBy: agent
+                      - id: 019a0a6e-1c00-7000-8000-0000000000cb
+                        date: 2026-10-19
+                        title: Seguimiento a Diego (pidió propuesta el viernes)
+                        kind: follow_up
+                        origin: agent
+                        done: false
+                        doneAt: null
+                        relatedBlockId: null
+                        order: 3
+                        version: 1
+                        createdAt: 2026-10-19T07:00:04.812-03:00
+                        updatedAt: 2026-10-19T07:00:04.812-03:00
+                        updatedBy: agent
+                    habitLogs: []
+                    pendingProposal: null
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
+                    version: 3
+                    createdAt: 2026-10-19T07:00:04.812-03:00
+                    updatedAt: 2026-10-19T21:20:00.000-03:00
                     updatedBy: user
               schema:
                 $ref: "#/components/schemas/Day"
@@ -9039,19 +10169,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "422":
-          description: "`shift_out_of_range`. `idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`shift_out_of_range`: a start would leave 00:00–29:59. `idempotency_key_reuse`: same `Idempotency-Key`, different body."
           content:
             application/problem+json:
-              examples:
-                outOfRange:
-                  summary: +60 at night would push pádel past midnight
-                  value:
-                    type: https://agenda.lemydev.com/problems/shift_out_of_range
-                    title: Shift would cross midnight
-                    status: 422
-                    detail: '"Tiempo en pareja" would start at 00:45.'
-                    code: shift_out_of_range
-                    requestId: req_01JA9X7Q2M8K
               schema:
                 $ref: "#/components/schemas/Problem"
         "429":
@@ -10024,6 +11144,24 @@ paths:
                         updatedBy: agent
                     habitLogs: []
                     pendingProposal: null
+                    sleep:
+                      night: null
+                      previousNight:
+                        id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
                     version: 5
                     createdAt: 2026-10-19T07:00:04.812-03:00
                     updatedAt: 2026-10-19T12:41:30.120-03:00
@@ -12244,6 +13382,35 @@ paths:
                         unset: 1
                       showUpRate: 0.86
                       closeRate: 0.33
+                    sleep:
+                      nightsLogged: 6
+                      nightsTotal: 7
+                      avgDurationMinutes: 418
+                      avgBedtime: 24:02
+                      avgWakeTime: 07:01
+                      avgBedDelayMinutes: 32
+                      nights:
+                        - date: 2026-10-12
+                          durationMinutes: 425
+                          bedDelayMinutes: 25
+                        - date: 2026-10-13
+                          durationMinutes: 395
+                          bedDelayMinutes: 50
+                        - date: 2026-10-14
+                          durationMinutes: 440
+                          bedDelayMinutes: 10
+                        - date: 2026-10-15
+                          durationMinutes: null
+                          bedDelayMinutes: 40
+                        - date: 2026-10-16
+                          durationMinutes: 380
+                          bedDelayMinutes: 55
+                        - date: 2026-10-17
+                          durationMinutes: 455
+                          bedDelayMinutes: 15
+                        - date: 2026-10-18
+                          durationMinutes: 410
+                          bedDelayMinutes: 35
                     habits:
                       - slug: gym
                         name: Gym
@@ -12363,6 +13530,22 @@ paths:
                       energy: 3
                       mood: 4
                       text: null
+                    lastNightSleep:
+                      id: 019a0a6e-1c00-7000-8000-00000000015e
+                      date: 2026-10-18
+                      bedAt: 2026-10-19T00:05:00.000-03:00
+                      bedSource: user
+                      wokeAt: 2026-10-19T06:55:00.000-03:00
+                      wakeSource: user
+                      durationMinutes: 410
+                      plannedStart: 23:30
+                      plannedEnd: 07:00
+                      bedDelayMinutes: 35
+                      note: null
+                      version: 2
+                      createdAt: 2026-10-19T00:05:00.000-03:00
+                      updatedAt: 2026-10-19T06:55:00.000-03:00
+                      updatedBy: user
                     skippedPatterns:
                       - type: reading
                         hour: 07:00
@@ -12491,6 +13674,354 @@ paths:
                 $ref: "#/components/schemas/Problem"
         "401":
           description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: "`rate_limited` (agent: 120 req/min)."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/sleep:
+    get:
+      operationId: listSleep
+      tags:
+        - Sleep
+      summary: Sleep logs in a date range
+      description: |-
+        Default: last 14 nights. Max 400.
+
+        **Actors:** agent, user.
+      security:
+        - agentBearer: []
+        - session: []
+      x-actors:
+        - agent
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: false
+          description: Local date in America/Buenos_Aires, `YYYY-MM-DD`.
+          name: from
+          in: query
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: false
+          description: Local date in America/Buenos_Aires, `YYYY-MM-DD`.
+          name: to
+          in: query
+      responses:
+        "200":
+          description: Ascending by night.
+          content:
+            application/json:
+              examples:
+                recent:
+                  summary: Last two nights
+                  value:
+                    logs:
+                      - id: 019a0a6e-1c00-7000-8000-00000000015e
+                        date: 2026-10-18
+                        bedAt: 2026-10-19T00:05:00.000-03:00
+                        bedSource: user
+                        wokeAt: 2026-10-19T06:55:00.000-03:00
+                        wakeSource: user
+                        durationMinutes: 410
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 35
+                        note: null
+                        version: 2
+                        createdAt: 2026-10-19T00:05:00.000-03:00
+                        updatedAt: 2026-10-19T06:55:00.000-03:00
+                        updatedBy: user
+                      - id: 019a0a6e-1c00-7000-8000-00000000015f
+                        date: 2026-10-19
+                        bedAt: 2026-10-20T00:20:00.000-03:00
+                        bedSource: user
+                        wokeAt: null
+                        wakeSource: null
+                        durationMinutes: null
+                        plannedStart: 23:30
+                        plannedEnd: 07:00
+                        bedDelayMinutes: 50
+                        note: null
+                        version: 1
+                        createdAt: 2026-10-20T00:20:00.000-03:00
+                        updatedAt: 2026-10-20T00:20:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SleepLog"
+                required:
+                  - logs
+                additionalProperties: false
+        "400":
+          description: "`validation_error`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: "`rate_limited` (agent: 120 req/min)."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/sleep/events:
+    post:
+      operationId: logSleepEvent
+      tags:
+        - Sleep
+      summary: '"Me voy a dormir" / "Me levanté"'
+      description: |-
+        Sets `bedAt` or `wokeAt` (now, or `at`). Night = previous day if the time is before 12:00. `bed` also marks the pending `sleep` block of that day done. The agent can only fill an empty half.
+
+        **Actors:** agent, user.
+      security:
+        - agentBearer: []
+        - session: []
+      x-actors:
+        - agent
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              bed:
+                summary: 00:20 — I tap "Me voy a dormir" (night of the 19th)
+                value:
+                  type: bed
+              wake:
+                summary: 07:05 — I tap "Me levanté"
+                value:
+                  type: wake
+              agentBackdate:
+                summary: I tell Agenbot "anoche me dormí a las 00:20"
+                value:
+                  type: bed
+                  at: 2026-10-20T00:20:00.000-03:00
+            schema:
+              $ref: "#/components/schemas/SleepEvent"
+      responses:
+        "200":
+          description: Updated night.
+          content:
+            application/json:
+              examples:
+                wake:
+                  summary: 07:05 — I tap "Me levanté"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000015f
+                    date: 2026-10-19
+                    bedAt: 2026-10-20T00:20:00.000-03:00
+                    bedSource: user
+                    wokeAt: 2026-10-20T07:05:00.000-03:00
+                    wakeSource: user
+                    durationMinutes: 405
+                    plannedStart: 23:30
+                    plannedEnd: 07:00
+                    bedDelayMinutes: 50
+                    note: null
+                    version: 2
+                    createdAt: 2026-10-20T00:20:00.000-03:00
+                    updatedAt: 2026-10-20T07:05:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "201":
+          description: Night created.
+          content:
+            application/json:
+              examples:
+                bed:
+                  summary: 00:20 — I tap "Me voy a dormir" (night of the 19th)
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000015f
+                    date: 2026-10-19
+                    bedAt: 2026-10-20T00:20:00.000-03:00
+                    bedSource: user
+                    wokeAt: null
+                    wakeSource: null
+                    durationMinutes: null
+                    plannedStart: 23:30
+                    plannedEnd: 07:00
+                    bedDelayMinutes: 50
+                    note: null
+                    version: 1
+                    createdAt: 2026-10-20T00:20:00.000-03:00
+                    updatedAt: 2026-10-20T00:20:00.000-03:00
+                    updatedBy: user
+                agentBackdate:
+                  summary: I tell Agenbot "anoche me dormí a las 00:20"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000015f
+                    date: 2026-10-19
+                    bedAt: 2026-10-20T00:20:00.000-03:00
+                    bedSource: agent
+                    wokeAt: null
+                    wakeSource: null
+                    durationMinutes: null
+                    plannedStart: 23:30
+                    plannedEnd: 07:00
+                    bedDelayMinutes: 50
+                    note: null
+                    version: 1
+                    createdAt: 2026-10-20T08:30:00.000-03:00
+                    updatedAt: 2026-10-20T08:30:00.000-03:00
+                    updatedBy: agent
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "400":
+          description: "`validation_error`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: "`user_edit_conflict` (agent overwriting my time). `idempotency_in_progress`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: "`validation_error`: time in the future, wake before bed or night ≥ 20 h. `idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: "`rate_limited` (agent: 120 req/min)."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/sleep/{date}:
+    put:
+      operationId: upsertSleep
+      tags:
+        - Sleep
+      summary: Load or correct a night by hand
+      description: |-
+        Used by the morning reminder card when I forgot the buttons. I can edit any night, closed days included.
+
+        **Actors:** agent, user.
+      security:
+        - agentBearer: []
+        - session: []
+      x-actors:
+        - agent
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Local date in America/Buenos_Aires, `YYYY-MM-DD`.
+          name: date
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              manual:
+                summary: "10:00 reminder → I load last night: 23:50 → 07:00"
+                value:
+                  bedAt: 2026-10-18T23:50:00.000-03:00
+                  wokeAt: 2026-10-19T07:00:00.000-03:00
+            schema:
+              $ref: "#/components/schemas/SleepUpsert"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                manual:
+                  summary: "10:00 reminder → I load last night: 23:50 → 07:00"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000015e
+                    date: 2026-10-18
+                    bedAt: 2026-10-18T23:50:00.000-03:00
+                    bedSource: user
+                    wokeAt: 2026-10-19T07:00:00.000-03:00
+                    wakeSource: user
+                    durationMinutes: 430
+                    plannedStart: 23:30
+                    plannedEnd: 07:00
+                    bedDelayMinutes: 20
+                    note: null
+                    version: 1
+                    createdAt: 2026-10-19T10:02:00.000-03:00
+                    updatedAt: 2026-10-19T10:02:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "400":
+          description: "`validation_error`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: "`user_edit_conflict`, `version_conflict`. `idempotency_in_progress`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: "`validation_error`: future time, wake before bed, ≥ 20 h. `idempotency_key_reuse`: same `Idempotency-Key`, different body."
           content:
             application/problem+json:
               schema:
@@ -13668,6 +15199,7 @@ paths:
                     p256dh: BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM
                     auth: tBHItJI5svbpez7KI4CCXg
                   callReminders: true
+                  sleepReminders: true
             schema:
               $ref: "#/components/schemas/PushSubscribeInput"
       responses:
@@ -13683,6 +15215,7 @@ paths:
                     deviceId: 019a0a6e-1c00-7000-8000-000000000320
                     endpoint: https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b
                     callReminders: true
+                    sleepReminders: true
                     createdAt: 2026-10-19T07:41:30.000-03:00
               schema:
                 $ref: "#/components/schemas/PushSubscription"
@@ -13973,6 +15506,45 @@ webhooks:
                     blocksTotal: 12
                     weeklyGym:
                       done: 0
+                      target: 3
+                  dayUrl: https://agenda.lemydev.com/api/days/2026-10-19
+              shiftAndSleep:
+                summary: '"Me atrasé" +45 at night, then "Me voy a dormir" at 00:20'
+                value:
+                  event: day.updated_by_user
+                  batchId: 019a0a6e-1c00-7000-8000-000000000385
+                  date: 2026-10-19
+                  dayVersion: 8
+                  changes:
+                    - entity: day
+                      id: 019a0a6e-1c00-7000-8000-000000000001
+                      action: shift
+                      shift:
+                        fromTime: 21:00
+                        minutes: 45
+                        blocks:
+                          - id: 019a0a6e-1c00-7000-8000-00000000006c
+                            title: Tiempo en pareja
+                            from: 21:45
+                            to: 22:30
+                          - id: 019a0a6e-1c00-7000-8000-00000000006d
+                            title: Dormir
+                            from: 23:30
+                            to: 24:15
+                      at: 2026-10-19T21:20:00.000-03:00
+                    - entity: sleep_log
+                      id: 019a0a6e-1c00-7000-8000-00000000015f
+                      action: create
+                      sleep:
+                        night: 2026-10-19
+                        bedAt: 2026-10-20T00:20:00.000-03:00
+                        wokeAt: null
+                      at: 2026-10-20T00:20:00.000-03:00
+                  summary:
+                    blocksDone: 11
+                    blocksTotal: 12
+                    weeklyGym:
+                      done: 1
                       target: 3
                   dayUrl: https://agenda.lemydev.com/api/days/2026-10-19
             schema:

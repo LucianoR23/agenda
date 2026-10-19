@@ -14,6 +14,7 @@ erDiagram
     habit ||--o{ habit_log : "one per date"
     device ||--o| passkey : "fingerprint"
     device ||--o{ push_subscription : ""
+    day ||..o| sleep_log : "same date (night)"
     device |o--o{ auth_attempt : ""
 
     day {
@@ -43,7 +44,7 @@ erDiagram
         uuid id PK
         uuid option_id FK "(option_id, day_id) composite FK"
         uuid day_id FK
-        text start "HH:mm"
+        text start "HH:mm 00:00-29:59"
         text end "HH:mm, nullable"
         text title
         block_type type
@@ -91,6 +92,15 @@ erDiagram
         bool done
         numeric value
         habit_log_source source
+    }
+    sleep_log {
+        uuid id PK
+        date date UK "night starting this day"
+        timestamptz bed_at
+        habit_log_source bed_source
+        timestamptz woke_at
+        habit_log_source wake_source
+        text note
     }
     task {
         uuid id PK
@@ -193,5 +203,6 @@ erDiagram
         text p256dh
         text auth
         bool call_reminders
+        bool sleep_reminders
     }
 ```

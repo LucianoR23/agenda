@@ -15,6 +15,7 @@ import {
   TaskCreate,
   TaskPatch,
 } from "../tracking";
+import { SleepEvent, SleepLog, SleepUpsert } from "../sleep";
 import { z } from "../zod";
 
 const HabitParams = z.strictObject({
@@ -55,6 +56,88 @@ const readingHabit = {
   order: 1,
   version: 1,
 };
+
+const sleepRoutes: RouteDef[] = [
+  {
+    operationId: "listSleep",
+    method: "get",
+    path: "/api/sleep",
+    tag: "Sleep",
+    summary: "Sleep logs in a date range",
+    description: "Default: last 14 nights. Max 400.",
+    access: "agent+user",
+    query: Range,
+    responses: { 200: { description: "Ascending by night.", schema: z.strictObject({ logs: z.array(SleepLog) }) } },
+    exchanges: [
+      { name: "recent", summary: "Last two nights", actor: "user", query: { from: "2026-10-18", to: "2026-10-19" }, status: 200, response: { logs: [ex.sleepPrevNight, ex.sleepTonightBed] } },
+    ],
+  },
+  {
+    operationId: "logSleepEvent",
+    method: "post",
+    path: "/api/sleep/events",
+    tag: "Sleep",
+    summary: "\"Me voy a dormir\" / \"Me levanté\"",
+    description:
+      "Sets `bedAt` or `wokeAt` (now, or `at`). Night = previous day if the time is before 12:00. `bed` also marks the pending `sleep` block of that day done. The agent can only fill an empty half.",
+    access: "agent+user",
+    body: SleepEvent,
+    responses: {
+      200: { description: "Updated night.", schema: SleepLog },
+      201: { description: "Night created.", schema: SleepLog },
+      409: { description: "`user_edit_conflict` (agent overwriting my time)." },
+      422: { description: "`validation_error`: time in the future, wake before bed or night ≥ 20 h." },
+    },
+    exchanges: [
+      { name: "bed", summary: "00:20 — I tap \"Me voy a dormir\" (night of the 19th)", actor: "user", body: { type: "bed" }, status: 201, response: ex.sleepTonightBed },
+      {
+        name: "wake",
+        summary: "07:05 — I tap \"Me levanté\"",
+        actor: "user",
+        body: { type: "wake" },
+        status: 200,
+        response: { ...ex.sleepTonightBed, wokeAt: "2026-10-20T07:05:00.000-03:00", wakeSource: "user", durationMinutes: 405, version: 2, updatedAt: "2026-10-20T07:05:00.000-03:00" },
+      },
+      {
+        name: "agentBackdate",
+        summary: "I tell Agenbot \"anoche me dormí a las 00:20\"",
+        actor: "agent",
+        body: { type: "bed", at: "2026-10-20T00:20:00.000-03:00" },
+        status: 201,
+        response: { ...ex.sleepTonightBed, bedSource: "agent", createdAt: "2026-10-20T08:30:00.000-03:00", updatedAt: "2026-10-20T08:30:00.000-03:00", updatedBy: "agent" },
+      },
+    ],
+  },
+  {
+    operationId: "upsertSleep",
+    method: "put",
+    path: "/api/sleep/{date}",
+    tag: "Sleep",
+    summary: "Load or correct a night by hand",
+    description: "Used by the morning reminder card when I forgot the buttons. I can edit any night, closed days included.",
+    access: "agent+user",
+    params: z.strictObject({ date: LocalDate }),
+    body: SleepUpsert,
+    ifMatch: true,
+    responses: {
+      200: { description: "Updated.", schema: SleepLog },
+      201: { description: "Created.", schema: SleepLog },
+      409: { description: "`user_edit_conflict`, `version_conflict`." },
+      422: { description: "`validation_error`: future time, wake before bed, ≥ 20 h." },
+    },
+    exchanges: [
+      {
+        name: "manual",
+        summary: "10:00 reminder → I load last night: 23:50 → 07:00",
+        actor: "user",
+        params: { date: "2026-10-18" },
+        body: { bedAt: "2026-10-18T23:50:00.000-03:00", wokeAt: "2026-10-19T07:00:00.000-03:00" },
+        status: 201,
+        response: { ...ex.sleepPrevNight, bedAt: "2026-10-18T23:50:00.000-03:00", wokeAt: "2026-10-19T07:00:00.000-03:00", durationMinutes: 430, bedDelayMinutes: 20, version: 1, createdAt: "2026-10-19T10:02:00.000-03:00", updatedAt: "2026-10-19T10:02:00.000-03:00" },
+      },
+    ],
+  },
+];
 
 export const trackingRoutes: RouteDef[] = [
   {
@@ -302,6 +385,23 @@ export const trackingRoutes: RouteDef[] = [
             showUpRate: 0.86,
             closeRate: 0.33,
           },
+          sleep: {
+            nightsLogged: 6,
+            nightsTotal: 7,
+            avgDurationMinutes: 418,
+            avgBedtime: "24:02",
+            avgWakeTime: "07:01",
+            avgBedDelayMinutes: 32,
+            nights: [
+              { date: "2026-10-12", durationMinutes: 425, bedDelayMinutes: 25 },
+              { date: "2026-10-13", durationMinutes: 395, bedDelayMinutes: 50 },
+              { date: "2026-10-14", durationMinutes: 440, bedDelayMinutes: 10 },
+              { date: "2026-10-15", durationMinutes: null, bedDelayMinutes: 40 },
+              { date: "2026-10-16", durationMinutes: 380, bedDelayMinutes: 55 },
+              { date: "2026-10-17", durationMinutes: 455, bedDelayMinutes: 15 },
+              { date: "2026-10-18", durationMinutes: 410, bedDelayMinutes: 35 },
+            ],
+          },
           habits: [
             { slug: "gym", name: "Gym", currentStreak: 5, bestStreak: 9, periodsMet: 1, periodsTotal: 1 },
             { slug: "reading", name: "Lectura", currentStreak: 3, bestStreak: 21, periodsMet: 5, periodsTotal: 7 },
@@ -344,6 +444,7 @@ export const trackingRoutes: RouteDef[] = [
             unfinishedTasks: [{ ...ex.tasks0700[3], date: "2026-10-18", createdAt: "2026-10-18T07:00:03.000-03:00", updatedAt: "2026-10-18T07:00:03.000-03:00" }],
           },
           lastReview: { date: "2026-10-17", energy: 3, mood: 4, text: null },
+          lastNightSleep: ex.sleepPrevNight,
           skippedPatterns: [{ type: "reading", hour: "07:00", skipped: 4, total: 6 }],
           pendingProposal: null,
         },
@@ -395,4 +496,5 @@ export const trackingRoutes: RouteDef[] = [
       },
     ],
   },
+  ...sleepRoutes,
 ];

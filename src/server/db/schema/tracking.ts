@@ -89,3 +89,31 @@ export const task = pgTable(
     check("task_done_at_consistent", sql`${t.done} = (${t.doneAt} IS NOT NULL)`),
   ],
 );
+
+/**
+ * Actual sleep for the night that starts on `date` (bedtime on `date` evening or after midnight,
+ * wake-up the next morning). Each half has its own source so ownership works per field:
+ * the agent may only fill a half that is still empty.
+ */
+export const sleepLog = pgTable(
+  "sleep_log",
+  {
+    id: id(),
+    date: date({ mode: "string" }).notNull().unique("sleep_log_date_uq"),
+    bedAt: timestamp({ withTimezone: true }),
+    bedSource: habitLogSourceEnum(),
+    wokeAt: timestamp({ withTimezone: true }),
+    wakeSource: habitLogSourceEnum(),
+    note: text(),
+    ...mutable(),
+  },
+  (t) => [
+    check("sleep_log_bed_source", sql`(${t.bedAt} IS NULL) = (${t.bedSource} IS NULL)`),
+    check("sleep_log_wake_source", sql`(${t.wokeAt} IS NULL) = (${t.wakeSource} IS NULL)`),
+    check(
+      "sleep_log_order",
+      sql`${t.bedAt} IS NULL OR ${t.wokeAt} IS NULL
+        OR (${t.wokeAt} > ${t.bedAt} AND ${t.wokeAt} - ${t.bedAt} < interval '20 hours')`,
+    ),
+  ],
+);

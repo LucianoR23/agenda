@@ -1,5 +1,6 @@
-import { Actor, ExpectedVersion, LocalDate, LocalTime, Mutable, orNull, Timestamp, Uuid } from "./common";
+import { Actor, BlockTime, ExpectedVersion, LocalDate, LocalTime, Mutable, orNull, Timestamp, Uuid } from "./common";
 import { BlockType, CallOutcome, HabitLog, Review, Task, TaskKind, WeeklyGym } from "./planning";
+import { SleepLog } from "./sleep";
 import { z } from "./zod";
 
 // ---------- habits ----------
@@ -154,6 +155,17 @@ export const Metrics = z
       showUpRate: Rate.openapi({ description: "(calls with outcome − no_show − rescheduled) / (calls with outcome − rescheduled)." }),
       closeRate: Rate.openapi({ description: "closed_won / calls that showed up." }),
     }),
+    sleep: z.strictObject({
+      nightsLogged: z.int().openapi({ description: "Nights with both bed and wake times." }),
+      nightsTotal: z.int(),
+      avgDurationMinutes: z.int().nullable(),
+      avgBedtime: orNull(BlockTime).openapi({ description: "Average bedtime, `24:xx` when after midnight." }),
+      avgWakeTime: orNull(LocalTime),
+      avgBedDelayMinutes: z.int().nullable().openapi({ description: "Average bedtime vs planned `sleep` block start." }),
+      nights: z.array(
+        z.strictObject({ date: LocalDate, durationMinutes: z.int().nullable(), bedDelayMinutes: z.int().nullable() }),
+      ),
+    }),
     habits: z.array(
       z.strictObject({
         slug: z.string(),
@@ -207,6 +219,7 @@ export const AgentContext = z
       })
       .nullable(),
     lastReview: orNull(z.strictObject({ date: LocalDate, ...Review.shape })),
+    lastNightSleep: orNull(SleepLog).openapi({ description: "Night before `date` (may be incomplete)." }),
     skippedPatterns: z
       .array(
         z.strictObject({
@@ -227,7 +240,7 @@ export const AgentContext = z
 // ---------- changelog ----------
 
 export const ChangeAction = z
-  .enum(["create", "update", "delete", "replace", "choose", "close", "propose", "accept", "reject"])
+  .enum(["create", "update", "delete", "replace", "choose", "close", "propose", "accept", "reject", "shift"])
   .openapi("ChangeAction");
 
 export const ChangeLogEntry = z
@@ -249,15 +262,26 @@ export const ChangeLogEntry = z
 
 export const WebhookChange = z
   .strictObject({
-    entity: z.enum(["day", "block", "task", "habit_log", "proposal"]),
+    entity: z.enum(["day", "block", "task", "habit_log", "proposal", "sleep_log"]),
     id: Uuid,
     action: ChangeAction,
     fields: z.record(z.string(), z.strictObject({ from: z.unknown(), to: z.unknown() })).optional(),
     block: z
-      .strictObject({ title: z.string(), type: BlockType, start: LocalTime, externalId: z.string().nullable(), outcome: orNull(CallOutcome).optional() })
+      .strictObject({ title: z.string(), type: BlockType, start: BlockTime, externalId: z.string().nullable(), outcome: orNull(CallOutcome).optional() })
       .optional(),
     task: z.strictObject({ title: z.string(), kind: TaskKind }).optional(),
     habit: z.strictObject({ slug: z.string(), name: z.string() }).optional(),
+    shift: z
+      .strictObject({
+        fromTime: BlockTime,
+        minutes: z.int(),
+        blocks: z.array(z.strictObject({ id: Uuid, title: z.string(), from: BlockTime, to: BlockTime })),
+      })
+      .optional()
+      .openapi({ description: "On `action: shift` (\"Me atrasé\")." }),
+    sleep: z
+      .strictObject({ night: LocalDate, bedAt: orNull(Timestamp), wokeAt: orNull(Timestamp) })
+      .optional(),
     at: Timestamp,
   })
   .openapi("WebhookChange");

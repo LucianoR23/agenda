@@ -1,4 +1,5 @@
-import { ExpectedVersion, LocalDate, LocalTime, Mutable, OptionLabel, orNull, Timestamp, Uuid } from "./common";
+import { ExpectedVersion, LocalDate, BlockTime, Mutable, OptionLabel, orNull, Timestamp, Uuid } from "./common";
+import { DaySleep } from "./sleep";
 import { z } from "./zod";
 
 // ---------- enums ----------
@@ -65,8 +66,8 @@ export const Review = z
 // ---------- blocks ----------
 
 const blockScheduleShape = {
-  start: LocalTime,
-  end: orNull(LocalTime).optional().openapi({
+  start: BlockTime,
+  end: orNull(BlockTime).optional().openapi({
     description: "Optional end. `end < start` means the block ends after midnight.",
   }),
   title: z.string().min(1).max(200),
@@ -88,8 +89,8 @@ export const Block = z
   .strictObject({
     id: Uuid,
     optionId: Uuid,
-    start: LocalTime,
-    end: orNull(LocalTime),
+    start: BlockTime,
+    end: orNull(BlockTime),
     title: z.string(),
     type: BlockType,
     detail: z.string().nullable(),
@@ -142,8 +143,8 @@ export const BlockCreate = z
 
 export const BlockPatch = z
   .strictObject({
-    start: LocalTime.optional(),
-    end: orNull(LocalTime).optional(),
+    start: BlockTime.optional(),
+    end: orNull(BlockTime).optional(),
     title: z.string().min(1).max(200).optional(),
     type: BlockType.optional(),
     detail: z.string().max(4000).nullable().optional(),
@@ -167,8 +168,8 @@ export const BlockPatch = z
 
 export const BlockExternalPatch = z
   .strictObject({
-    start: LocalTime.optional(),
-    end: orNull(LocalTime).optional(),
+    start: BlockTime.optional(),
+    end: orNull(BlockTime).optional(),
     title: z.string().min(1).max(200).optional(),
     type: BlockType.optional(),
     detail: z.string().max(4000).nullable().optional(),
@@ -286,8 +287,8 @@ export const BlockRef = z
     externalId: z.string().nullable(),
     title: z.string(),
     type: BlockType,
-    start: LocalTime,
-    end: orNull(LocalTime),
+    start: BlockTime,
+    end: orNull(BlockTime),
   })
   .openapi("BlockRef");
 
@@ -302,8 +303,8 @@ export const ProposalDiff = z
     moved: z.array(
       z.strictObject({
         block: BlockRef,
-        from: z.strictObject({ start: LocalTime, end: orNull(LocalTime) }),
-        to: z.strictObject({ start: LocalTime, end: orNull(LocalTime) }),
+        from: z.strictObject({ start: BlockTime, end: orNull(BlockTime) }),
+        to: z.strictObject({ start: BlockTime, end: orNull(BlockTime) }),
       }),
     ),
     changed: z.array(
@@ -376,6 +377,7 @@ export const Day = z
     tasks: z.array(Task),
     habitLogs: z.array(HabitLog),
     pendingProposal: orNull(Proposal),
+    sleep: DaySleep,
     ...Mutable,
   })
   .openapi("Day", {
@@ -402,7 +404,7 @@ export const ChooseInput = z
 
 export const ShiftInput = z
   .strictObject({
-    fromTime: LocalTime.openapi({ description: "Shift blocks starting at or after this time." }),
+    fromTime: BlockTime.openapi({ description: "Shift blocks starting at or after this time.", example: "21:00" }),
     minutes: z
       .int()
       .min(-240)
@@ -413,7 +415,7 @@ export const ShiftInput = z
   })
   .openapi("ShiftInput", {
     description:
-      "Shifts my pending, unlocked agent/user blocks of the chosen option. Calendar blocks are untouched. 422 `shift_out_of_range` if a block would cross 00:00/23:59.",
+      "\"Me atrasé\": shifts my pending, unlocked agent/user blocks of the chosen option (including `sleep`). Calendar blocks are untouched. Blocks may move past midnight (`24:15`); nothing is lost and the shift is recorded as a `shift` ChangeLog entry and webhook change. 422 `shift_out_of_range` only if a start would leave 00:00–29:59.",
   });
 
 export const ReorderInput = z

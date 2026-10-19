@@ -142,6 +142,8 @@ export const pushSubscription = pgTable("push_subscription", {
   auth: text().notNull(),
   // per-device toggle for the 10-min reminder before call blocks
   callReminders: boolean().notNull().default(true),
+  // per-device toggle for the morning reminder when last night's sleep is incomplete
+  sleepReminders: boolean().notNull().default(true),
   failureCount: integer().notNull().default(0),
   lastSuccessAt: timestamp({ withTimezone: true }),
   createdAt: createdAt(),

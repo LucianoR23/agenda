@@ -14,6 +14,7 @@ import type {
   Proposal,
   Task,
 } from "./planning";
+import type { SleepLog } from "./sleep";
 
 type BlockT = z.infer<typeof Block>;
 type BlockInputT = z.infer<typeof BlockInput>;
@@ -228,6 +229,44 @@ export const habitLogGym: z.infer<typeof HabitLog> = {
   updatedBy: "user",
 };
 
+/** Night of Sunday 18 → Monday 19, loaded with the quick buttons. */
+export const sleepPrevNight: z.infer<typeof SleepLog> = {
+  id: uid(350),
+  date: "2026-10-18",
+  bedAt: "2026-10-19T00:05:00.000-03:00",
+  bedSource: "user",
+  wokeAt: "2026-10-19T06:55:00.000-03:00",
+  wakeSource: "user",
+  durationMinutes: 410,
+  plannedStart: "23:30",
+  plannedEnd: "07:00",
+  bedDelayMinutes: 35,
+  note: null,
+  version: 2,
+  createdAt: "2026-10-19T00:05:00.000-03:00",
+  updatedAt: "2026-10-19T06:55:00.000-03:00",
+  updatedBy: "user",
+};
+
+/** Tonight: I tapped "Me voy a dormir" at 00:20 (after midnight, so it belongs to the night of the 19th). */
+export const sleepTonightBed: z.infer<typeof SleepLog> = {
+  id: uid(351),
+  date: DATE,
+  bedAt: "2026-10-20T00:20:00.000-03:00",
+  bedSource: "user",
+  wokeAt: null,
+  wakeSource: null,
+  durationMinutes: null,
+  plannedStart: "23:30",
+  plannedEnd: "07:00",
+  bedDelayMinutes: 50,
+  note: null,
+  version: 1,
+  createdAt: "2026-10-20T00:20:00.000-03:00",
+  updatedAt: "2026-10-20T00:20:00.000-03:00",
+  updatedBy: "user",
+};
+
 /** Day right after the 07:00 PUT (draft). */
 export const dayDraft: DayT = {
   id: DAY_ID,
@@ -245,6 +284,7 @@ export const dayDraft: DayT = {
   tasks: tasks0700,
   habitLogs: [],
   pendingProposal: null,
+  sleep: { night: null, previousNight: sleepPrevNight },
   version: 1,
   createdAt: T0700,
   updatedAt: T0700,

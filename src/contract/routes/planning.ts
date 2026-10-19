@@ -30,21 +30,20 @@ const ProposalParams = z.strictObject({ date: LocalDate, id: Uuid });
 const D = { date: ex.DATE };
 const etag = (v: number) => ({ ETag: `"${v}"` });
 
-// "Me atrasé +30" from 11:00 on the chosen day: only my pending, unlocked agent/user blocks move; sleep stays.
-const shifted = (() => {
+// "Me atrasé" on the chosen day: only my pending, unlocked agent/user blocks move (sleep included).
+const shiftDay = (fromTime: string, minutes: number, at: string, version: number) => {
   const a = ex.dayChosen.options[0];
   const add = (t: string, m: number) => {
     const total = Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) + m;
     return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
   };
-  const at = "2026-10-19T11:04:00.000-03:00";
   const blocks = a.blocks
     .map((b) =>
-      b.source !== "calendar" && b.status === "pending" && !b.locked && b.type !== "sleep" && b.start >= "11:00"
+      b.source !== "calendar" && b.status === "pending" && !b.locked && b.start >= fromTime
         ? {
             ...b,
-            start: add(b.start, 30),
-            end: b.end ? add(b.end, 30) : null,
+            start: add(b.start, minutes),
+            end: b.end ? add(b.end, minutes) : null,
             userOverrides: ["start", "end"] as ("start" | "end")[],
             version: b.version + 1,
             updatedAt: at,
@@ -53,8 +52,10 @@ const shifted = (() => {
         : b,
     )
     .sort((x, y) => x.start.localeCompare(y.start));
-  return { ...ex.dayChosen, status: "edited" as const, options: [{ ...a, blocks }, ex.dayChosen.options[1]], version: 3, updatedAt: at };
-})();
+  return { ...ex.dayChosen, status: "edited" as const, options: [{ ...a, blocks }, ex.dayChosen.options[1]], version, updatedAt: at };
+};
+const shifted = shiftDay("11:00", 30, "2026-10-19T11:04:00.000-03:00", 3);
+const shiftedNight = shiftDay("21:00", 45, "2026-10-19T21:20:00.000-03:00", 3);
 
 const breakfastA = ex.dayChosen.options[0].blocks.find((b) => b.title === "Desayuno")!;
 const optionB = ex.dayDraft.options[1];
@@ -246,7 +247,7 @@ export const planningRoutes: RouteDef[] = [
     tag: "Days",
     summary: "\"Me atrasé\": shift my pending blocks",
     description:
-      "Moves pending, unlocked `agent`/`user` blocks of the chosen option starting at or after `fromTime`. Calendar and `sleep` blocks never move. When the user shifts, `start`/`end` are added to `userOverrides`.",
+      "Moves pending, unlocked `agent`/`user` blocks of the chosen option starting at or after `fromTime`, `sleep` included; calendar blocks never move. Blocks can pass midnight (`24:15` = 00:15 next day). When I shift, `start`/`end` join `userOverrides`. Recorded as a `shift` ChangeLog entry and a `shift` webhook change.",
     access: "agent+user",
     params: DateParams,
     body: ShiftInput,
@@ -254,18 +255,19 @@ export const planningRoutes: RouteDef[] = [
     responses: {
       200: { description: "Updated day.", schema: Day, headers: ["ETag"] },
       409: { description: "`invalid_transition` (draft), `day_closed`, `version_conflict`." },
-      422: { description: "`shift_out_of_range`." },
+      422: { description: "`shift_out_of_range`: a start would leave 00:00–29:59." },
     },
     exchanges: [
       { name: "plus30", summary: "11:04 — +30 min from 11:00", actor: "user", params: D, body: { fromTime: "11:00", minutes: 30 }, status: 200, response: shifted, responseHeaders: etag(3) },
       {
-        name: "outOfRange",
-        summary: "+60 at night would push pádel past midnight",
+        name: "pastMidnight",
+        summary: "21:20 — +45 from 21:00: pareja 22:30, dormir pasa a 24:15 (00:15 del martes); pádel (calendar) no se mueve",
         actor: "user",
         params: D,
-        body: { fromTime: "21:30", minutes: 180 },
-        status: 422,
-        response: problem(422, "shift_out_of_range", "\"Tiempo en pareja\" would start at 00:45."),
+        body: { fromTime: "21:00", minutes: 45 },
+        status: 200,
+        response: shiftedNight,
+        responseHeaders: etag(3),
       },
     ],
   },

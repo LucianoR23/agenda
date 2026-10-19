@@ -7,7 +7,7 @@ import postgres from "postgres";
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
-  const pg = postgres(url, { max: 1 });
+  const pg = postgres(url, { max: 1, onnotice: () => {} });
   await migrate(drizzle(pg), { migrationsFolder: process.env.MIGRATIONS_DIR ?? "./drizzle" });
   await pg.end();
   console.log("migrations applied");

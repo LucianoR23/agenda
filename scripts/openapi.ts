@@ -11,7 +11,7 @@ import {
   reason,
   routes,
   validateExamples,
-  webhookExample,
+  webhookExamples,
 } from "../src/contract/openapi";
 import type { Exchange, RouteDef } from "../src/contract/route-def";
 
@@ -103,19 +103,23 @@ const md = [
   "",
   "### `POST ${AGENT_WEBHOOK_URL}` — my changes, sent to Agenbot",
   "",
-  fold(
-    "Request",
-    [
-      "POST ${AGENT_WEBHOOK_URL}",
-      "Authorization: Bearer ${AGENT_WEBHOOK_TOKEN}",
-      `Idempotency-Key: ${webhookExample.batchId}`,
-      "Content-Type: application/json",
-      "",
-      json(webhookExample),
-    ].join("\n"),
-    "http",
-  ),
-  "",
+  ...webhookExamples.flatMap((w) => [
+    `#### ${w.summary}`,
+    "",
+    fold(
+      "Request",
+      [
+        "POST ${AGENT_WEBHOOK_URL}",
+        "Authorization: Bearer ${AGENT_WEBHOOK_TOKEN}",
+        `Idempotency-Key: ${w.value.batchId}`,
+        "Content-Type: application/json",
+        "",
+        json(w.value),
+      ].join("\n"),
+      "http",
+    ),
+    "",
+  ]),
 ].join("\n");
 
 const targets: Array<[string, string]> = [
