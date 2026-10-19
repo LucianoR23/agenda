@@ -100,7 +100,8 @@ export const idempotencyKey = pgTable(
     requestHash: text().notNull(),
     // null while the first request is still in flight
     responseStatus: integer(),
-    responseBody: jsonb(),
+    // serialized JSON text, so a replay is byte-identical to the original response
+    responseBody: text(),
     createdAt: createdAt(),
   },
   (t) => [
@@ -108,3 +109,9 @@ export const idempotencyKey = pgTable(
     index("idempotency_key_created_idx").on(t.createdAt),
   ],
 );
+
+/** Dedup for scheduled pushes (call reminders, sleep reminder). `key` e.g. `remind:<blockId>:<start>`, `sleep:<date>`. */
+export const notificationLog = pgTable("notification_log", {
+  key: text().primaryKey(),
+  sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});

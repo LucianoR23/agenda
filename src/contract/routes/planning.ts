@@ -230,6 +230,7 @@ export const planningRoutes: RouteDef[] = [
     ifMatch: true,
     responses: {
       200: { description: "Updated day.", schema: Day, headers: ["ETag"] },
+      403: { description: "`forbidden`: only I can close a day early." },
       404: { description: "`day_not_found`." },
       409: { description: "`version_conflict`, `user_edit_conflict` (agent writing my review), `day_closed` (agent)." },
     },
@@ -399,7 +400,9 @@ export const planningRoutes: RouteDef[] = [
     body: BlockCreate,
     responses: {
       201: { description: "Created block.", schema: Block },
-      409: { description: "`day_closed` (agent), `forbidden` source." },
+      403: { description: "`forbidden`: only the agent mirrors `calendar` blocks; `locked`/`remind` are mine." },
+      404: { description: "`not_found`: no such option." },
+      409: { description: "`day_closed` (agent)." },
     },
     exchanges: [
       {
@@ -444,8 +447,10 @@ export const planningRoutes: RouteDef[] = [
     ifMatch: true,
     responses: {
       200: { description: "Updated block.", schema: Block },
+      403: { description: "`forbidden`: the agent sent a field only I own (`locked`, `remind`)." },
       404: { description: "`not_found`." },
       409: { description: "`calendar_owned`, `user_edit_conflict`, `version_conflict`, `day_closed` (agent)." },
+      422: { description: "`validation_error`: outcome/lead on a non-call block." },
     },
     exchanges: [
       {

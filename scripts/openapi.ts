@@ -13,6 +13,7 @@ import {
   validateExamples,
   webhookExamples,
 } from "../src/contract/openapi";
+import * as ex from "../src/contract/examples";
 import type { Exchange, RouteDef } from "../src/contract/route-def";
 
 const check = process.argv.includes("--check");
@@ -122,9 +123,14 @@ const md = [
   ]),
 ].join("\n");
 
+// request bodies used by scripts/agent-simulation.sh (same examples, so they can't drift from the contract)
+const fixture = (v: unknown) => `${JSON.stringify(v, null, 2)}\n`;
+
 const targets: Array<[string, string]> = [
   ["openapi.yaml", yaml],
   ["docs/api-examples.md", md],
+  ["scripts/fixtures/agenbot-0700.json", fixture(ex.dayInput0700)],
+  ["scripts/fixtures/agenbot-replan.json", fixture(ex.dayInputReplan)],
 ];
 
 if (check) {

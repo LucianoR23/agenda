@@ -196,3 +196,30 @@ Resolved 2026-10-19:
 - **D63 — Icons as an SVG sprite** (`pnpm icons`, checked in CI) instead of the Material Symbols font.
 - **D64 — Theme**: system preference with dark as the base; per-device override stored client-side (localStorage).
 - **D65 — Morning-only sleep reminder** (confirmed): no bedtime nag.
+
+## API implementation (STOP 3)
+
+- **D66 — One dispatcher for `/api/*`** (`src/app/api/[...path]/route.ts` → `src/server/http/router.ts`). It matches
+  the request against the contract catalog, so paths, params, query, body validation and per-route auth come from the
+  same Zod definitions as `openapi.yaml`; a test asserts every `operationId` has an implementation.
+- **D67 — One transaction per request.** Domain code receives `ctx.db` (the transaction); pushes run after commit.
+  Failed credential checks write lockout counters on a separate connection so they survive the rollback.
+- **D68 — Idempotency rows are reserved before the handler, outside the transaction**, and store 2xx–4xx responses
+  (5xx releases the key). The body is stored as text, so a replay is byte-identical (`Idempotent-Replayed: true`).
+- **D69 — Block matching on agent bodies**: `externalId` → `id` → (agent blocks) same type + title. Re-sending the
+  same day is a no-op and never duplicates a block I tracked; ids from another environment still match.
+- **D70 — Absent day fields in a `PUT` are left unchanged** (`notes`, `callsSummary`, `weeklyGym`).
+- **D71 — The agent can't write past days**: a `PUT` for a past date that never existed, task/habit/sleep writes for a
+  past date → `409 day_closed`. Mine are allowed.
+- **D72 — Lockout counts per device and globally with the same threshold (5)**; success resets counters and the
+  doubling. Setup code, PIN, recovery code, reset code and fingerprint failures all count.
+- **D73 — Undoing a linked block** (done → pending/skipped) removes the habit log only if no other done block of that
+  type remains that day (a manual log on that same day would also be removed — accepted edge case).
+- **D74 — Webhook batches**: `collecting` (debounce restarts on each change, but an `immediate` change keeps its
+  due time) → claimed as `pending` when sent, so new changes start a new batch; retries 30 s · 2 min · 8 min ·
+  32 min, then `failed`. Same `Idempotency-Key` (batch id) on every retry; `dayVersion`/summary computed at send time.
+- **D75 — Reminders are deduplicated** in `notification_log` (`remind:<block>:<start>`, `sleep:<night>`), so a restart
+  never sends twice and a moved block reminds again at its new time.
+- **D76 — Day versions**: a new day starts at version 1; my own day ("Armar mi día") is created at version 2
+  (insert + choose).
+

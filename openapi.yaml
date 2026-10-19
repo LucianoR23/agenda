@@ -1100,6 +1100,9 @@ components:
         proposals:
           type: array
           items: {}
+        sleepLogs:
+          type: array
+          items: {}
         changeLog:
           type: array
           items: {}
@@ -1111,6 +1114,7 @@ components:
         - habitLogs
         - tasks
         - proposals
+        - sleepLogs
         - changeLog
       additionalProperties: false
       description: "All personal data as JSON (no auth secrets: no PIN/recovery hashes, sessions or passkeys)."
@@ -8013,6 +8017,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+        "403":
+          description: "`forbidden`: only I can close a day early."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         "404":
           description: "`day_not_found`."
           content:
@@ -11900,8 +11910,20 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+        "403":
+          description: "`forbidden`: only the agent mirrors `calendar` blocks; `locked`/`remind` are mine."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: "`not_found`: no such option."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         "409":
-          description: "`day_closed` (agent), `forbidden` source. `idempotency_in_progress`."
+          description: "`day_closed` (agent). `idempotency_in_progress`."
           content:
             application/problem+json:
               schema:
@@ -12103,6 +12125,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+        "403":
+          description: "`forbidden`: the agent sent a field only I own (`locked`, `remind`)."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         "404":
           description: "`not_found`."
           content:
@@ -12234,7 +12262,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`validation_error`: outcome/lead on a non-call block. `idempotency_key_reuse`: same `Idempotency-Key`, different body."
           content:
             application/problem+json:
               schema:
@@ -15744,6 +15772,7 @@ paths:
                     habitLogs: []
                     tasks: []
                     proposals: []
+                    sleepLogs: []
                     changeLog: []
               schema:
                 $ref: "#/components/schemas/ExportBundle"

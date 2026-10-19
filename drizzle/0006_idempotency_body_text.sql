@@ -1,0 +1,1 @@
+ALTER TABLE "idempotency_key" ALTER COLUMN "response_body" SET DATA TYPE text;

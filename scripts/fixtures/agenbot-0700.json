@@ -1,0 +1,271 @@
+{
+  "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+  "weeklyGym": {
+    "done": 0,
+    "target": 3
+  },
+  "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+  "options": [
+    {
+      "label": "A",
+      "title": "Gym al mediodía",
+      "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+      "blocks": [
+        {
+          "source": "calendar",
+          "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+          "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+          "calendar": "work",
+          "start": "10:00",
+          "end": "10:45",
+          "type": "call",
+          "title": "Llamada de cierre",
+          "detail": "Programa de 12 semanas · 2ª llamada",
+          "lead": {
+            "name": "Martín Gómez",
+            "phone": "+5491155550101",
+            "whatsapp": "5491155550101",
+            "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+            "crmUrl": "https://crm.example.com/leads/8812"
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+          "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+          "calendar": "work",
+          "start": "14:00",
+          "end": "14:45",
+          "type": "call",
+          "title": "Primera llamada",
+          "lead": {
+            "name": "Laura Pérez",
+            "whatsapp": "5493515550202",
+            "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+          "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+          "calendar": "work",
+          "start": "16:00",
+          "end": "20:00",
+          "type": "local_work",
+          "title": "Turno en el local"
+        },
+        {
+          "source": "calendar",
+          "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+          "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+          "calendar": "personal",
+          "start": "20:30",
+          "end": "21:30",
+          "type": "padel",
+          "title": "Clase de pádel"
+        },
+        {
+          "source": "agent",
+          "start": "07:15",
+          "end": "07:45",
+          "type": "dogs",
+          "title": "Paseo con las perras"
+        },
+        {
+          "source": "agent",
+          "start": "08:00",
+          "end": "08:30",
+          "type": "meal",
+          "title": "Desayuno"
+        },
+        {
+          "source": "agent",
+          "start": "09:00",
+          "end": "09:50",
+          "type": "study",
+          "title": "Repasar guion de cierre",
+          "detail": "Objeción de precio: practicar reencuadre de inversión."
+        },
+        {
+          "source": "agent",
+          "start": "11:00",
+          "end": "11:30",
+          "type": "reading",
+          "title": "Lectura (30 min)"
+        },
+        {
+          "source": "agent",
+          "start": "21:45",
+          "end": "22:45",
+          "type": "partner",
+          "title": "Tiempo en pareja"
+        },
+        {
+          "source": "agent",
+          "start": "23:30",
+          "end": "07:00",
+          "type": "sleep",
+          "title": "Dormir"
+        },
+        {
+          "source": "agent",
+          "start": "12:00",
+          "end": "13:00",
+          "type": "gym",
+          "title": "Gym — tren superior"
+        },
+        {
+          "source": "agent",
+          "start": "13:10",
+          "end": "13:40",
+          "type": "meal",
+          "title": "Almuerzo"
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "title": "Gym temprano",
+      "description": "Gym antes de los perros; mediodía libre para preparar a Laura.",
+      "blocks": [
+        {
+          "source": "calendar",
+          "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+          "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+          "calendar": "work",
+          "start": "10:00",
+          "end": "10:45",
+          "type": "call",
+          "title": "Llamada de cierre",
+          "detail": "Programa de 12 semanas · 2ª llamada",
+          "lead": {
+            "name": "Martín Gómez",
+            "phone": "+5491155550101",
+            "whatsapp": "5491155550101",
+            "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+            "crmUrl": "https://crm.example.com/leads/8812"
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+          "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+          "calendar": "work",
+          "start": "14:00",
+          "end": "14:45",
+          "type": "call",
+          "title": "Primera llamada",
+          "lead": {
+            "name": "Laura Pérez",
+            "whatsapp": "5493515550202",
+            "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+          "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+          "calendar": "work",
+          "start": "16:00",
+          "end": "20:00",
+          "type": "local_work",
+          "title": "Turno en el local"
+        },
+        {
+          "source": "calendar",
+          "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+          "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+          "calendar": "personal",
+          "start": "20:30",
+          "end": "21:30",
+          "type": "padel",
+          "title": "Clase de pádel"
+        },
+        {
+          "source": "agent",
+          "start": "06:15",
+          "end": "07:05",
+          "type": "gym",
+          "title": "Gym — tren superior"
+        },
+        {
+          "source": "agent",
+          "start": "07:15",
+          "end": "07:45",
+          "type": "dogs",
+          "title": "Paseo con las perras"
+        },
+        {
+          "source": "agent",
+          "start": "08:00",
+          "end": "08:30",
+          "type": "meal",
+          "title": "Desayuno"
+        },
+        {
+          "source": "agent",
+          "start": "09:00",
+          "end": "09:50",
+          "type": "study",
+          "title": "Repasar guion de cierre",
+          "detail": "Objeción de precio: practicar reencuadre de inversión."
+        },
+        {
+          "source": "agent",
+          "start": "11:00",
+          "end": "11:30",
+          "type": "reading",
+          "title": "Lectura (30 min)"
+        },
+        {
+          "source": "agent",
+          "start": "21:45",
+          "end": "22:45",
+          "type": "partner",
+          "title": "Tiempo en pareja"
+        },
+        {
+          "source": "agent",
+          "start": "23:30",
+          "end": "07:00",
+          "type": "sleep",
+          "title": "Dormir"
+        },
+        {
+          "source": "agent",
+          "start": "12:30",
+          "end": "13:15",
+          "type": "meal",
+          "title": "Almuerzo"
+        },
+        {
+          "source": "agent",
+          "start": "13:15",
+          "end": "13:45",
+          "type": "study",
+          "title": "Preparar llamada con Laura"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Confirmar por WhatsApp a Martín (10:00)",
+      "kind": "whatsapp_confirm",
+      "relatedExternalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e"
+    },
+    {
+      "title": "Confirmar por WhatsApp a Laura (14:00)",
+      "kind": "whatsapp_confirm",
+      "relatedExternalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g"
+    },
+    {
+      "title": "Leer notas de descubrimiento de Martín en el CRM",
+      "kind": "lead_context"
+    },
+    {
+      "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+      "kind": "follow_up"
+    }
+  ]
+}

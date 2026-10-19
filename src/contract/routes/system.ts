@@ -421,7 +421,7 @@ export const systemRoutes: RouteDef[] = [
     access: "user",
     responses: { 200: { description: "Download (`Content-Disposition: attachment`).", schema: ExportBundle } },
     exchanges: [
-      { name: "export", summary: "Export", actor: "user", status: 200, response: { exportedAt: "2026-10-19T23:00:00.000-03:00", schemaVersion: 1, days: [], habits: [], habitLogs: [], tasks: [], proposals: [], changeLog: [] } },
+      { name: "export", summary: "Export", actor: "user", status: 200, response: { exportedAt: "2026-10-19T23:00:00.000-03:00", schemaVersion: 1, days: [], habits: [], habitLogs: [], tasks: [], proposals: [], sleepLogs: [], changeLog: [] } },
     ],
   },
   {

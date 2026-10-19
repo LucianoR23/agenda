@@ -11673,6 +11673,7 @@ Content-Type: application/json
   "habitLogs": [],
   "tasks": [],
   "proposals": [],
+  "sleepLogs": [],
   "changeLog": []
 }
 ```
