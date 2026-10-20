@@ -2,8 +2,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { changeLog, webhookOutbox } from "../db/schema";
 import { env } from "../env";
 import { type Ctx, writer } from "../http/context";
+import { kickWebhooks } from "../worker";
 
-export type Entity = "day" | "block" | "task" | "habit" | "habit_log" | "proposal" | "sleep_log" | "plan_option";
+export type Entity = "day" | "block" | "task" | "habit" | "habit_log" | "proposal" | "sleep_log" | "plan_option" | "adjustment";
 type Action = typeof changeLog.$inferInsert.action;
 export type FieldDiff = Record<string, { from: unknown; to: unknown }>;
 
@@ -84,4 +85,15 @@ export async function recordChange(ctx: Ctx, c: ChangeInput) {
       .insert(webhookOutbox)
       .values({ date: c.date, payload: { changes: [change], ...(c.immediate ? { immediate: true } : {}) }, status: "collecting", nextAttemptAt: due });
   }
+  if (c.immediate) ctx.afterCommit.push(async () => kickWebhooks());
+}
+
+/**
+ * A standalone event ("Pedir ajuste"): its own outbox row, ready to deliver now, never batched with the day's
+ * changes. The payload is stored final; the worker sends it as is. Only for my actions (the caller checks).
+ */
+export async function enqueueEvent(ctx: Ctx, date: string, payload: Record<string, unknown> & { event: string }) {
+  if (!env().AGENT_WEBHOOK_URL) return;
+  await ctx.db.insert(webhookOutbox).values({ date, payload, status: "pending", nextAttemptAt: ctx.now });
+  ctx.afterCommit.push(async () => kickWebhooks());
 }

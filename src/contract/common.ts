@@ -83,6 +83,8 @@ export const ErrorCode = z
     "locked_out",
     "invalid_credentials",
     "setup_completed",
+    "adjustment_resolved",
+    "adjustment_invalid",
     "internal_error",
     "service_unavailable",
   ])

@@ -22,6 +22,8 @@ const TITLES: Record<Code, string> = {
   locked_out: "Too many failed attempts",
   invalid_credentials: "Invalid credentials",
   setup_completed: "Setup already completed",
+  adjustment_resolved: "Adjustment request already resolved",
+  adjustment_invalid: "Adjustment request cannot be linked",
   internal_error: "Internal error",
   service_unavailable: "Service unavailable",
 };

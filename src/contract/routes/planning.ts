@@ -168,6 +168,7 @@ export const planningRoutes: RouteDef[] = [
       201: { description: "`created`.", schema: PutDayResult, headers: ["ETag"] },
       202: { description: "`proposed`: day unchanged, proposal created.", schema: PutDayResult },
       409: { description: "`day_closed` or `version_conflict` (when `If-Match` is sent)." },
+      422: { description: "`validation_error` (chosen option missing) or `adjustment_invalid` (`adjustmentIds` not pending / other date)." },
     },
     exchanges: [
       {
@@ -190,6 +191,25 @@ export const planningRoutes: RouteDef[] = [
         body: ex.dayInputReplan,
         status: 202,
         response: { result: "proposed", day: ex.dayEditedWithProposal, proposal: ex.proposalPending },
+      },
+      {
+        name: "answerAdjustment",
+        summary: "12:30 — answering my \"Pedir ajuste\" (adjustmentIds) → proposal, the request becomes `proposed`",
+        actor: "agent",
+        params: D,
+        headers: { "Idempotency-Key": "agenbot-adj-600" },
+        body: { ...ex.dayInputReplan, adjustmentIds: [ex.uid(600)] },
+        status: 202,
+        response: { result: "proposed", day: ex.dayEditedWithProposal, proposal: { ...ex.proposalPending, payload: { ...ex.dayInputReplan, adjustmentIds: [ex.uid(600)] } } },
+      },
+      {
+        name: "adjustmentInvalid",
+        summary: "Linking a request that is not pending",
+        actor: "agent",
+        params: D,
+        body: { ...ex.dayInputReplan, adjustmentIds: [ex.uid(602)] },
+        status: 422,
+        response: problem(422, "adjustment_invalid", `Adjustment ${ex.uid(602)} is cancelled.`),
       },
       {
         name: "closed",

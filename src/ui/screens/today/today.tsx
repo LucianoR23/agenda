@@ -5,7 +5,7 @@ import { motion, type PanInfo } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { uuidv7 } from "uuidv7";
 import { api, ApiProblem } from "@/client/api";
-import { useDay, useHabits, useWrites } from "@/client/queries";
+import { useAdjustments, useDay, useHabits, useWrites } from "@/client/queries";
 import { useSync } from "@/client/sync";
 import type { Block, Day } from "@/client/types";
 import { typeColor } from "../../block-types";
@@ -16,8 +16,10 @@ import { Icon } from "../../components/icon";
 import { DayHeader } from "../../components/navigation";
 import { BottomSheet, useToast } from "../../components/overlay";
 import { EmptyState, OptionCard, SectionCard, TimelineSkeleton } from "../../components/surfaces";
+import { cx } from "../../cx";
 import { localHHmm } from "../../format";
 import { addDays, ago, dayLabel, haptic, nowHHmm, todayART, useNow } from "../../time";
+import { AddChooser, AdjustmentForm, AdjustmentsCard } from "./adjustments";
 import { BlockEditor } from "./block-editor";
 import { SleepEditor } from "./sleep-editor";
 import { Timeline } from "./timeline";
@@ -27,6 +29,8 @@ type Sheet =
   | { kind: "proposal" }
   | { kind: "shift" }
   | { kind: "sleep"; night: string }
+  | { kind: "add" }
+  | { kind: "adjust" }
   | null;
 
 const chosenOption = (d: Day) => d.options.find((o) => o.id === d.chosenOptionId) ?? null;
@@ -49,22 +53,33 @@ export function TodayScreen() {
   const writes = useWrites(date);
   const q = useDay(date);
   const day = q.data;
+  const adjustments = useAdjustments(date).data?.adjustments ?? [];
 
   useEffect(() => {
     const url = date === today ? "/" : `/?date=${date}`;
     window.history.replaceState(null, "", url);
   }, [date, today]);
 
-  // auto-scroll to "now" once per day
+  // auto-scroll to "now" once per day; a push about a request (?adjustments=1) lands on its card instead
   const scrolled = useRef<string | null>(null);
+  const [toRequests] = useState(() => new URLSearchParams(window.location.search).has("adjustments"));
   useEffect(() => {
-    if (!day || day.date !== today || day.status === "draft" || scrolled.current === day.date) return;
+    if (!day || scrolled.current === day.date) return;
+    if (toRequests) {
+      const card = document.querySelector('[data-testid="adjustments"]');
+      if (card) {
+        card.scrollIntoView({ block: "center" });
+        scrolled.current = day.date;
+      }
+      return;
+    }
+    if (day.date !== today || day.status === "draft") return;
     const el = document.querySelector('[aria-label^="Ahora"]');
     if (el) {
       el.scrollIntoView({ block: "center" });
       scrolled.current = day.date;
     }
-  }, [day, today]);
+  }, [day, today, toRequests, adjustments.length]);
 
   const isToday = date === today;
   const nowTime = nowHHmm(now);
@@ -96,6 +111,7 @@ export function TodayScreen() {
     try {
       await fn();
       await qc.invalidateQueries({ queryKey: ["day", date] });
+      await qc.invalidateQueries({ queryKey: ["adjustments", date] });
       if (ok) toast({ message: ok });
       return true;
     } catch (e) {
@@ -115,6 +131,8 @@ export function TodayScreen() {
   const hour = Number(nowTime.slice(0, 2));
   const sleepMode = !isToday || !day ? null : hour >= 20 || hour < 5 ? "night" : hour < 14 ? "morning" : null;
   const nightDate = hour < 5 ? addDays(today, -1) : today;
+  // "Pedir ajuste" is for today or later, on days that are not closed (D92)
+  const closed = date < today || day?.status === "closed";
   const reviewDue = isToday && day && day.status !== "closed" && day.status !== "draft" && !day.review && nowTime >= "22:00";
 
   return (
@@ -146,6 +164,15 @@ export function TodayScreen() {
           {day.pendingProposal.reason ?? "Revisalo antes de aplicarlo."}
         </Banner>
       )}
+
+      <AdjustmentsCard
+        items={adjustments}
+        onOpenProposal={() => setSheet({ kind: "proposal" })}
+        onCancel={(a) => {
+          void writes.cancelAdjustment(a);
+          toast({ icon: "close", message: "Pedido cancelado" });
+        }}
+      />
 
       {sleepMode && day && (
         <SleepCard
@@ -201,14 +228,38 @@ export function TodayScreen() {
 
       {day && isToday && day.status !== "draft" && <HabitsToday />}
 
-      {day && day.status !== "draft" && (
-        <div className="fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] z-20 md:bottom-8">
-          <Fab label="Agregar bloque" onClick={() => setSheet({ kind: "block", block: null })} />
+      {(day || !closed) && (
+        // above the sticky "Elegir esta" while choosing an option
+        <div className={cx("fixed right-4 z-20", day?.status === "draft" ? "bottom-[calc(156px+env(safe-area-inset-bottom))] md:bottom-24" : "bottom-[calc(96px+env(safe-area-inset-bottom))] md:bottom-8")}>
+          <Fab label="Agregar" onClick={() => setSheet({ kind: "add" })} />
         </div>
       )}
 
       {/* room to scroll the last block clear of the add button */}
       <div className="h-16" aria-hidden />
+
+      <BottomSheet open={sheet?.kind === "add"} onClose={() => setSheet(null)} label="Agregar">
+        <AddChooser
+          canBlock={!!day}
+          canAsk={!closed}
+          onBlock={() => setSheet({ kind: "block", block: null })}
+          onAsk={() => setSheet({ kind: "adjust" })}
+        />
+      </BottomSheet>
+
+      <BottomSheet open={sheet?.kind === "adjust"} onClose={() => setSheet(null)} label="Pedido a Agenbot">
+        {sheet?.kind === "adjust" && (
+          <AdjustmentForm
+            defaultDate={date}
+            today={today}
+            onSend={(forDate, text) => {
+              void writes.requestAdjustment(forDate, text);
+              toast({ icon: "auto_awesome", message: forDate === date ? "Pedido enviado. Agenbot te responde con una propuesta." : `Pedido enviado para el ${forDate.slice(8)}/${forDate.slice(5, 7)}.` });
+              setSheet(null);
+            }}
+          />
+        )}
+      </BottomSheet>
 
       <BottomSheet open={sheet?.kind === "block"} onClose={() => setSheet(null)} label="Bloque">
         {sheet?.kind === "block" && (

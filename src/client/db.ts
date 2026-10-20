@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { Adjustment } from "./types";
 
 /** Last good server response per query key (offline reads). */
 export interface CacheEntry {
@@ -25,7 +26,8 @@ export interface OutboxItem {
 
 export type Optimistic =
   | { kind: "block"; date: string; blockId: string; patch: Record<string, unknown> }
-  | { kind: "task"; date: string; taskId: string; patch: Record<string, unknown> };
+  | { kind: "task"; date: string; taskId: string; patch: Record<string, unknown> }
+  | { kind: "adjustment"; date: string; adjustment: Adjustment };
 
 class AgendaDb extends Dexie {
   cache!: EntityTable<CacheEntry, "key">;

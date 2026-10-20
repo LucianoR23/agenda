@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte } from "drizzle-orm";
-import { block, changeLog, day, habit, habitLog, planOption, proposal, sleepLog, task } from "../db/schema";
+import { adjustment, block, changeLog, day, habit, habitLog, planOption, proposal, sleepLog, task } from "../db/schema";
 import type { Ctx } from "../http/context";
 import { validation } from "../http/errors";
 import { addDays, dateRange, daysBetween, fromMinutes, isoLocal, localDate, localTime, monthEnd, monthStart, toMinutes, weekStart } from "../time";
@@ -266,7 +266,7 @@ export async function listChangelog(
 }
 
 export async function exportAll(ctx: Ctx) {
-  const [days, options, blocks, habits, habitLogs, tasks, proposals, sleep, changes] = await Promise.all([
+  const [days, options, blocks, habits, habitLogs, tasks, proposals, sleep, changes, adjustments] = await Promise.all([
     ctx.db.select().from(day).orderBy(asc(day.date)),
     ctx.db.select().from(planOption),
     ctx.db.select().from(block),
@@ -276,6 +276,7 @@ export async function exportAll(ctx: Ctx) {
     ctx.db.select().from(proposal),
     ctx.db.select().from(sleepLog).orderBy(asc(sleepLog.date)),
     ctx.db.select().from(changeLog).orderBy(asc(changeLog.at)),
+    ctx.db.select().from(adjustment).orderBy(asc(adjustment.createdAt)),
   ]);
   return {
     exportedAt: isoLocal(ctx.now),
@@ -285,6 +286,7 @@ export async function exportAll(ctx: Ctx) {
     habitLogs,
     tasks,
     proposals,
+    adjustments,
     sleepLogs: sleep,
     changeLog: changes,
   };

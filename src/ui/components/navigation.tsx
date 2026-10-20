@@ -14,6 +14,19 @@ export const TABS: Array<{ key: string; label: string; icon: IconName; href: str
   { key: "settings", label: "Ajustes", icon: "settings", href: "/ajustes" },
 ];
 
+export type Badges = Partial<Record<string, number>>;
+
+/** Small count on a tab icon (e.g. Hoy: proposals ready for my requests). */
+function Badge({ n }: { n?: number }) {
+  if (!n) return null;
+  return (
+    <span aria-hidden className="absolute -top-1 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 font-mono text-[11px] font-semibold text-bg">
+      {n}
+    </span>
+  );
+}
+const withBadge = (label: string, n?: number) => (n ? `${label}, ${n} ${n === 1 ? "propuesta lista" : "propuestas listas"}` : undefined);
+
 /** Active tab from the pathname. */
 export const tabFor = (pathname: string) => TABS.find((t) => (t.href === "/" ? pathname === "/" : pathname.startsWith(t.href)))?.key ?? "today";
 
@@ -21,15 +34,18 @@ export const tabFor = (pathname: string) => TABS.find((t) => (t.href === "/" ? p
  * Bottom tab bar (72 px). Up to 5 sections all visible; with 6+ the 5th becomes "Más" (sheet with the rest).
  * Desktop uses the sidebar with all sections.
  */
-export function TabBar({ active }: { active: string }) {
+export function TabBar({ active, badges = {} }: { active: string; badges?: Badges }) {
   return (
     <nav aria-label="Secciones" className="grid h-[calc(72px+env(safe-area-inset-bottom))] grid-cols-5 border-t border-border bg-surface pb-safe">
       {TABS.map((t) => {
         const on = t.key === active;
         return (
-          <Link key={t.key} href={t.href} aria-current={on ? "page" : undefined} className={cx("flex flex-col items-center justify-center gap-0.5", on ? "text-text" : "text-muted")}>
+          <Link key={t.key} href={t.href} aria-current={on ? "page" : undefined} aria-label={withBadge(t.label, badges[t.key])} className={cx("flex flex-col items-center justify-center gap-0.5", on ? "text-text" : "text-muted")}>
             <span className={cx("flex h-[30px] w-14 items-center justify-center rounded-[15px] transition-colors", on && "bg-raised")}>
-              <Icon name={t.icon} size={22} />
+              <span className="relative">
+                <Icon name={t.icon} size={22} />
+                <Badge n={badges[t.key]} />
+              </span>
             </span>
             <span className="text-micro">{t.label}</span>
           </Link>
@@ -39,7 +55,7 @@ export function TabBar({ active }: { active: string }) {
   );
 }
 
-export function Sidebar({ active }: { active: string }) {
+export function Sidebar({ active, badges = {} }: { active: string; badges?: Badges }) {
   return (
     <nav aria-label="Secciones" className="flex w-60 flex-col gap-1 border-r border-border bg-surface p-4">
       <span className="flex items-center gap-2.5 px-3 pb-4">
@@ -49,8 +65,11 @@ export function Sidebar({ active }: { active: string }) {
       {TABS.map((t) => {
         const on = t.key === active;
         return (
-          <Link key={t.key} href={t.href} aria-current={on ? "page" : undefined} className={cx("flex min-h-11 items-center gap-3 rounded-md px-3 text-[15px]", on ? "bg-raised font-semibold text-text" : "text-text2")}>
-            <Icon name={t.icon} size={22} />
+          <Link key={t.key} href={t.href} aria-current={on ? "page" : undefined} aria-label={withBadge(t.label, badges[t.key])} className={cx("flex min-h-11 items-center gap-3 rounded-md px-3 text-[15px]", on ? "bg-raised font-semibold text-text" : "text-text2")}>
+            <span className="relative flex">
+              <Icon name={t.icon} size={22} />
+              <Badge n={badges[t.key]} />
+            </span>
             {t.label}
           </Link>
         );

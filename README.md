@@ -212,6 +212,28 @@ without asking.
 - **"Me atrasé media hora":** `POST /api/days/TODAY/shift` `{"fromTime":"HH:mm","minutes":30}`.
 - Habits: `POST /api/habits/{slug}/logs` `{"date","done","value?"}`. Tasks: `/api/tasks`.
 
+### "Pedir ajuste" (I write what changed, you propose)
+I describe a change in plain words from the app (Hoy → **+** → *Pedido a Agenbot*). You get an
+`adjustment.requested` webhook **right away** (not debounced, never batched):
+
+```json
+{ "event": "adjustment.requested", "adjustmentId": "019a…", "date": "2026-10-19",
+  "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.", "createdAt": "2026-10-19T12:20:04.118-03:00",
+  "adjustmentUrl": "https://agenda.lemydev.com/api/adjustments/019a…", "dayUrl": "https://agenda.lemydev.com/api/days/2026-10-19" }
+```
+
+1. `GET dayUrl` (and your calendars), build the rearranged day.
+2. `PUT /api/days/{date}` with the full body plus `"adjustmentIds": ["019a…"]` → **202** proposal; the request becomes
+   `proposed` and I get a push "Tu ajuste está listo". One PUT can answer several pending requests (there is only one
+   pending proposal per day: a newer one supersedes the previous). On a **draft** day the PUT applies directly (200)
+   and the request stays `pending`.
+3. Close it: `PATCH /api/adjustments/{id}` `{"status":"done","agentNote":"Moví a Laura a las 15:00 y el gym a las 17:30."}`
+   or `{"status":"failed","agentNote":"<why>"}`. A resolved or cancelled request → 409 `adjustment_resolved`.
+4. I accept or reject the proposal in the app; the accept/reject webhook change carries `adjustmentIds`.
+
+`adjustment.cancelled` (same shape + `cancelledAt`) means I cancelled it while `pending`: stop working on it. Catch up
+after downtime with `GET /api/adjustments?status=pending`. Your writes never trigger webhooks.
+
 ### Webhook (my changes → you)
 `POST ${AGENT_WEBHOOK_URL}` with `Authorization: Bearer ${AGENT_WEBHOOK_TOKEN}` and `Idempotency-Key: <batchId>`:
 
@@ -236,8 +258,10 @@ without asking.
 ```
 
 - Only **my** changes (yours never come back: no loops). Entities: `day` (choose, shift, review…), `block`, `task`,
-  `habit_log`, `proposal` (accept/reject), `sleep_log`.
-- Debounced per day: sent 120 s after my last change; `choose` and proposal accept/reject are sent immediately.
+  `habit_log`, `proposal` (accept/reject), `sleep_log`. "Pedir ajuste" requests arrive as separate
+  `adjustment.requested` / `adjustment.cancelled` events (see above), with the same URL, auth and retries.
+- Debounced per day: sent 120 s after my last change; `choose`, proposal accept/reject and adjustment events are sent
+  immediately.
 - Answer any 2xx. Failures are retried 30 s · 2 min · 8 min · 32 min with the **same** `Idempotency-Key`, then marked
   failed (visible in Ajustes → Agenbot). `GET dayUrl` if you need the full day.
 

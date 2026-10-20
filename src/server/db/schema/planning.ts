@@ -219,3 +219,28 @@ export const proposal = pgTable(
     index("proposal_day_created_idx").on(t.dayId, t.createdAt),
   ],
 );
+
+export const adjustmentStatusEnum = pgEnum("adjustment_status", ["pending", "proposed", "done", "failed", "cancelled"]);
+
+/**
+ * "Pedir ajuste": something changed in my day, written in plain words for Agenbot. The agent answers with a
+ * proposal (PUT with `adjustmentIds`) and closes it with done/failed. One proposal can answer several requests.
+ */
+export const adjustment = pgTable(
+  "adjustment",
+  {
+    id: id(),
+    date: date({ mode: "string" }).notNull(),
+    text: text().notNull(),
+    status: adjustmentStatusEnum().notNull().default("pending"),
+    agentNote: text(),
+    proposalId: uuid().references(() => proposal.id, { onDelete: "set null" }),
+    resolvedAt: timestamp({ withTimezone: true }),
+    ...mutable(),
+  },
+  (t) => [
+    index("adjustment_date_created_idx").on(t.date, t.createdAt),
+    index("adjustment_proposal_idx").on(t.proposalId),
+    check("adjustment_text_length", sql`char_length(${t.text}) BETWEEN 1 AND 1000`),
+  ],
+);

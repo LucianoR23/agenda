@@ -6,7 +6,9 @@ import {
 import type { ZodType } from "zod";
 import { Problem } from "./common";
 import { dayEditedWithProposal } from "./examples";
+import { AdjustmentWebhookPayload } from "./adjustments";
 import type { Access, Exchange, ResponseDef, RouteDef } from "./route-def";
+import { adjustmentRoutes, adjustmentWebhookExamples } from "./routes/adjustments";
 import { planningRoutes } from "./routes/planning";
 import { systemRoutes } from "./routes/system";
 import { trackingRoutes } from "./routes/tracking";
@@ -15,7 +17,7 @@ import { z } from "./zod";
 
 export const API_VERSION = "1.0.0";
 
-export const routes: RouteDef[] = [...planningRoutes, ...trackingRoutes, ...systemRoutes];
+export const routes: RouteDef[] = [...planningRoutes, ...adjustmentRoutes, ...trackingRoutes, ...systemRoutes];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
@@ -207,6 +209,32 @@ export function buildRegistry() {
     responses: { 200: { description: "Any 2xx acknowledges the batch." } },
   });
 
+  registry.registerWebhook({
+    method: "post",
+    path: "adjustmentEvent",
+    operationId: "adjustmentEvent",
+    tags: ["Webhook"],
+    summary: "Outbound: \"Pedir ajuste\" requested or cancelled",
+    security: [{ agentWebhookToken: [] }],
+    description: [
+      "Same URL, `Authorization` and retries as `dayUpdatedByUser`; `Idempotency-Key` is the delivery id.",
+      "Sent right away (no debounce) and never batched with other changes, one per request. Only for my actions.",
+      "`adjustment.requested`: read the day, answer with `PUT /api/days/{date}` + `adjustmentIds`, then close it with `PATCH /api/adjustments/{id}`.",
+      "`adjustment.cancelled`: stop working on it (a later PATCH gets 409 `adjustment_resolved`).",
+    ].join(" "),
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: AdjustmentWebhookPayload,
+            examples: Object.fromEntries(adjustmentWebhookExamples.map((w) => [w.name, { summary: w.summary, value: w.value }])),
+          },
+        },
+      },
+    },
+    responses: { 200: { description: "Any 2xx acknowledges the event." } },
+  });
+
   return registry;
 }
 
@@ -300,6 +328,7 @@ export function generateOpenApiDocument() {
     tags: [
       { name: "Days" },
       { name: "Proposals" },
+      { name: "Adjustments", description: "\"Pedir ajuste\": I describe what changed, Agenbot answers with a proposal." },
       { name: "Blocks" },
       { name: "Habits" },
       { name: "Tasks" },
@@ -346,6 +375,10 @@ export function validateExamples(): string[] {
   }
   for (const w of webhookExamples) {
     const wh = WebhookPayload.safeParse(w.value);
+    if (!wh.success) failures.push(`webhook/${w.name}: ${wh.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+  }
+  for (const w of adjustmentWebhookExamples) {
+    const wh = AdjustmentWebhookPayload.safeParse(w.value);
     if (!wh.success) failures.push(`webhook/${w.name}: ${wh.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
   }
   return failures;

@@ -8,6 +8,7 @@ import { ApiError, dayClosed, invalidTransition, notFound, userEditConflict, val
 import { purgeExpired } from "../http/idempotency";
 import { sendPush } from "../push";
 import { fromMinutes, localDate, toMinutes } from "../time";
+import { checkLinkable, idsForProposal, linkToProposal, resolveForProposals } from "./adjustments";
 import { diffFields, recordChange } from "./events";
 import { dayOut, findDay, isPast, optionsOf, primaryOption, proposalDiff, proposalOut, requireDay } from "./load";
 import { planMerge } from "./merge";
@@ -37,10 +38,7 @@ export async function closeDay(ctx: Ctx, d: DayRow, actor: "system" | "user"): P
     .set({ status: "closed", closedAt: ctx.now, updatedBy: actor })
     .where(eq(day.id, d.id))
     .returning();
-  await ctx.db
-    .update(proposal)
-    .set({ status: "superseded", resolvedAt: ctx.now })
-    .where(and(eq(proposal.dayId, d.id), eq(proposal.status, "pending")));
+  await supersedePending(ctx, d.id);
   await recordChange(ctx, {
     entity: "day",
     entityId: d.id,
@@ -50,6 +48,16 @@ export async function closeDay(ctx: Ctx, d: DayRow, actor: "system" | "user"): P
     ...(actor === "system" ? { actor: "system" as const } : {}),
   });
   return row;
+}
+
+/** Supersedes the day's pending proposal; requests waiting on it are resolved. */
+async function supersedePending(ctx: Ctx, dayId: string) {
+  const gone = await ctx.db
+    .update(proposal)
+    .set({ status: "superseded", resolvedAt: ctx.now })
+    .where(and(eq(proposal.dayId, dayId), eq(proposal.status, "pending")))
+    .returning({ id: proposal.id });
+  await resolveForProposals(ctx, gone.map((p) => p.id));
 }
 
 /** Lazy close: any access to a past day that is not closed closes it first. */
@@ -168,6 +176,7 @@ export async function putDay(ctx: Ctx, date: string, input: DayInputT, force: bo
 
   if (!existing) {
     if (isPast(ctx, date)) throw dayClosed(date);
+    await checkLinkable(ctx, date, input.adjustmentIds);
     // a new day starts at version 1: fields go into the insert, blocks don't bump it
     const [created] = await ctx.db.insert(day).values({ date, status: "draft", ...dayFieldsOf(input), updatedBy: writer(ctx) }).returning();
     const { row, diffs } = await applyBlocks(ctx, created, input, "replace", false);
@@ -180,6 +189,8 @@ export async function putDay(ctx: Ctx, date: string, input: DayInputT, force: bo
   const d = await ensureClosedIfPast(ctx, existing);
   if (d.status === "closed") throw dayClosed(date);
   await checkVersion(ctx, d, undefined, async () => dayOut(ctx, d));
+  // draft / force: applied directly, the requests stay pending until the agent closes them (D92)
+  const adjustmentIds = await checkLinkable(ctx, date, input.adjustmentIds);
 
   if (d.status === "draft") {
     const { row, diffs } = await applyBlocks(ctx, d, input, "replace");
@@ -201,17 +212,16 @@ export async function putDay(ctx: Ctx, date: string, input: DayInputT, force: bo
     return { status: 200, result: "replaced" as const, day: row, proposal: null };
   }
 
-  await ctx.db
-    .update(proposal)
-    .set({ status: "superseded", resolvedAt: ctx.now })
-    .where(and(eq(proposal.dayId, d.id), eq(proposal.status, "pending")));
+  await supersedePending(ctx, d.id);
   const [p] = await ctx.db
     .insert(proposal)
     .values({ dayId: d.id, payload: input, reason: input.reason ?? null, baseDayVersion: d.version, createdAt: ctx.now })
     .returning();
+  await linkToProposal(ctx, adjustmentIds, p.id);
   await syncAgentTasks(ctx, d, input.tasks);
-  await recordChange(ctx, { entity: "proposal", entityId: p.id, date, action: "propose", after: { reason: p.reason } });
-  ctx.afterCommit.push(() => sendPush(getDb(), { title: "Agenbot propone un cambio", body: input.reason ?? "Revisá la propuesta para hoy.", url: `/?date=${date}&proposal=1`, tag: `proposal-${date}` }));
+  await recordChange(ctx, { entity: "proposal", entityId: p.id, date, action: "propose", after: { reason: p.reason, ...(adjustmentIds.length ? { adjustmentIds } : {}) } });
+  const title = adjustmentIds.length ? "Tu ajuste está listo" : "Agenbot propone un cambio";
+  ctx.afterCommit.push(() => sendPush(getDb(), { title, body: input.reason ?? "Revisá la propuesta para hoy.", url: `/?date=${date}&proposal=1`, tag: `proposal-${date}` }));
   return { status: 202, result: "proposed" as const, day: d, proposal: p };
 }
 
@@ -367,12 +377,15 @@ export async function acceptProposal(ctx: Ctx, date: string, id: string) {
   const diff = proposalDiff(d, options, blocks, p.payload as DayInputT, ctx.now);
   await applyBlocks(ctx, d, p.payload as DayInputT, "merge");
   await ctx.db.update(proposal).set({ status: "accepted", resolvedAt: ctx.now }).where(eq(proposal.id, p.id));
+  await resolveForProposals(ctx, [p.id]);
+  const adjustmentIds = await idsForProposal(ctx, p.id);
   await recordChange(ctx, {
     entity: "proposal",
     entityId: p.id,
     date,
     action: "accept",
     after: { moved: diff.moved.length, added: diff.added.length, removed: diff.removed.length },
+    ...(adjustmentIds.length ? { webhook: { adjustmentIds } } : {}),
     immediate: true,
   });
   return (await findDay(ctx, date))!;
@@ -382,7 +395,9 @@ export async function rejectProposal(ctx: Ctx, date: string, id: string) {
   const d = await requireDay(ctx, date, true);
   const p = await pendingProposal(ctx, d, id);
   const [row] = await ctx.db.update(proposal).set({ status: "rejected", resolvedAt: ctx.now }).where(eq(proposal.id, p.id)).returning();
-  await recordChange(ctx, { entity: "proposal", entityId: p.id, date, action: "reject", immediate: true });
+  await resolveForProposals(ctx, [p.id]);
+  const adjustmentIds = await idsForProposal(ctx, p.id);
+  await recordChange(ctx, { entity: "proposal", entityId: p.id, date, action: "reject", ...(adjustmentIds.length ? { webhook: { adjustmentIds } } : {}), immediate: true });
   const { options, blocks } = await optionsOf(ctx, d.id);
   return proposalOut(row, d, options, blocks, ctx.now);
 }

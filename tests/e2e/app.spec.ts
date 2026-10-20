@@ -173,7 +173,8 @@ test("agent block editor, add block, Me atrasé", async () => {
   await expect(page.getByLabel("Inicio")).toBeVisible();
   await shot("10-editor-agent-block");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Agregar bloque" }).click();
+  await page.getByRole("button", { name: "Agregar", exact: true }).click();
+  await page.getByRole("button", { name: /Nuevo evento/ }).click();
   await page.getByLabel("Título").fill("Pagar alquiler del local");
   await page.getByLabel("Inicio").fill("17:30");
   await page.getByLabel("Fin").fill("17:45");
@@ -248,6 +249,43 @@ test("Agenbot re-plan → proposal banner → diff → accept", async () => {
   await shot("14-proposal-diff");
   await page.getByRole("button", { name: "Aceptar" }).click();
   await expect(page.getByText("Cambios aplicados")).toBeVisible();
+});
+
+test("Pedir ajuste: + → pedido → Agenbot propone → badge → acepto", async () => {
+  await page.getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Pedido a Agenbot/ })).toBeVisible();
+  await shot("33-agregar-elegir");
+  await page.getByRole("button", { name: /Pedido a Agenbot/ }).click();
+  await page.getByLabel("Qué cambió").fill("Se movió Carlos a las 15:00 y me surgió algo de 17 a 18.");
+  await shot("34-pedido-form");
+  await page.getByRole("button", { name: "Enviar a Agenbot" }).click();
+  const card = page.getByTestId("adjustments");
+  await expect(card.getByText("Esperando a Agenbot")).toBeVisible();
+  await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await shot("35-pedido-esperando");
+
+  // Agenbot: picks up the pending request, answers with a proposal, closes it with a note
+  const pending = await agentApi("GET", `/api/adjustments?date=${TODAY}&status=pending`);
+  expect(pending.body.adjustments).toHaveLength(1);
+  const id = pending.body.adjustments[0].id;
+  const base = JSON.parse(readFileSync("scripts/fixtures/agenbot-replan.json", "utf8"));
+  // a real change: breakfast moves 15 min (a block I never touched)
+  base.options[0].blocks = base.options[0].blocks.map((b: { title: string }) => (b.title === "Desayuno" ? { ...b, start: "08:15", end: "08:45" } : b));
+  const put = await agentApi("PUT", `/api/days/${TODAY}`, { ...base, reason: "Carlos pasa a las 15:00; corro el desayuno.", adjustmentIds: [id] });
+  expect(put.status).toBe(202);
+  expect((await agentApi("PATCH", `/api/adjustments/${id}`, { status: "done", agentNote: "Moví a Carlos a las 15:00 y la lectura a las 14:00." })).status).toBe(200);
+
+  // the push opens /?adjustments=1: Hoy lands on the requests card
+  await page.goto("/?adjustments=1");
+  await expect(card.getByText("Propuesta lista")).toBeVisible();
+  await expect(card).toBeInViewport();
+  await expect(card.getByText("Moví a Carlos a las 15:00")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Hoy, 1 propuesta lista" })).toBeVisible();
+  await shot("36-pedido-propuesta-lista");
+  await card.getByRole("button", { name: "Ver propuesta" }).click();
+  await page.getByRole("button", { name: "Aceptar" }).click();
+  await expect(card.getByText("Aplicado")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Hoy, 1 propuesta lista" })).toHaveCount(0);
 });
 
 test("Tareas y hábitos, Historial, Métricas", async () => {

@@ -1,10 +1,11 @@
 "use client";
 
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
+import { uuidv7 } from "uuidv7";
 import { api, ApiProblem, get } from "./api";
 import { idb } from "./db";
 import { enqueue, markSynced, reapplyPending, setOnline, withPending } from "./sync";
-import type { Day, DaySummary, Device, HabitProgress, Metrics, SessionState, Task, WebhookStatus } from "./types";
+import type { Adjustment, Day, DaySummary, Device, HabitProgress, Metrics, SessionState, Task, WebhookStatus } from "./types";
 
 const CACHE_DAYS = 14;
 
@@ -60,6 +61,8 @@ export const useHabits = () => useCached<{ habits: HabitProgress[] }>(["habits"]
 export const useTasks = (date: string) => useCached<{ tasks: Task[] }>(["tasks", date], `/api/tasks?date=${date}`);
 export const useMetrics = (range: string, anchor: string) => useCached<Metrics>(["metrics", range, anchor], `/api/metrics?range=${range}&anchor=${anchor}`);
 export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/api/auth/devices");
+// polled while visible: the agent's answer (proposal / note) usually arrives within a minute
+export const useAdjustments = (date: string) => useCached<{ adjustments: Adjustment[] }>(["adjustments", date], `/api/adjustments?date=${date}`, { refetchInterval: 20_000 });
 export const useWebhookStatus = () => useCached<WebhookStatus>(["webhook"], "/api/webhook/status");
 
 export const useSession = () =>
@@ -101,6 +104,33 @@ export function useWrites(date: string) {
       }),
     send: (method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body: unknown, label: string, extra: string[] = []) =>
       enqueue(qc, { method, path, body, invalidate: [...dayKeys, ...extra], label }),
+    /** "Pedir ajuste" for `forDate` (may differ from the day on screen). */
+    requestAdjustment: (forDate: string, text: string) => {
+      const now = new Date().toISOString();
+      const adjustment: Adjustment = {
+        id: uuidv7(),
+        date: forDate,
+        text,
+        status: "pending",
+        agentNote: null,
+        proposal: null,
+        resolvedAt: null,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        updatedBy: "user",
+      };
+      return enqueue(qc, {
+        method: "POST",
+        path: "/api/adjustments",
+        body: { id: adjustment.id, date: forDate, text },
+        invalidate: [k("adjustments", forDate)],
+        optimistic: { kind: "adjustment", date: forDate, adjustment },
+        label: "Pedido a Agenbot",
+      });
+    },
+    cancelAdjustment: (a: Adjustment) =>
+      enqueue(qc, { method: "POST", path: `/api/adjustments/${a.id}/cancel`, body: undefined, invalidate: [k("adjustments", a.date)], label: "Pedido cancelado" }),
   };
 }
 

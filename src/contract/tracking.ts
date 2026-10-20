@@ -282,6 +282,7 @@ export const WebhookChange = z
     sleep: z
       .strictObject({ night: LocalDate, bedAt: orNull(Timestamp), wokeAt: orNull(Timestamp) })
       .optional(),
+    adjustmentIds: z.array(Uuid).optional().openapi({ description: "On proposal `accept` / `reject`: the \"Pedir ajuste\" requests it answered." }),
     at: Timestamp,
   })
   .openapi("WebhookChange");

@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type * as A from "@/contract/adjustments";
 import type * as P from "@/contract/planning";
 import type * as Sl from "@/contract/sleep";
 import type * as Sy from "@/contract/system";
@@ -18,6 +19,7 @@ export type SleepLog = z.infer<typeof Sl.SleepLog>;
 export type SessionState = z.infer<typeof Sy.SessionState>;
 export type Device = z.infer<typeof Sy.Device>;
 export type WebhookStatus = z.infer<typeof Sy.WebhookStatus>;
+export type Adjustment = z.infer<typeof A.Adjustment>;
 
 export interface Problem {
   status: number;

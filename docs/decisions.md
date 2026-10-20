@@ -275,3 +275,15 @@ Resolved 2026-10-19:
   `pointercancel`, dropping the block. Bottom sheets close by swiping down anywhere while their content is at the
   top (not only on the handle), and lock the page behind them. Call blocks show a single **WhatsApp** button that
   opens the chat with no prefilled message (no *Llamar*). E2E covers all three with real CDP touch events.
+- **D92 — "Pedir ajuste" (adjustment requests).** I describe a change in plain words; Agenbot answers with a
+  proposal. Table `adjustment` (`pending → proposed → done | failed`, `cancelled` by me while `pending`), linked n:1
+  to `proposal` because a day has a single pending proposal (Q-adj 2A: `adjustmentIds[]` in the day PUT, so one
+  proposal can answer several requests). `resolvedAt` = nothing left to do: failed, cancelled, done without a
+  proposal, or the linked proposal accepted / rejected / superseded (a newer proposal or the day closing). Draft
+  day: the PUT applies directly and the request stays `pending` until the agent closes it (Q-adj 1A). Webhook:
+  `{ "event": "adjustment.requested" | "adjustment.cancelled", … }` (Q-adj 3A, same envelope key as the day batch;
+  Q-adj 4A, cancel notifies), each in its own outbox row, sent right away; the worker is kicked after commit so
+  immediate events (also choose / proposal accept-reject) no longer wait for the 30 s tick. UI: the **+** on Hoy
+  asks "Nuevo evento" or "Pedido a Agenbot" (Q-adj 5); a "Pedidos a Agenbot" card shows status and the agent's note;
+  the Hoy tab shows a badge while a request's proposal waits for me. Requests go through the offline outbox with a
+  client id; a 409 there is a plain rejection (toast), not the mine-vs-server conflict sheet.

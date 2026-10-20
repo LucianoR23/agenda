@@ -170,6 +170,7 @@ export const ExportBundle = z
     habitLogs: z.array(z.unknown()),
     tasks: z.array(z.unknown()),
     proposals: z.array(z.unknown()),
+    adjustments: z.array(z.unknown()),
     sleepLogs: z.array(z.unknown()),
     changeLog: z.array(z.unknown()),
   })

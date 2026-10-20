@@ -1,6 +1,6 @@
 # Test report (STOP 3)
 
-Run: `pnpm test:coverage` on 2026-10-19 against PostgreSQL 18.6 (docker-compose `db-test`). **89/89 passed**, 9 files, ~20 s.
+Run: `pnpm test:coverage` on 2026-10-19 against PostgreSQL 18.6 (docker-compose `db-test`). **101/101 passed**, 10 files, ~23 s (updated with "Pedir ajuste", D92).
 
 Every API test goes through the real router (`handle(Request)`) and **every response is validated against the committed `openapi.yaml`** (Ajv, JSON Schema 2020-12): an undocumented status, content type or field fails the test. CI runs the same suite with a Postgres 18 service.
 
@@ -8,7 +8,7 @@ Every API test goes through the real router (`handle(Request)`) and **every resp
 
 | Statements | Branches | Functions | Lines |
 |---|---|---|---|
-| 90.0 % | 78.9 % | 90.2 % | 93.2 % |
+| 90.4 % | 79.9 % | 90.9 % | 93.4 % |
 
 Not covered on purpose: successful WebAuthn registration/assertion (needs a real platform authenticator; options, error paths and lockout are tested), real Web Push delivery (`web-push` is swapped for a capturing sender), `migrate.ts` (exercised by the test global setup through drizzle's migrator).
 
@@ -32,6 +32,7 @@ Not covered on purpose: successful WebAuthn registration/assertion (needs a real
 | Reset-pin CLI code (15 min, single use) | auth: *CLI reset code…* |
 | Device re-auth after 7 days | auth: *re-auth after 7 days unused…* |
 | Webhook debounce + no-loop + retry | webhook: 4 tests |
+| "Pedir ajuste": create, transitions, 409, proposal link, webhook only for my actions | adjustments: 11 tests |
 | Metrics math with fixtures | metrics: week fixture with hand-computed values |
 | Midnight ART edge cases | lifecycle: *midnight in Buenos Aires*; unit: *ART time and midnight edges* |
 | Contract (every response vs openapi.yaml) | all API tests; platform: *every operation in the contract is implemented* |
@@ -222,3 +223,17 @@ Not covered on purpose: successful WebAuthn registration/assertion (needs a real
 ✓ 12 requests OK
 ```
 
+
+### tests/api/adjustments.test.ts — "Pedir ajuste" (D92)
+
+- creating a request sends adjustment.requested right away, alone, not batched with my changes
+- past or closed days → 409 day_closed; a day not loaded yet is fine
+- agent answers with a proposal (adjustmentIds) → proposed; done waits for me; accepting resolves it
+- rejecting the linked proposal also resolves the request
+- transitions: cancel only while pending; resolved requests → 409 adjustment_resolved
+- PUT adjustmentIds must be pending and for that date → else 422 adjustment_invalid (nothing applied)
+- draft day: the PUT applies directly, the request stays pending; done without proposal resolves it
+- one proposal can answer several requests; a newer proposal supersedes and resolves the older ones
+- PATCH proposalId must belong to the same date
+- only my actions reach the webhook; actors are enforced
+- delivery failures retry with backoff and show in /api/webhook/status

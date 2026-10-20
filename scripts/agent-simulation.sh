@@ -4,7 +4,8 @@
 #   AGENT_TOKEN=... BASE_URL=http://localhost:3000 DATE=2026-10-19 scripts/agent-simulation.sh
 #
 # Steps: health → contract → planning context → 07:00 PUT → retry (idempotent) → read back →
-# "elegí la A" → mirror a Google Calendar change → "ya fui al gym" → re-plan (proposal) → my changes → metrics.
+# "elegí la A" → mirror a Google Calendar change → "ya fui al gym" → re-plan (proposal) → answer "Pedir ajuste"
+# requests → my changes → metrics.
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3000}"
@@ -85,11 +86,26 @@ bold "10. Re-plan the afternoon → proposal for Luciano (day already chosen)"
 call PUT "/api/days/$DATE" 202,200 "$HERE/fixtures/agenbot-replan.json" "Idempotency-Key: agenbot-$DATE-replan"
 echo "    result: $(j 'd.result') · diff: $(j 'd.proposal ? d.proposal.diff.moved.map(m=>m.block.title+" "+m.from.start+"→"+m.to.start).join(", ") || "no moves" : "-"')"
 
-bold "11. What Luciano changed today (ChangeLog, actor=user)"
+bold "11. \"Pedir ajuste\": answer Luciano's pending requests (proposal + note)"
+call GET "/api/adjustments?date=$DATE&status=pending" 200
+IDS="$(j 'd.adjustments.map(a=>a.id)')"
+if [ "$IDS" != "[]" ]; then
+  node -e "const b=require('$HERE/fixtures/agenbot-replan.json'); b.adjustmentIds=$IDS; b.reason='Respondo tu pedido: muevo la lectura a las 14:00.'; require('fs').writeFileSync('$TMP/adjust.json', JSON.stringify(b))"
+  call PUT "/api/days/$DATE" 202,200 "$TMP/adjust.json" "Idempotency-Key: agenbot-$DATE-adjust-$(date +%s)"
+  echo "    result: $(j 'd.result') · answered: $IDS"
+  for ID in $(node -e "console.log($IDS.join(' '))"); do
+    call PATCH "/api/adjustments/$ID" 200 "$(jbody '{"status":"done","agentNote":"Moví la lectura a las 14:00; la propuesta te espera en Hoy."}')"
+    echo "    $ID → $(j 'd.status') · proposal $(j 'd.proposal ? d.proposal.status : "-"')"
+  done
+else
+  echo "    none pending (send one from Hoy → + → Pedido a Agenbot)"
+fi
+
+bold "12. What Luciano changed today (ChangeLog, actor=user)"
 call GET "/api/changelog?from=$DATE&to=$DATE&actor=user" 200
 echo "    $(j 'd.entries.length') entries: $(j 'd.entries.slice(0,5).map(e=>e.entity+"/"+e.action).join(", ") || "-"')"
 
-bold "12. Weekly metrics"
+bold "13. Weekly metrics"
 call GET "/api/metrics?range=week&anchor=$DATE" 200
 echo "    blocks done $(j 'd.blocks.done')/$(j 'd.blocks.total') · calls $(j 'd.calls.total') · gym $(j 'd.gym.total')"
 

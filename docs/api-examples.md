@@ -12,6 +12,7 @@ Errors common to every route (400 `validation_error`, 401, 403, 409 `idempotency
 - **Days**: `POST /api/days/{date}`, `GET /api/days/{date}`, `PUT /api/days/{date}`, `PATCH /api/days/{date}`, `POST /api/days/{date}/choose`, `POST /api/days/{date}/shift`, `GET /api/days`
 - **Proposals**: `GET /api/days/{date}/proposals`, `POST /api/days/{date}/proposals/{id}/accept`, `POST /api/days/{date}/proposals/{id}/reject`
 - **Blocks**: `POST /api/days/{date}/blocks`, `PATCH /api/days/{date}/blocks/{id}`, `PATCH /api/days/{date}/blocks/by-external/{externalId}`, `DELETE /api/days/{date}/blocks/{id}`, `POST /api/days/{date}/blocks/reorder`
+- **Adjustments**: `POST /api/adjustments`, `GET /api/adjustments`, `GET /api/adjustments/{id}`, `PATCH /api/adjustments/{id}`, `POST /api/adjustments/{id}/cancel`
 - **Habits**: `GET /api/habits`, `POST /api/habits`, `PATCH /api/habits/{habit}`, `GET /api/habits/{habit}/logs`, `POST /api/habits/{habit}/logs`
 - **Tasks**: `GET /api/tasks`, `POST /api/tasks`, `PATCH /api/tasks/{id}`, `DELETE /api/tasks/{id}`
 - **Metrics**: `GET /api/metrics`
@@ -4580,6 +4581,1602 @@ Content-Type: application/json
 ```
 
 </details>
+
+#### 12:30 — answering my "Pedir ajuste" (adjustmentIds) → proposal, the request becomes `proposed`
+_agent_
+
+<details><summary>Request</summary>
+
+```http
+PUT /api/days/2026-10-19
+Authorization: Bearer <agent token>
+Idempotency-Key: agenbot-adj-600
+Content-Type: application/json
+
+{
+  "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+  "weeklyGym": {
+    "done": 0,
+    "target": 3
+  },
+  "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+  "options": [
+    {
+      "label": "A",
+      "title": "Gym al mediodía",
+      "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+      "blocks": [
+        {
+          "source": "calendar",
+          "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+          "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+          "calendar": "work",
+          "start": "10:00",
+          "end": "10:45",
+          "type": "call",
+          "title": "Llamada de cierre",
+          "detail": "Programa de 12 semanas · 2ª llamada",
+          "lead": {
+            "name": "Martín Gómez",
+            "phone": "+5491155550101",
+            "whatsapp": "5491155550101",
+            "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+            "crmUrl": "https://crm.example.com/leads/8812"
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+          "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+          "calendar": "work",
+          "start": "15:00",
+          "end": "15:45",
+          "type": "call",
+          "title": "Primera llamada",
+          "lead": {
+            "name": "Laura Pérez",
+            "whatsapp": "5493515550202",
+            "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+          "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+          "calendar": "work",
+          "start": "16:00",
+          "end": "20:00",
+          "type": "local_work",
+          "title": "Turno en el local"
+        },
+        {
+          "source": "calendar",
+          "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+          "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+          "calendar": "personal",
+          "start": "20:30",
+          "end": "21:30",
+          "type": "padel",
+          "title": "Clase de pádel"
+        },
+        {
+          "source": "agent",
+          "start": "07:15",
+          "end": "07:45",
+          "type": "dogs",
+          "title": "Paseo con las perras"
+        },
+        {
+          "source": "agent",
+          "start": "08:00",
+          "end": "08:30",
+          "type": "meal",
+          "title": "Desayuno"
+        },
+        {
+          "source": "agent",
+          "start": "09:00",
+          "end": "09:50",
+          "type": "study",
+          "title": "Repasar guion de cierre",
+          "detail": "Objeción de precio: practicar reencuadre de inversión."
+        },
+        {
+          "source": "agent",
+          "start": "14:00",
+          "end": "14:30",
+          "type": "reading",
+          "title": "Lectura (30 min)",
+          "id": "019a0a6e-1c00-7000-8000-00000000006b"
+        },
+        {
+          "source": "agent",
+          "start": "21:45",
+          "end": "22:45",
+          "type": "partner",
+          "title": "Tiempo en pareja"
+        },
+        {
+          "source": "agent",
+          "start": "23:30",
+          "end": "07:00",
+          "type": "sleep",
+          "title": "Dormir"
+        },
+        {
+          "source": "agent",
+          "start": "12:00",
+          "end": "13:00",
+          "type": "gym",
+          "title": "Gym — tren superior"
+        },
+        {
+          "source": "agent",
+          "start": "13:10",
+          "end": "13:40",
+          "type": "meal",
+          "title": "Almuerzo"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Confirmar por WhatsApp a Martín (10:00)",
+      "kind": "whatsapp_confirm",
+      "relatedExternalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e"
+    },
+    {
+      "title": "Confirmar por WhatsApp a Laura (14:00)",
+      "kind": "whatsapp_confirm",
+      "relatedExternalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g"
+    },
+    {
+      "title": "Leer notas de descubrimiento de Martín en el CRM",
+      "kind": "lead_context"
+    },
+    {
+      "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+      "kind": "follow_up"
+    }
+  ],
+  "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.",
+  "adjustmentIds": [
+    "019a0a6e-1c00-7000-8000-000000000258"
+  ]
+}
+```
+
+</details>
+
+<details><summary>Response 202</summary>
+
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "result": "proposed",
+  "day": {
+    "id": "019a0a6e-1c00-7000-8000-000000000001",
+    "date": "2026-10-19",
+    "status": "edited",
+    "chosenOptionId": "019a0a6e-1c00-7000-8000-000000000002",
+    "chosenOption": "A",
+    "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+    "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+    "weeklyGym": {
+      "done": 0,
+      "target": 3
+    },
+    "review": null,
+    "reviewedAt": null,
+    "closedAt": null,
+    "options": [
+      {
+        "id": "019a0a6e-1c00-7000-8000-000000000002",
+        "label": "A",
+        "title": "Gym al mediodía",
+        "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+        "order": 0,
+        "blocks": [
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000068",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "07:15",
+            "end": "07:45",
+            "title": "Paseo con las perras",
+            "type": "dogs",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 4,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000069",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "08:00",
+            "end": "08:30",
+            "title": "Desayuno",
+            "type": "meal",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 5,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006a",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "09:00",
+            "end": "09:50",
+            "title": "Repasar guion de cierre",
+            "type": "study",
+            "detail": "Objeción de precio: practicar reencuadre de inversión.",
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 6,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000064",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "10:00",
+            "end": "10:45",
+            "title": "Llamada de cierre",
+            "type": "call",
+            "detail": "Programa de 12 semanas · 2ª llamada",
+            "lead": {
+              "name": "Martín Gómez",
+              "phone": "+5491155550101",
+              "whatsapp": "5491155550101",
+              "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+              "crmUrl": "https://crm.example.com/leads/8812"
+            },
+            "source": "calendar",
+            "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+            "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+            "calendar": "work",
+            "removedFromCalendarAt": null,
+            "status": "done",
+            "statusAt": "2026-10-19T10:48:03.551-03:00",
+            "outcome": "follow_up",
+            "note": "Le interesa, pide hablar con la pareja. Volver a llamar el jueves 18:00.",
+            "locked": false,
+            "remind": true,
+            "userOverrides": [],
+            "order": 0,
+            "version": 2,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T10:48:03.551-03:00",
+            "updatedBy": "user"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006b",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "11:15",
+            "end": "11:45",
+            "title": "Lectura (30 min)",
+            "type": "reading",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [
+              "start",
+              "end"
+            ],
+            "order": 7,
+            "version": 2,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T10:50:12.000-03:00",
+            "updatedBy": "user"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006e",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "12:00",
+            "end": "13:00",
+            "title": "Gym — tren superior",
+            "type": "gym",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 10,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006f",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "13:10",
+            "end": "13:40",
+            "title": "Almuerzo",
+            "type": "meal",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 11,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000065",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "14:00",
+            "end": "14:45",
+            "title": "Primera llamada",
+            "type": "call",
+            "detail": null,
+            "lead": {
+              "name": "Laura Pérez",
+              "whatsapp": "5493515550202",
+              "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+            },
+            "source": "calendar",
+            "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+            "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+            "calendar": "work",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": true,
+            "userOverrides": [],
+            "order": 1,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000066",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "16:00",
+            "end": "20:00",
+            "title": "Turno en el local",
+            "type": "local_work",
+            "detail": null,
+            "lead": null,
+            "source": "calendar",
+            "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+            "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+            "calendar": "work",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 2,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000067",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "20:30",
+            "end": "21:30",
+            "title": "Clase de pádel",
+            "type": "padel",
+            "detail": null,
+            "lead": null,
+            "source": "calendar",
+            "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+            "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+            "calendar": "personal",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 3,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006c",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "21:45",
+            "end": "22:45",
+            "title": "Tiempo en pareja",
+            "type": "partner",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 8,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000006d",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000002",
+            "start": "23:30",
+            "end": "07:00",
+            "title": "Dormir",
+            "type": "sleep",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 9,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          }
+        ],
+        "version": 1,
+        "createdAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedBy": "agent"
+      },
+      {
+        "id": "019a0a6e-1c00-7000-8000-000000000003",
+        "label": "B",
+        "title": "Gym temprano",
+        "description": "Gym antes de los perros; mediodía libre para preparar a Laura.",
+        "order": 1,
+        "blocks": [
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000074",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "06:15",
+            "end": "07:05",
+            "title": "Gym — tren superior",
+            "type": "gym",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 4,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000075",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "07:15",
+            "end": "07:45",
+            "title": "Paseo con las perras",
+            "type": "dogs",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 5,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000076",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "08:00",
+            "end": "08:30",
+            "title": "Desayuno",
+            "type": "meal",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 6,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000077",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "09:00",
+            "end": "09:50",
+            "title": "Repasar guion de cierre",
+            "type": "study",
+            "detail": "Objeción de precio: practicar reencuadre de inversión.",
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 7,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000070",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "10:00",
+            "end": "10:45",
+            "title": "Llamada de cierre",
+            "type": "call",
+            "detail": "Programa de 12 semanas · 2ª llamada",
+            "lead": {
+              "name": "Martín Gómez",
+              "phone": "+5491155550101",
+              "whatsapp": "5491155550101",
+              "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+              "crmUrl": "https://crm.example.com/leads/8812"
+            },
+            "source": "calendar",
+            "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+            "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+            "calendar": "work",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": true,
+            "userOverrides": [],
+            "order": 0,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000078",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "11:00",
+            "end": "11:30",
+            "title": "Lectura (30 min)",
+            "type": "reading",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 8,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000007b",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "12:30",
+            "end": "13:15",
+            "title": "Almuerzo",
+            "type": "meal",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 11,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000007c",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "13:15",
+            "end": "13:45",
+            "title": "Preparar llamada con Laura",
+            "type": "study",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 12,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000071",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "14:00",
+            "end": "14:45",
+            "title": "Primera llamada",
+            "type": "call",
+            "detail": null,
+            "lead": {
+              "name": "Laura Pérez",
+              "whatsapp": "5493515550202",
+              "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+            },
+            "source": "calendar",
+            "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+            "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+            "calendar": "work",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": true,
+            "userOverrides": [],
+            "order": 1,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000072",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "16:00",
+            "end": "20:00",
+            "title": "Turno en el local",
+            "type": "local_work",
+            "detail": null,
+            "lead": null,
+            "source": "calendar",
+            "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+            "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+            "calendar": "work",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 2,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000073",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "20:30",
+            "end": "21:30",
+            "title": "Clase de pádel",
+            "type": "padel",
+            "detail": null,
+            "lead": null,
+            "source": "calendar",
+            "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+            "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+            "calendar": "personal",
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 3,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-000000000079",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "21:45",
+            "end": "22:45",
+            "title": "Tiempo en pareja",
+            "type": "partner",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 9,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          },
+          {
+            "id": "019a0a6e-1c00-7000-8000-00000000007a",
+            "optionId": "019a0a6e-1c00-7000-8000-000000000003",
+            "start": "23:30",
+            "end": "07:00",
+            "title": "Dormir",
+            "type": "sleep",
+            "detail": null,
+            "lead": null,
+            "source": "agent",
+            "externalId": null,
+            "externalUrl": null,
+            "calendar": null,
+            "removedFromCalendarAt": null,
+            "status": "pending",
+            "statusAt": null,
+            "outcome": null,
+            "note": null,
+            "locked": false,
+            "remind": false,
+            "userOverrides": [],
+            "order": 10,
+            "version": 1,
+            "createdAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedAt": "2026-10-19T07:00:04.812-03:00",
+            "updatedBy": "agent"
+          }
+        ],
+        "version": 1,
+        "createdAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedBy": "agent"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "019a0a6e-1c00-7000-8000-0000000000c8",
+        "date": "2026-10-19",
+        "title": "Confirmar por WhatsApp a Martín (10:00)",
+        "kind": "whatsapp_confirm",
+        "origin": "agent",
+        "done": true,
+        "doneAt": "2026-10-19T08:05:00.000-03:00",
+        "relatedBlockId": "019a0a6e-1c00-7000-8000-000000000064",
+        "order": 0,
+        "version": 2,
+        "createdAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedAt": "2026-10-19T08:05:00.000-03:00",
+        "updatedBy": "user"
+      },
+      {
+        "id": "019a0a6e-1c00-7000-8000-0000000000c9",
+        "date": "2026-10-19",
+        "title": "Confirmar por WhatsApp a Laura (14:00)",
+        "kind": "whatsapp_confirm",
+        "origin": "agent",
+        "done": false,
+        "doneAt": null,
+        "relatedBlockId": "019a0a6e-1c00-7000-8000-000000000065",
+        "order": 1,
+        "version": 1,
+        "createdAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedBy": "agent"
+      },
+      {
+        "id": "019a0a6e-1c00-7000-8000-0000000000ca",
+        "date": "2026-10-19",
+        "title": "Leer notas de descubrimiento de Martín en el CRM",
+        "kind": "lead_context",
+        "origin": "agent",
+        "done": false,
+        "doneAt": null,
+        "relatedBlockId": null,
+        "order": 2,
+        "version": 1,
+        "createdAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedBy": "agent"
+      },
+      {
+        "id": "019a0a6e-1c00-7000-8000-0000000000cb",
+        "date": "2026-10-19",
+        "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+        "kind": "follow_up",
+        "origin": "agent",
+        "done": false,
+        "doneAt": null,
+        "relatedBlockId": null,
+        "order": 3,
+        "version": 1,
+        "createdAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedAt": "2026-10-19T07:00:04.812-03:00",
+        "updatedBy": "agent"
+      }
+    ],
+    "habitLogs": [],
+    "pendingProposal": {
+      "id": "019a0a6e-1c00-7000-8000-0000000001f4",
+      "date": "2026-10-19",
+      "status": "pending",
+      "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.",
+      "baseDayVersion": 4,
+      "createdAt": "2026-10-19T12:30:09.004-03:00",
+      "resolvedAt": null,
+      "diff": {
+        "option": "A",
+        "added": [],
+        "removed": [],
+        "keptRemovedFromCalendar": [],
+        "moved": [
+          {
+            "block": {
+              "id": "019a0a6e-1c00-7000-8000-000000000065",
+              "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+              "title": "Primera llamada",
+              "type": "call",
+              "start": "14:00",
+              "end": "14:45"
+            },
+            "from": {
+              "start": "14:00",
+              "end": "14:45"
+            },
+            "to": {
+              "start": "15:00",
+              "end": "15:45"
+            }
+          }
+        ],
+        "changed": [],
+        "preservedOverrides": [
+          {
+            "block": {
+              "id": "019a0a6e-1c00-7000-8000-00000000006b",
+              "externalId": null,
+              "title": "Lectura (30 min)",
+              "type": "reading",
+              "start": "11:15",
+              "end": "11:45"
+            },
+            "fields": [
+              "start",
+              "end"
+            ]
+          }
+        ],
+        "dayFields": {}
+      },
+      "payload": {
+        "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+        "weeklyGym": {
+          "done": 0,
+          "target": 3
+        },
+        "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+        "options": [
+          {
+            "label": "A",
+            "title": "Gym al mediodía",
+            "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+            "blocks": [
+              {
+                "source": "calendar",
+                "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+                "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+                "calendar": "work",
+                "start": "10:00",
+                "end": "10:45",
+                "type": "call",
+                "title": "Llamada de cierre",
+                "detail": "Programa de 12 semanas · 2ª llamada",
+                "lead": {
+                  "name": "Martín Gómez",
+                  "phone": "+5491155550101",
+                  "whatsapp": "5491155550101",
+                  "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+                  "crmUrl": "https://crm.example.com/leads/8812"
+                }
+              },
+              {
+                "source": "calendar",
+                "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+                "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+                "calendar": "work",
+                "start": "15:00",
+                "end": "15:45",
+                "type": "call",
+                "title": "Primera llamada",
+                "lead": {
+                  "name": "Laura Pérez",
+                  "whatsapp": "5493515550202",
+                  "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+                }
+              },
+              {
+                "source": "calendar",
+                "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+                "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+                "calendar": "work",
+                "start": "16:00",
+                "end": "20:00",
+                "type": "local_work",
+                "title": "Turno en el local"
+              },
+              {
+                "source": "calendar",
+                "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+                "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+                "calendar": "personal",
+                "start": "20:30",
+                "end": "21:30",
+                "type": "padel",
+                "title": "Clase de pádel"
+              },
+              {
+                "source": "agent",
+                "start": "07:15",
+                "end": "07:45",
+                "type": "dogs",
+                "title": "Paseo con las perras"
+              },
+              {
+                "source": "agent",
+                "start": "08:00",
+                "end": "08:30",
+                "type": "meal",
+                "title": "Desayuno"
+              },
+              {
+                "source": "agent",
+                "start": "09:00",
+                "end": "09:50",
+                "type": "study",
+                "title": "Repasar guion de cierre",
+                "detail": "Objeción de precio: practicar reencuadre de inversión."
+              },
+              {
+                "source": "agent",
+                "start": "14:00",
+                "end": "14:30",
+                "type": "reading",
+                "title": "Lectura (30 min)",
+                "id": "019a0a6e-1c00-7000-8000-00000000006b"
+              },
+              {
+                "source": "agent",
+                "start": "21:45",
+                "end": "22:45",
+                "type": "partner",
+                "title": "Tiempo en pareja"
+              },
+              {
+                "source": "agent",
+                "start": "23:30",
+                "end": "07:00",
+                "type": "sleep",
+                "title": "Dormir"
+              },
+              {
+                "source": "agent",
+                "start": "12:00",
+                "end": "13:00",
+                "type": "gym",
+                "title": "Gym — tren superior"
+              },
+              {
+                "source": "agent",
+                "start": "13:10",
+                "end": "13:40",
+                "type": "meal",
+                "title": "Almuerzo"
+              }
+            ]
+          }
+        ],
+        "tasks": [
+          {
+            "title": "Confirmar por WhatsApp a Martín (10:00)",
+            "kind": "whatsapp_confirm",
+            "relatedExternalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e"
+          },
+          {
+            "title": "Confirmar por WhatsApp a Laura (14:00)",
+            "kind": "whatsapp_confirm",
+            "relatedExternalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g"
+          },
+          {
+            "title": "Leer notas de descubrimiento de Martín en el CRM",
+            "kind": "lead_context"
+          },
+          {
+            "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+            "kind": "follow_up"
+          }
+        ],
+        "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00."
+      }
+    },
+    "sleep": {
+      "night": null,
+      "previousNight": {
+        "id": "019a0a6e-1c00-7000-8000-00000000015e",
+        "date": "2026-10-18",
+        "bedAt": "2026-10-19T00:05:00.000-03:00",
+        "bedSource": "user",
+        "wokeAt": "2026-10-19T06:55:00.000-03:00",
+        "wakeSource": "user",
+        "durationMinutes": 410,
+        "plannedStart": "23:30",
+        "plannedEnd": "07:00",
+        "bedDelayMinutes": 35,
+        "note": null,
+        "version": 2,
+        "createdAt": "2026-10-19T00:05:00.000-03:00",
+        "updatedAt": "2026-10-19T06:55:00.000-03:00",
+        "updatedBy": "user"
+      }
+    },
+    "version": 4,
+    "createdAt": "2026-10-19T07:00:04.812-03:00",
+    "updatedAt": "2026-10-19T10:50:12.000-03:00",
+    "updatedBy": "user"
+  },
+  "proposal": {
+    "id": "019a0a6e-1c00-7000-8000-0000000001f4",
+    "date": "2026-10-19",
+    "status": "pending",
+    "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.",
+    "baseDayVersion": 4,
+    "createdAt": "2026-10-19T12:30:09.004-03:00",
+    "resolvedAt": null,
+    "diff": {
+      "option": "A",
+      "added": [],
+      "removed": [],
+      "keptRemovedFromCalendar": [],
+      "moved": [
+        {
+          "block": {
+            "id": "019a0a6e-1c00-7000-8000-000000000065",
+            "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+            "title": "Primera llamada",
+            "type": "call",
+            "start": "14:00",
+            "end": "14:45"
+          },
+          "from": {
+            "start": "14:00",
+            "end": "14:45"
+          },
+          "to": {
+            "start": "15:00",
+            "end": "15:45"
+          }
+        }
+      ],
+      "changed": [],
+      "preservedOverrides": [
+        {
+          "block": {
+            "id": "019a0a6e-1c00-7000-8000-00000000006b",
+            "externalId": null,
+            "title": "Lectura (30 min)",
+            "type": "reading",
+            "start": "11:15",
+            "end": "11:45"
+          },
+          "fields": [
+            "start",
+            "end"
+          ]
+        }
+      ],
+      "dayFields": {}
+    },
+    "payload": {
+      "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+      "weeklyGym": {
+        "done": 0,
+        "target": 3
+      },
+      "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+      "options": [
+        {
+          "label": "A",
+          "title": "Gym al mediodía",
+          "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+          "blocks": [
+            {
+              "source": "calendar",
+              "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+              "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+              "calendar": "work",
+              "start": "10:00",
+              "end": "10:45",
+              "type": "call",
+              "title": "Llamada de cierre",
+              "detail": "Programa de 12 semanas · 2ª llamada",
+              "lead": {
+                "name": "Martín Gómez",
+                "phone": "+5491155550101",
+                "whatsapp": "5491155550101",
+                "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+                "crmUrl": "https://crm.example.com/leads/8812"
+              }
+            },
+            {
+              "source": "calendar",
+              "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+              "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+              "calendar": "work",
+              "start": "15:00",
+              "end": "15:45",
+              "type": "call",
+              "title": "Primera llamada",
+              "lead": {
+                "name": "Laura Pérez",
+                "whatsapp": "5493515550202",
+                "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+              }
+            },
+            {
+              "source": "calendar",
+              "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+              "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+              "calendar": "work",
+              "start": "16:00",
+              "end": "20:00",
+              "type": "local_work",
+              "title": "Turno en el local"
+            },
+            {
+              "source": "calendar",
+              "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+              "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+              "calendar": "personal",
+              "start": "20:30",
+              "end": "21:30",
+              "type": "padel",
+              "title": "Clase de pádel"
+            },
+            {
+              "source": "agent",
+              "start": "07:15",
+              "end": "07:45",
+              "type": "dogs",
+              "title": "Paseo con las perras"
+            },
+            {
+              "source": "agent",
+              "start": "08:00",
+              "end": "08:30",
+              "type": "meal",
+              "title": "Desayuno"
+            },
+            {
+              "source": "agent",
+              "start": "09:00",
+              "end": "09:50",
+              "type": "study",
+              "title": "Repasar guion de cierre",
+              "detail": "Objeción de precio: practicar reencuadre de inversión."
+            },
+            {
+              "source": "agent",
+              "start": "14:00",
+              "end": "14:30",
+              "type": "reading",
+              "title": "Lectura (30 min)",
+              "id": "019a0a6e-1c00-7000-8000-00000000006b"
+            },
+            {
+              "source": "agent",
+              "start": "21:45",
+              "end": "22:45",
+              "type": "partner",
+              "title": "Tiempo en pareja"
+            },
+            {
+              "source": "agent",
+              "start": "23:30",
+              "end": "07:00",
+              "type": "sleep",
+              "title": "Dormir"
+            },
+            {
+              "source": "agent",
+              "start": "12:00",
+              "end": "13:00",
+              "type": "gym",
+              "title": "Gym — tren superior"
+            },
+            {
+              "source": "agent",
+              "start": "13:10",
+              "end": "13:40",
+              "type": "meal",
+              "title": "Almuerzo"
+            }
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Confirmar por WhatsApp a Martín (10:00)",
+          "kind": "whatsapp_confirm",
+          "relatedExternalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e"
+        },
+        {
+          "title": "Confirmar por WhatsApp a Laura (14:00)",
+          "kind": "whatsapp_confirm",
+          "relatedExternalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g"
+        },
+        {
+          "title": "Leer notas de descubrimiento de Martín en el CRM",
+          "kind": "lead_context"
+        },
+        {
+          "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+          "kind": "follow_up"
+        }
+      ],
+      "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.",
+      "adjustmentIds": [
+        "019a0a6e-1c00-7000-8000-000000000258"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+#### Linking a request that is not pending
+_agent_
+
+<details><summary>Request</summary>
+
+```http
+PUT /api/days/2026-10-19
+Authorization: Bearer <agent token>
+Content-Type: application/json
+
+{
+  "callsSummary": "2 llamadas: Martín (cierre, objeción precio) 10:00 y Laura (primera llamada) 14:00.",
+  "weeklyGym": {
+    "done": 0,
+    "target": 3
+  },
+  "notes": "Turno en el local 16–20: no hay hueco para gym a la tarde.",
+  "options": [
+    {
+      "label": "A",
+      "title": "Gym al mediodía",
+      "description": "Gym entre la llamada de Martín y la de Laura; lectura temprano.",
+      "blocks": [
+        {
+          "source": "calendar",
+          "externalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e",
+          "externalUrl": "https://www.google.com/calendar/event?eid=NGYyazlxMGQxbTdiOHM2dDN1MXYwYTJjM2U",
+          "calendar": "work",
+          "start": "10:00",
+          "end": "10:45",
+          "type": "call",
+          "title": "Llamada de cierre",
+          "detail": "Programa de 12 semanas · 2ª llamada",
+          "lead": {
+            "name": "Martín Gómez",
+            "phone": "+5491155550101",
+            "whatsapp": "5491155550101",
+            "notes": "Coach online, factura ~4k USD/mes, quiere llegar a 10k. Objeción en la llamada de descubrimiento: precio.",
+            "crmUrl": "https://crm.example.com/leads/8812"
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g",
+          "externalUrl": "https://www.google.com/calendar/event?eid=N2gzbjFwNXI4czJ0NHY2eDl6MGIxZDNmNWc",
+          "calendar": "work",
+          "start": "15:00",
+          "end": "15:45",
+          "type": "call",
+          "title": "Primera llamada",
+          "lead": {
+            "name": "Laura Pérez",
+            "whatsapp": "5493515550202",
+            "notes": "Personal trainer presencial, quiere pasar a online. Primera llamada."
+          }
+        },
+        {
+          "source": "calendar",
+          "externalId": "2a4c6e8g0i2k4m6o8q0s2u4w6y",
+          "externalUrl": "https://www.google.com/calendar/event?eid=MmE0YzZlOGcwaTJrNG02bzhxMHMydTR3Nnk",
+          "calendar": "work",
+          "start": "16:00",
+          "end": "20:00",
+          "type": "local_work",
+          "title": "Turno en el local"
+        },
+        {
+          "source": "calendar",
+          "externalId": "9b8c7d6e5f4g3h2i1j0k9l8m7n",
+          "externalUrl": "https://www.google.com/calendar/event?eid=OWI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN24",
+          "calendar": "personal",
+          "start": "20:30",
+          "end": "21:30",
+          "type": "padel",
+          "title": "Clase de pádel"
+        },
+        {
+          "source": "agent",
+          "start": "07:15",
+          "end": "07:45",
+          "type": "dogs",
+          "title": "Paseo con las perras"
+        },
+        {
+          "source": "agent",
+          "start": "08:00",
+          "end": "08:30",
+          "type": "meal",
+          "title": "Desayuno"
+        },
+        {
+          "source": "agent",
+          "start": "09:00",
+          "end": "09:50",
+          "type": "study",
+          "title": "Repasar guion de cierre",
+          "detail": "Objeción de precio: practicar reencuadre de inversión."
+        },
+        {
+          "source": "agent",
+          "start": "14:00",
+          "end": "14:30",
+          "type": "reading",
+          "title": "Lectura (30 min)",
+          "id": "019a0a6e-1c00-7000-8000-00000000006b"
+        },
+        {
+          "source": "agent",
+          "start": "21:45",
+          "end": "22:45",
+          "type": "partner",
+          "title": "Tiempo en pareja"
+        },
+        {
+          "source": "agent",
+          "start": "23:30",
+          "end": "07:00",
+          "type": "sleep",
+          "title": "Dormir"
+        },
+        {
+          "source": "agent",
+          "start": "12:00",
+          "end": "13:00",
+          "type": "gym",
+          "title": "Gym — tren superior"
+        },
+        {
+          "source": "agent",
+          "start": "13:10",
+          "end": "13:40",
+          "type": "meal",
+          "title": "Almuerzo"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Confirmar por WhatsApp a Martín (10:00)",
+      "kind": "whatsapp_confirm",
+      "relatedExternalId": "4f2k9q0d1m7b8s6t3u1v0a2c3e"
+    },
+    {
+      "title": "Confirmar por WhatsApp a Laura (14:00)",
+      "kind": "whatsapp_confirm",
+      "relatedExternalId": "7h3n1p5r8s2t4v6x9z0b1d3f5g"
+    },
+    {
+      "title": "Leer notas de descubrimiento de Martín en el CRM",
+      "kind": "lead_context"
+    },
+    {
+      "title": "Seguimiento a Diego (pidió propuesta el viernes)",
+      "kind": "follow_up"
+    }
+  ],
+  "reason": "La llamada con Laura pasó a las 15:00 en Google Calendar; muevo la lectura a las 14:00.",
+  "adjustmentIds": [
+    "019a0a6e-1c00-7000-8000-00000000025a"
+  ]
+}
+```
+
+</details>
+
+```http
+HTTP/1.1 422 Unprocessable Content
+Content-Type: application/problem+json
+
+{
+  "type": "https://agenda.lemydev.com/problems/adjustment_invalid",
+  "title": "Adjustment request cannot be linked",
+  "status": 422,
+  "detail": "Adjustment 019a0a6e-1c00-7000-8000-00000000025a is cancelled.",
+  "code": "adjustment_invalid",
+  "requestId": "req_01JA9X7Q2M8K"
+}
+```
 
 #### Writing a closed day
 _agent_
@@ -10496,6 +12093,404 @@ Content-Type: application/json
 
 </details>
 
+## Adjustments
+
+### `POST /api/adjustments` — "Pedir ajuste": ask Agenbot to rearrange a day (user)
+
+Access: **user**
+
+Creates the request as `pending` and sends the `adjustment.requested` webhook right away (no debounce, not batched). The day may not be loaded yet. The agent answers with a proposal (`PUT /api/days/{date}` with `adjustmentIds`) and closes it with `PATCH /api/adjustments/{id}`.
+
+#### 12:20 — Laura se movió y me surgió algo
+_user_
+
+```http
+POST /api/adjustments
+Cookie: agenda_session=<session>
+Idempotency-Key: 019a0a6e-ffff-7000-8000-000000000060
+Content-Type: application/json
+
+{
+  "date": "2026-10-19",
+  "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18."
+}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+ETag: "1"
+
+{
+  "id": "019a0a6e-1c00-7000-8000-000000000258",
+  "date": "2026-10-19",
+  "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.",
+  "status": "pending",
+  "agentNote": null,
+  "proposal": null,
+  "resolvedAt": null,
+  "version": 1,
+  "createdAt": "2026-10-19T12:20:04.118-03:00",
+  "updatedAt": "2026-10-19T12:20:04.118-03:00",
+  "updatedBy": "user"
+}
+```
+
+#### A past day
+_user_
+
+```http
+POST /api/adjustments
+Cookie: agenda_session=<session>
+Content-Type: application/json
+
+{
+  "date": "2026-10-18",
+  "text": "Se movió Carlos a las 15:00"
+}
+```
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{
+  "type": "https://agenda.lemydev.com/problems/day_closed",
+  "title": "Day is closed",
+  "status": 409,
+  "detail": "2026-10-18 is closed.",
+  "code": "day_closed",
+  "requestId": "req_01JA9X7Q2M8K"
+}
+```
+
+### `GET /api/adjustments` — List adjustment requests
+
+Access: **agent+user**
+
+Newest first. Agenbot: `?status=pending` after an `adjustment.requested` webhook (or to catch up after downtime).
+
+#### Agenbot picks up pending requests
+_agent_
+
+```http
+GET /api/adjustments?date=2026-10-19&status=pending
+Authorization: Bearer <agent token>
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "adjustments": [
+    {
+      "id": "019a0a6e-1c00-7000-8000-000000000258",
+      "date": "2026-10-19",
+      "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.",
+      "status": "pending",
+      "agentNote": null,
+      "proposal": null,
+      "resolvedAt": null,
+      "version": 1,
+      "createdAt": "2026-10-19T12:20:04.118-03:00",
+      "updatedAt": "2026-10-19T12:20:04.118-03:00",
+      "updatedBy": "user"
+    }
+  ]
+}
+```
+
+#### My requests for the day (Hoy)
+_user_
+
+```http
+GET /api/adjustments?date=2026-10-19
+Cookie: agenda_session=<session>
+```
+
+<details><summary>Response 200</summary>
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "adjustments": [
+    {
+      "id": "019a0a6e-1c00-7000-8000-00000000025a",
+      "date": "2026-10-19",
+      "text": "Me surgió algo de 14 a 16.",
+      "status": "cancelled",
+      "agentNote": null,
+      "proposal": null,
+      "resolvedAt": "2026-10-19T13:10:30.000-03:00",
+      "version": 2,
+      "createdAt": "2026-10-19T13:10:00.000-03:00",
+      "updatedAt": "2026-10-19T13:10:30.000-03:00",
+      "updatedBy": "user"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-000000000259",
+      "date": "2026-10-19",
+      "text": "Se canceló Pamela.",
+      "status": "failed",
+      "agentNote": "No encuentro una llamada con Pamela hoy ni en tu calendario.",
+      "proposal": null,
+      "resolvedAt": "2026-10-19T13:05:40.000-03:00",
+      "version": 2,
+      "createdAt": "2026-10-19T13:05:01.000-03:00",
+      "updatedAt": "2026-10-19T13:05:40.000-03:00",
+      "updatedBy": "agent"
+    },
+    {
+      "id": "019a0a6e-1c00-7000-8000-000000000258",
+      "date": "2026-10-19",
+      "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.",
+      "status": "done",
+      "agentNote": "Moví la llamada de Laura a las 15:00 y el gym a las 17:30; la lectura queda a las 14:00.",
+      "proposal": {
+        "id": "019a0a6e-1c00-7000-8000-0000000001f4",
+        "status": "pending"
+      },
+      "resolvedAt": null,
+      "version": 3,
+      "createdAt": "2026-10-19T12:20:04.118-03:00",
+      "updatedAt": "2026-10-19T12:31:00.250-03:00",
+      "updatedBy": "agent"
+    }
+  ]
+}
+```
+
+</details>
+
+### `GET /api/adjustments/{id}` — Get an adjustment request
+
+Access: **agent+user**
+
+#### Linked to a pending proposal
+_agent_
+
+```http
+GET /api/adjustments/019a0a6e-1c00-7000-8000-000000000258
+Authorization: Bearer <agent token>
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+ETag: "2"
+
+{
+  "id": "019a0a6e-1c00-7000-8000-000000000258",
+  "date": "2026-10-19",
+  "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.",
+  "status": "proposed",
+  "agentNote": null,
+  "proposal": {
+    "id": "019a0a6e-1c00-7000-8000-0000000001f4",
+    "status": "pending"
+  },
+  "resolvedAt": null,
+  "version": 2,
+  "createdAt": "2026-10-19T12:20:04.118-03:00",
+  "updatedAt": "2026-10-19T12:30:09.004-03:00",
+  "updatedBy": "agent"
+}
+```
+
+### `PATCH /api/adjustments/{id}` — Close an adjustment request (agent)
+
+Access: **agent**
+
+`done` with a short note of what changed, or `failed` with the reason. Allowed from `pending` or `proposed`; `done | failed | cancelled` → 409 `adjustment_resolved` (with `current`). `proposalId` (optional) links a proposal of the same date, else 422 `adjustment_invalid`. Never triggers the webhook. I get a push when it fails, or when it is done without a proposal (applied to a draft day).
+
+#### 12:31 — done, the proposal waits for me
+_agent_
+
+```http
+PATCH /api/adjustments/019a0a6e-1c00-7000-8000-000000000258
+Authorization: Bearer <agent token>
+Idempotency-Key: agenbot-adj-600-done
+Content-Type: application/json
+
+{
+  "status": "done",
+  "agentNote": "Moví la llamada de Laura a las 15:00 y el gym a las 17:30; la lectura queda a las 14:00."
+}
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+ETag: "3"
+
+{
+  "id": "019a0a6e-1c00-7000-8000-000000000258",
+  "date": "2026-10-19",
+  "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.",
+  "status": "done",
+  "agentNote": "Moví la llamada de Laura a las 15:00 y el gym a las 17:30; la lectura queda a las 14:00.",
+  "proposal": {
+    "id": "019a0a6e-1c00-7000-8000-0000000001f4",
+    "status": "pending"
+  },
+  "resolvedAt": null,
+  "version": 3,
+  "createdAt": "2026-10-19T12:20:04.118-03:00",
+  "updatedAt": "2026-10-19T12:31:00.250-03:00",
+  "updatedBy": "agent"
+}
+```
+
+#### 13:05 — nothing to change
+_agent_
+
+```http
+PATCH /api/adjustments/019a0a6e-1c00-7000-8000-000000000259
+Authorization: Bearer <agent token>
+Content-Type: application/json
+
+{
+  "status": "failed",
+  "agentNote": "No encuentro una llamada con Pamela hoy ni en tu calendario."
+}
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+ETag: "2"
+
+{
+  "id": "019a0a6e-1c00-7000-8000-000000000259",
+  "date": "2026-10-19",
+  "text": "Se canceló Pamela.",
+  "status": "failed",
+  "agentNote": "No encuentro una llamada con Pamela hoy ni en tu calendario.",
+  "proposal": null,
+  "resolvedAt": "2026-10-19T13:05:40.000-03:00",
+  "version": 2,
+  "createdAt": "2026-10-19T13:05:01.000-03:00",
+  "updatedAt": "2026-10-19T13:05:40.000-03:00",
+  "updatedBy": "agent"
+}
+```
+
+#### Closing a request I already cancelled
+_agent_
+
+```http
+PATCH /api/adjustments/019a0a6e-1c00-7000-8000-00000000025a
+Authorization: Bearer <agent token>
+Content-Type: application/json
+
+{
+  "status": "done",
+  "agentNote": "Listo."
+}
+```
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{
+  "type": "https://agenda.lemydev.com/problems/adjustment_resolved",
+  "title": "Adjustment request already resolved",
+  "status": 409,
+  "detail": "Adjustment is cancelled.",
+  "code": "adjustment_resolved",
+  "requestId": "req_01JA9X7Q2M8K",
+  "current": {
+    "id": "019a0a6e-1c00-7000-8000-00000000025a",
+    "date": "2026-10-19",
+    "text": "Me surgió algo de 14 a 16.",
+    "status": "cancelled",
+    "agentNote": null,
+    "proposal": null,
+    "resolvedAt": "2026-10-19T13:10:30.000-03:00",
+    "version": 2,
+    "createdAt": "2026-10-19T13:10:00.000-03:00",
+    "updatedAt": "2026-10-19T13:10:30.000-03:00",
+    "updatedBy": "user"
+  }
+}
+```
+
+### `POST /api/adjustments/{id}/cancel` — Cancel a pending request (user)
+
+Access: **user**
+
+Only while `pending`; sends the `adjustment.cancelled` webhook right away. Once there is a proposal, reject it instead.
+
+#### 13:10 — never mind
+_user_
+
+```http
+POST /api/adjustments/019a0a6e-1c00-7000-8000-00000000025a/cancel
+Cookie: agenda_session=<session>
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+ETag: "2"
+
+{
+  "id": "019a0a6e-1c00-7000-8000-00000000025a",
+  "date": "2026-10-19",
+  "text": "Me surgió algo de 14 a 16.",
+  "status": "cancelled",
+  "agentNote": null,
+  "proposal": null,
+  "resolvedAt": "2026-10-19T13:10:30.000-03:00",
+  "version": 2,
+  "createdAt": "2026-10-19T13:10:00.000-03:00",
+  "updatedAt": "2026-10-19T13:10:30.000-03:00",
+  "updatedBy": "user"
+}
+```
+
+#### Too late: Agenbot already proposed
+_user_
+
+```http
+POST /api/adjustments/019a0a6e-1c00-7000-8000-000000000258/cancel
+Cookie: agenda_session=<session>
+```
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{
+  "type": "https://agenda.lemydev.com/problems/adjustment_resolved",
+  "title": "Adjustment request already resolved",
+  "status": 409,
+  "detail": "Adjustment is proposed; reject the proposal instead.",
+  "code": "adjustment_resolved",
+  "requestId": "req_01JA9X7Q2M8K",
+  "current": {
+    "id": "019a0a6e-1c00-7000-8000-000000000258",
+    "date": "2026-10-19",
+    "text": "Laura pasó a las 15:00 y me surgió algo de 17 a 18.",
+    "status": "proposed",
+    "agentNote": null,
+    "proposal": {
+      "id": "019a0a6e-1c00-7000-8000-0000000001f4",
+      "status": "pending"
+    },
+    "resolvedAt": null,
+    "version": 2,
+    "createdAt": "2026-10-19T12:20:04.118-03:00",
+    "updatedAt": "2026-10-19T12:30:09.004-03:00",
+    "updatedBy": "agent"
+  }
+}
+```
+
 ## Habits
 
 ### `GET /api/habits` — Habits with streak and current-period progress
@@ -11673,6 +13668,7 @@ Content-Type: application/json
   "habitLogs": [],
   "tasks": [],
   "proposals": [],
+  "adjustments": [],
   "sleepLogs": [],
   "changeLog": []
 }

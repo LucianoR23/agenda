@@ -14,7 +14,9 @@ export const backoffMs = (attempt: number) => 30_000 * 4 ** (attempt - 1);
 type Fetch = typeof fetch;
 
 /** Builds the final payload for a batch (day version and summary at send time). */
-async function buildPayload(db: DbLike, row: typeof webhookOutbox.$inferSelect) {
+async function buildPayload(db: DbLike, row: typeof webhookOutbox.$inferSelect): Promise<Record<string, unknown>> {
+  // standalone events (adjustment.*) are stored ready to send
+  if ("event" in (row.payload as object)) return row.payload as Record<string, unknown>;
   const [d] = await db.select().from(day).where(eq(day.date, row.date));
   let blocksDone = 0;
   let blocksTotal = 0;

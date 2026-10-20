@@ -50,6 +50,13 @@
       "when": 1792432877858,
       "tag": "0006_idempotency_body_text",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792453982218,
+      "tag": "0007_adjustment",
+      "breakpoints": true
     }
   ]
 }

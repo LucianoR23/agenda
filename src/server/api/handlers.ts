@@ -3,6 +3,7 @@ import { generateOpenApiDocument, withoutExamples } from "@/contract/openapi";
 import * as auth from "../auth/auth";
 import { getDb } from "../db/client";
 import { pushSubscription, webhookOutbox } from "../db/schema";
+import * as adjustments from "../domain/adjustments";
 import * as blocks from "../domain/blocks";
 import * as days from "../domain/days";
 import * as insights from "../domain/insights";
@@ -53,6 +54,25 @@ export const handlers: Record<string, Handler> = {
     return dayResponse(ctx, params.date);
   },
   rejectProposal: async (ctx, { params }) => json(200, await days.rejectProposal(ctx, params.date, params.id)),
+
+  // ---------- adjustments ("Pedir ajuste") ----------
+  createAdjustment: async (ctx, { body }) => {
+    const a = await adjustments.createAdjustment(ctx, body);
+    return json(201, a, etag(a.version));
+  },
+  listAdjustments: async (ctx, { query }) => json(200, { adjustments: await adjustments.listAdjustments(ctx, query) }),
+  getAdjustment: async (ctx, { params }) => {
+    const a = await adjustments.getAdjustment(ctx, params.id);
+    return json(200, a, etag(a.version));
+  },
+  patchAdjustment: async (ctx, { params, body }) => {
+    const a = await adjustments.patchAdjustment(ctx, params.id, body);
+    return json(200, a, etag(a.version));
+  },
+  cancelAdjustment: async (ctx, { params }) => {
+    const a = await adjustments.cancelAdjustment(ctx, params.id);
+    return json(200, a, etag(a.version));
+  },
 
   // ---------- blocks ----------
   createBlock: async (ctx, { params, query, body }) => json(201, blockOut(await blocks.createBlock(ctx, params.date, query.option, body))),

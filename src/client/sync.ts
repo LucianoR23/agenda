@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import { uuidv7 } from "uuidv7";
 import { api, ApiProblem } from "./api";
 import { idb, type Optimistic, type OutboxItem } from "./db";
-import type { Day, Task } from "./types";
+import type { Adjustment, Day, Task } from "./types";
 
 // ---------- status store ----------
 
@@ -72,8 +72,14 @@ function patchDayBlock(day: Day, blockId: string, patch: Record<string, unknown>
 const patchTask = (t: Task, taskId: string, patch: Record<string, unknown>): Task =>
   t.id !== taskId ? t : ({ ...t, ...patch, ...("done" in patch ? { doneAt: patch.done ? new Date().toISOString() : null } : {}), version: t.version + 1 } as Task);
 
+type AdjustmentList = { adjustments: Adjustment[] };
+/** A request sent offline shows up at once (newest first) until the server's copy replaces it. */
+const withAdjustment = (r: AdjustmentList, a: Adjustment): AdjustmentList =>
+  r.adjustments.some((x) => x.id === a.id) ? r : { adjustments: [a, ...r.adjustments] };
+
 /** Applies one optimistic change to whatever is in the query cache. */
 function applyOne(qc: QueryClient, o: Optimistic) {
+  if (o.kind === "adjustment") qc.setQueryData<AdjustmentList>(["adjustments", o.date], (r) => withAdjustment(r ?? { adjustments: [] }, o.adjustment));
   if (o.kind === "block") qc.setQueryData<Day>(["day", o.date], (d) => (d ? patchDayBlock(d, o.blockId, o.patch) : d));
   if (o.kind === "task") {
     qc.setQueryData<Day>(["day", o.date], (d) => (d ? { ...d, tasks: d.tasks.map((t) => patchTask(t, o.taskId, o.patch)) } : d));
@@ -87,6 +93,8 @@ export async function withPending<T>(key: unknown[], data: T): Promise<T> {
   let out: unknown = data;
   for (const { optimistic: o } of items) {
     if (!o || key[1] !== o.date) continue;
+    if (key[0] === "adjustments" && o.kind === "adjustment") out = withAdjustment(out as AdjustmentList, o.adjustment);
+    if (o.kind === "adjustment") continue;
     if (key[0] === "day") out = o.kind === "block" ? patchDayBlock(out as Day, o.blockId, o.patch) : { ...(out as Day), tasks: (out as Day).tasks.map((t) => patchTask(t, o.taskId, o.patch)) };
     if (key[0] === "tasks" && o.kind === "task") out = { tasks: (out as { tasks: Task[] }).tasks.map((t) => patchTask(t, o.taskId, o.patch)) };
   }
@@ -131,13 +139,15 @@ export function flush(qc: QueryClient): Promise<void> {
             set({ online: false });
             break;
           }
-          if (e.problem.status === 409 || e.problem.status === 412) {
+          // "Pedir ajuste" has nothing to merge: a 409 there (already answered, day closed) is just a rejection
+          const mergeable = !item.path.startsWith("/api/adjustments");
+          if ((e.problem.status === 409 || e.problem.status === 412) && mergeable) {
             await idb().outbox.update(item.id, { state: "conflict", conflict: { code: e.problem.code, detail: e.problem.detail, current: e.problem.current } });
           } else {
             // rejected for good (validation, gone…): drop it and show the server's truth
             await idb().outbox.delete(item.id);
             for (const k of item.invalidate) await qc.invalidateQueries({ queryKey: JSON.parse(k) });
-            notifyRejected(item, e.problem.detail ?? e.problem.title);
+            notifyRejected(item, REASON[e.problem.code ?? ""] ?? e.problem.detail ?? e.problem.title);
           }
         }
       }
@@ -168,6 +178,11 @@ export async function resolveConflict(qc: QueryClient, id: string, choice: "mine
   }
   await refreshCounts();
 }
+
+const REASON: Record<string, string> = {
+  adjustment_resolved: "Agenbot ya respondió ese pedido.",
+  day_closed: "Ese día ya está cerrado.",
+};
 
 type RejectListener = (item: OutboxItem, reason: string) => void;
 const rejectListeners = new Set<RejectListener>();

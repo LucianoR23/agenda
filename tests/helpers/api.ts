@@ -77,7 +77,7 @@ export async function setupUser(pin = PIN) {
 }
 
 const TABLES = [
-  "block", "plan_option", "proposal", "task", "habit_log", "habit", "sleep_log", "day", "change_log", "webhook_outbox",
+  "adjustment", "block", "plan_option", "proposal", "task", "habit_log", "habit", "sleep_log", "day", "change_log", "webhook_outbox",
   "idempotency_key", "notification_log", "push_subscription", "passkey", "auth_attempt", "auth_lockout", "device",
   "recovery_code", "pin_reset_code", "app_user",
 ];

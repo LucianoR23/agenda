@@ -333,6 +333,10 @@ export const DayInput = z
       description: "Why the agent is replacing the plan; shown in the proposal banner.",
     }),
     options: z.array(PlanOptionInput).min(1).max(5),
+    adjustmentIds: z.array(Uuid).min(1).max(20).optional().openapi({
+      description:
+        "\"Pedir ajuste\" requests this body answers (`GET /api/adjustments?date=&status=pending`). Each must be `pending` and for this date (else 422 `adjustment_invalid`). When the PUT becomes a proposal (202) they move to `proposed` and link to it; on a draft day (200) or `?mode=force` they stay `pending` until you close them with `PATCH /api/adjustments/{id}`.",
+    }),
     tasks: z.array(DayTaskInput).max(100).optional().openapi({
       description:
         "Agent checklist for the day. When present, agent-origin tasks for the date are synced (matched by `id`, then `kind`+`title`); unmatched ones are deleted unless done. My tasks are never touched. Applied immediately, even when the rest of the body becomes a proposal.",
