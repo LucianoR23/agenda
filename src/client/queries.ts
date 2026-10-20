@@ -8,6 +8,8 @@ import { enqueue, markSynced, reapplyPending, setOnline, withPending } from "./s
 import type { Adjustment, Day, DaySummary, Device, HabitProgress, Metrics, SessionState, Task, WebhookStatus } from "./types";
 
 const CACHE_DAYS = 14;
+/** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
+const CACHE_VERSION = 2;
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -26,7 +28,7 @@ export function makeQueryClient() {
 /** IndexedDB first: puts every cached response into the query cache before the first render. */
 export async function hydrateFromIdb(qc: QueryClient) {
   const cutoff = Date.now() - CACHE_DAYS * 86_400_000;
-  await idb().cache.where("at").below(cutoff).delete();
+  await idb().cache.filter((e) => e.at < cutoff || e.v !== CACHE_VERSION).delete();
   // shown immediately, but marked stale so every screen revalidates against the server on mount
   for (const e of await idb().cache.toArray()) qc.setQueryData(JSON.parse(e.key), e.data, { updatedAt: 1 });
   await reapplyPending(qc);
@@ -39,13 +41,13 @@ async function cached<T>(key: unknown[], path: string): Promise<T> {
     const data = await get<T>(path);
     setOnline(true);
     markSynced();
-    void idb().cache.put({ key: k, data, at: Date.now() });
+    void idb().cache.put({ key: k, data, at: Date.now(), v: CACHE_VERSION });
     return withPending(key, data);
   } catch (e) {
     if (e instanceof ApiProblem && e.offline) {
       setOnline(false);
       const hit = await idb().cache.get(k);
-      if (hit) return withPending(key, hit.data as T);
+      if (hit?.v === CACHE_VERSION) return withPending(key, hit.data as T);
     }
     throw e;
   }

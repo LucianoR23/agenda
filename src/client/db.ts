@@ -6,6 +6,8 @@ export interface CacheEntry {
   key: string;
   data: unknown;
   at: number;
+  /** Shape version of `data` (CACHE_VERSION when it was stored). */
+  v?: number;
 }
 
 /** A write waiting to reach the server (optimistic, replayed on reconnect with its Idempotency-Key). */
