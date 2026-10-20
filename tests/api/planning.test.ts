@@ -152,7 +152,7 @@ describe("ownership", () => {
     const c = await user.post(`${D}/blocks`, { start: "09:50", end: "10:00", title: "Pagar alquiler", type: "other" });
     expect(c.status).toBe(201);
     expect(c.body.source).toBe("user");
-    expect(c.body.userOverrides).toHaveLength(7);
+    expect(c.body.userOverrides).toHaveLength(8);
     expect((await agent().del(`${D}/blocks/${c.body.id}`)).body.code).toBe("user_edit_conflict");
     expect((await user.post(`${D}/blocks`, { start: "09:50", title: "Evento", type: "meeting", source: "calendar", externalId: "x" })).status).toBe(403);
 

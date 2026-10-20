@@ -22,6 +22,7 @@ export function blockOut(b: BlockRow): z.infer<typeof Block> {
     end: b.end,
     title: b.title,
     type: b.type,
+    callKind: b.callKind,
     detail: b.detail,
     lead: b.lead ?? null,
     source: b.source,

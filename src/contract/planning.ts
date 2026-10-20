@@ -26,10 +26,26 @@ export const BlockSource = z.enum(["calendar", "agent", "user"]).openapi("BlockS
 export const CalendarKind = z.enum(["work", "personal"]).openapi("CalendarKind");
 export const BlockStatus = z.enum(["pending", "done", "skipped"]).openapi("BlockStatus");
 export const CallOutcome = z
-  .enum(["closed_won", "follow_up", "no_show", "rescheduled", "lost"])
-  .openapi("CallOutcome");
+  .enum(["closed_won", "follow_up", "lost", "qualified", "not_qualified", "no_show", "rescheduled"])
+  .openapi("CallOutcome", {
+    description:
+      "Closer: `closed_won` (cerrada), `follow_up`, `lost` (no cerrada), `not_qualified` (turned out to be a triage), `no_show`, `rescheduled`. Triage: `qualified`, `not_qualified`, `no_show`, `rescheduled`. Calls without `callKind` accept any.",
+  });
+export const CallKind = z.enum(["closer", "triage"]).openapi("CallKind", {
+  description: "Kind of sales call; the agent tells them apart by the Google Calendar event. Only on `call` blocks.",
+});
+
+/** Outcomes each kind of call can end with (D93). */
+export const OUTCOMES_BY_KIND = {
+  closer: ["closed_won", "follow_up", "lost", "not_qualified", "no_show", "rescheduled"],
+  triage: ["qualified", "not_qualified", "no_show", "rescheduled"],
+} as const satisfies Record<z.infer<typeof CallKind>, ReadonlyArray<z.infer<typeof CallOutcome>>>;
+
+export const outcomeFits = (kind: string | null | undefined, outcome: string | null | undefined) =>
+  !kind || !outcome || (OUTCOMES_BY_KIND[kind as keyof typeof OUTCOMES_BY_KIND] as readonly string[]).includes(outcome);
+
 export const ScheduleField = z
-  .enum(["start", "end", "title", "type", "detail", "lead", "order"])
+  .enum(["start", "end", "title", "type", "callKind", "detail", "lead", "order"])
   .openapi("ScheduleField");
 export const ProposalStatus = z
   .enum(["pending", "accepted", "rejected", "superseded"])
@@ -72,6 +88,7 @@ const blockScheduleShape = {
   }),
   title: z.string().min(1).max(200),
   type: BlockType,
+  callKind: orNull(CallKind).optional().openapi({ description: "`closer` | `triage`; only on `call` blocks." }),
   detail: z.string().max(4000).nullable().optional(),
   lead: orNull(Lead).optional(),
   order: z.int().min(0).optional().openapi({ description: "Tie-breaker for blocks with the same start." }),
@@ -93,6 +110,7 @@ export const Block = z
     end: orNull(BlockTime),
     title: z.string(),
     type: BlockType,
+    callKind: orNull(CallKind),
     detail: z.string().nullable(),
     lead: orNull(Lead),
     source: BlockSource,
@@ -149,6 +167,7 @@ export const BlockPatch = z
     end: orNull(BlockTime).optional(),
     title: z.string().min(1).max(200).optional(),
     type: BlockType.optional(),
+    callKind: orNull(CallKind).optional(),
     detail: z.string().max(4000).nullable().optional(),
     lead: orNull(Lead).optional(),
     order: z.int().min(0).optional(),
@@ -175,6 +194,7 @@ export const BlockExternalPatch = z
     end: orNull(BlockTime).optional(),
     title: z.string().min(1).max(200).optional(),
     type: BlockType.optional(),
+    callKind: orNull(CallKind).optional(),
     detail: z.string().max(4000).nullable().optional(),
     lead: orNull(Lead).optional(),
     externalUrl: z.url().nullable().optional(),
@@ -190,9 +210,11 @@ export const BlockExternalPatch = z
   });
 
 function refineBlock(
-  b: { source?: string; type: string; externalId?: string | null; lead?: unknown },
+  b: { source?: string; type: string; externalId?: string | null; lead?: unknown; callKind?: string | null },
   ctx: z.RefinementCtx,
 ) {
+  if (b.callKind && b.type !== "call")
+    ctx.addIssue({ code: "custom", path: ["callKind"], message: "Only call blocks have a callKind" });
   if (b.source === "calendar" && !b.externalId)
     ctx.addIssue({ code: "custom", path: ["externalId"], message: "Required when source is calendar" });
   if (b.source !== "calendar" && b.externalId)

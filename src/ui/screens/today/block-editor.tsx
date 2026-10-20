@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import type { Block, BlockType, CallOutcome } from "@/client/types";
+import { outcomeFits } from "@/contract/planning";
+import type { Block, BlockType, CallKind, CallOutcome } from "@/client/types";
 import { BLOCK_TYPES, typeColor } from "../../block-types";
 import { cx } from "../../cx";
 import { Button, Segmented, Toggle } from "../../components/controls";
 import { OutcomePicker } from "../../components/extensions";
 import { Icon } from "../../components/icon";
 import { RowGroup, SheetRow } from "../../components/surfaces";
-import { blockRange, OUTCOME_LABEL, whatsappLink } from "../../format";
+import { blockRange, CALL_KIND_LABEL, OUTCOME_LABEL, whatsappLink } from "../../format";
 
 const TIME = /^([01][0-9]|2[0-9]):[0-5][0-9]$/;
 const input = "h-12 w-full rounded-md border border-border2 bg-surface px-3.5 text-body text-text outline-none focus:border-accent";
@@ -18,6 +19,7 @@ export interface BlockDraft {
   end: string;
   title: string;
   type: BlockType;
+  callKind: CallKind | null;
   detail: string;
   status: Block["status"];
   outcome: CallOutcome | null;
@@ -31,6 +33,7 @@ const fromBlock = (b: Block): BlockDraft => ({
   end: b.end ?? "",
   title: b.title,
   type: b.type,
+  callKind: b.callKind,
   detail: b.detail ?? "",
   status: b.status,
   outcome: b.outcome,
@@ -39,7 +42,7 @@ const fromBlock = (b: Block): BlockDraft => ({
   remind: b.remind,
 });
 
-const empty = (start: string): BlockDraft => ({ start, end: "", title: "", type: "other", detail: "", status: "pending", outcome: null, note: "", locked: false, remind: false });
+const empty = (start: string): BlockDraft => ({ start, end: "", title: "", type: "other", callKind: null, detail: "", status: "pending", outcome: null, note: "", locked: false, remind: false });
 
 /** Only the fields that changed, in API shape. */
 export function patchFrom(b: Block, d: BlockDraft): Record<string, unknown> {
@@ -50,6 +53,8 @@ export function patchFrom(b: Block, d: BlockDraft): Record<string, unknown> {
     if (n(d.end) !== b.end) out.end = n(d.end);
     if (d.title.trim() !== b.title) out.title = d.title.trim();
     if (d.type !== b.type) out.type = d.type;
+    const kind = d.type === "call" ? d.callKind : null;
+    if (kind !== b.callKind && (d.type === "call" || b.type === "call")) out.callKind = kind;
     if (n(d.detail) !== b.detail) out.detail = n(d.detail);
   }
   if (d.status !== b.status) out.status = d.status;
@@ -90,6 +95,7 @@ export function BlockEditor({
         <span className="flex items-center gap-2 text-caption text-muted">
           <Icon name={t.icon} size={16} color={typeColor(d.type)} />
           {t.label}
+          {isCall && d.callKind && ` · ${CALL_KIND_LABEL[d.callKind]}`}
           {block && ` · ${blockRange(block.start, block.end)}`}
           {calendar && (
             <>
@@ -151,6 +157,22 @@ export function BlockEditor({
                 </button>
               ))}
           </div>
+          {isCall && (
+            <Segmented
+              background="bg-bg"
+              value={d.callKind ?? "none"}
+              onChange={(v) => {
+                const kind = v === "none" ? null : (v as CallKind);
+                // an outcome the new kind can't have is cleared (D93)
+                setD((x) => ({ ...x, callKind: kind, outcome: outcomeFits(kind, x.outcome) ? x.outcome : null }));
+              }}
+              options={[
+                { value: "closer", label: "Closer" },
+                { value: "triage", label: "Triage" },
+                { value: "none", label: "Sin tipo" },
+              ]}
+            />
+          )}
           <textarea aria-label="Detalle" placeholder="Detalle (opcional)" value={d.detail} onChange={(e) => set("detail", e.target.value)} rows={2} className={cx(input, "h-auto py-3")} />
           <p className="text-caption text-muted">Hasta 29:59: 24:15 es 00:15 del día siguiente.</p>
         </div>
@@ -169,6 +191,7 @@ export function BlockEditor({
       {pickOutcome && isCall && (
         <OutcomePicker
           value={d.outcome}
+          kind={d.callKind}
           onChange={(o) => {
             setD((x) => ({ ...x, outcome: o, status: x.status === "pending" ? "done" : x.status }));
             setPickOutcome(false);

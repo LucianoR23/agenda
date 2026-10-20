@@ -180,7 +180,10 @@ AGENT_TOKEN=… BASE_URL=https://agenda.lemydev.com DATE=2026-10-19 pnpm agent:s
 3. `PUT /api/days/TODAY` with `Idempotency-Key: agenbot-TODAY-0700`:
    - `options[]` (`A`, `B`, …), each with **all** calendar events (`source: "calendar"`, `externalId` = Google event id,
      `externalUrl`, `calendar: work|personal`) plus your blocks (`source: "agent"`).
-   - Calls: `type: "call"`, `title` = kind of call ("Llamada de cierre"), `lead: { name, phone?, whatsapp?, notes?, crmUrl? }`.
+   - Calls: `type: "call"`, `callKind: "closer" | "triage"` (tell them apart by the Google Calendar event),
+     `title` = kind of call ("Llamada de cierre"), `lead: { name, phone?, whatsapp?, notes?, crmUrl? }`.
+     Outcomes by kind — closer: `closed_won`, `follow_up`, `lost` (no cerrada), `not_qualified`, `no_show`,
+     `rescheduled`; triage: `qualified`, `not_qualified`, `no_show`, `rescheduled` (else 422).
    - `tasks[]`: the checklist (`whatsapp_confirm`, `lead_context`, `follow_up`, `other`), optionally
      `relatedExternalId`. Applied immediately; your unfinished tasks are replaced, mine are never touched.
    - `callsSummary`, `weeklyGym`, `notes`, `reason` (shown when it becomes a proposal).

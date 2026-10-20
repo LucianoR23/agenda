@@ -4,7 +4,7 @@ import type { z } from "zod";
 import type { Block } from "@/contract/planning";
 import { BLOCK_TYPES, typeColor } from "../block-types";
 import { cx } from "../cx";
-import { blockRange, blockTime, OUTCOME_LABEL, STATUS_LABEL, whatsappLink } from "../format";
+import { blockRange, blockTime, CALL_KIND_LABEL, OUTCOME_LABEL, STATUS_LABEL, whatsappLink } from "../format";
 import type { IconName } from "../icons";
 import { Button } from "./controls";
 import { Icon } from "./icon";
@@ -57,7 +57,10 @@ export function BlockCard({ block, onOpen }: { block: BlockData; onOpen?: () => 
       >
         <div className="flex items-center gap-2.5">
           <Icon name={type.icon} color={typeColor(block.type)} />
-          <div className={cx("flex-1 text-body text-text", (skipped || removed) && "line-through")}>{block.title}</div>
+          <div className={cx("flex-1 text-body text-text", (skipped || removed) && "line-through")}>
+            {block.title}
+            {isCall && block.callKind && <span className="ml-2 inline-flex h-6 items-center rounded-full bg-call-soft px-2 align-middle text-micro font-medium text-call">{CALL_KIND_LABEL[block.callKind]}</span>}
+          </div>
           <Icon name={removed ? "event_busy" : STATUS_ICON[block.status]} className="text-muted" label={STATUS_LABEL[block.status]} />
         </div>
 

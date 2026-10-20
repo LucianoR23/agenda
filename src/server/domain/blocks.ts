@@ -12,7 +12,9 @@ import { planBlockPatch, type BlockPatchInput, type Violation } from "./ownershi
 import type { BlockRow, DayRow } from "./rows";
 import { blockOut } from "./serialize";
 
-const webhookBlock = (b: BlockRow) => ({ block: { title: b.title, type: b.type, start: b.start, externalId: b.externalId, outcome: b.outcome } });
+const webhookBlock = (b: BlockRow) => ({
+  block: { title: b.title, type: b.type, start: b.start, externalId: b.externalId, outcome: b.outcome, ...(b.type === "call" ? { callKind: b.callKind } : {}) },
+});
 
 function raise(v: Violation, b: BlockRow): never {
   const current = blockOut(b);
@@ -141,6 +143,7 @@ export async function createBlock(ctx: Ctx, date: string, optionLabel: string | 
       end: body.end ?? null,
       title: body.title,
       type: body.type,
+      callKind: body.type === "call" ? (body.callKind ?? null) : null,
       detail: body.detail ?? null,
       lead: body.lead ?? null,
       order: body.order ?? 0,

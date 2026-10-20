@@ -47,7 +47,11 @@ async function history() {
     ])
     .onConflictDoNothing();
 
-  const outcomes = ["closed_won", "follow_up", "no_show", "follow_up", "lost", "closed_won", "rescheduled"] as const;
+  // per kind of call (D93): closers close or not, triages qualify or not
+  const outcomes = {
+    closer: ["closed_won", "follow_up", "no_show", "follow_up", "lost", "closed_won", "not_qualified"],
+    triage: ["qualified", "not_qualified", "qualified", "no_show", "qualified", "rescheduled", "qualified"],
+  } as const;
   for (let i = 14; i >= 1; i--) {
     const date = addDays(today, -i);
     await as("agent", instantAt(date, "07:00"), (ctx) => putDay(ctx, date, ex.dayInput0700, false));
@@ -61,7 +65,7 @@ async function history() {
       const roll = (i * 7 + k * 3) % 10;
       const status: "done" | "skipped" | "pending" = b.type === "sleep" ? "done" : roll < 7 ? "done" : roll < 9 ? "skipped" : "pending";
       if (status === "pending") continue;
-      const patch = b.type === "call" ? { status: "done" as const, outcome: outcomes[(i + k) % outcomes.length] } : { status };
+      const patch = b.type === "call" ? { status: "done" as const, outcome: outcomes[b.callKind ?? "closer"][(i + k) % 7] } : { status };
       await as("user", instantAt(date, "22:00"), (ctx) => patchBlock(ctx, date, b.id, patch));
     }
     if (i % 2 === 0) await as("user", instantAt(date, "22:30"), (ctx) => patchDay(ctx, date, { review: { energy: 3 + (i % 3), mood: 2 + (i % 4), text: i % 4 === 0 ? "Buen ritmo, cerré una venta." : null } }));

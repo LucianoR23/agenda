@@ -13,6 +13,7 @@ export type Proposal = z.infer<typeof P.Proposal>;
 export type DaySummary = z.infer<typeof P.DaySummary>;
 export type BlockType = z.infer<typeof P.BlockType>;
 export type CallOutcome = z.infer<typeof P.CallOutcome>;
+export type CallKind = z.infer<typeof P.CallKind>;
 export type HabitProgress = z.infer<typeof T.HabitProgress>;
 export type Metrics = z.infer<typeof T.Metrics>;
 export type SleepLog = z.infer<typeof Sl.SleepLog>;

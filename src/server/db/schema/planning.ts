@@ -46,7 +46,10 @@ export const callOutcomeEnum = pgEnum("call_outcome", [
   "no_show",
   "rescheduled",
   "lost",
+  "qualified",
+  "not_qualified",
 ]);
+export const callKindEnum = pgEnum("call_kind", ["closer", "triage"]);
 export const proposalStatusEnum = pgEnum("proposal_status", [
   "pending",
   "accepted",
@@ -55,7 +58,7 @@ export const proposalStatusEnum = pgEnum("proposal_status", [
 ]);
 
 /** Schedule fields of a block; the only values allowed in `block.user_overrides`. */
-export const SCHEDULE_FIELDS = ["start", "end", "title", "type", "detail", "lead", "order"] as const;
+export const SCHEDULE_FIELDS = ["start", "end", "title", "type", "callKind", "detail", "lead", "order"] as const;
 export type ScheduleField = (typeof SCHEDULE_FIELDS)[number];
 
 export type Lead = {
@@ -142,6 +145,8 @@ export const block = pgTable(
     end: text(),
     title: text().notNull(),
     type: blockTypeEnum().notNull(),
+    // closer | triage, only for calls (D93)
+    callKind: callKindEnum(),
     detail: text(),
     lead: jsonb().$type<Lead>(),
     source: blockSourceEnum().notNull(),
@@ -189,9 +194,10 @@ export const block = pgTable(
     ),
     check("block_outcome_only_calls", sql`${t.outcome} IS NULL OR ${t.type} = 'call'`),
     check("block_lead_only_calls", sql`${t.lead} IS NULL OR ${t.type} = 'call'`),
+    check("block_call_kind_only_calls", sql`${t.callKind} IS NULL OR ${t.type} = 'call'`),
     check(
       "block_user_overrides_values",
-      sql`${t.userOverrides} <@ ARRAY['start','end','title','type','detail','lead','order']::text[]`,
+      sql`${t.userOverrides} <@ ARRAY['start','end','title','type','callKind','detail','lead','order']::text[]`,
     ),
   ],
 );

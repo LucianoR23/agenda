@@ -287,3 +287,9 @@ Resolved 2026-10-19:
   asks "Nuevo evento" or "Pedido a Agenbot" (Q-adj 5); a "Pedidos a Agenbot" card shows status and the agent's note;
   the Hoy tab shows a badge while a request's proposal waits for me. Requests go through the offline outbox with a
   client id; a 409 there is a plain rejection (toast), not the mine-vs-server conflict sheet.
+- **D93 — Closer vs triage calls.** Calls carry `callKind: closer | triage` (a schedule field: on calendar blocks it
+  is Google's, set by Agenbot from the event; on mine I pick it; it is cleared when a block stops being a call).
+  Outcomes by kind: closer `closed_won · follow_up · lost · not_qualified · no_show · rescheduled` (a closer call can
+  turn out not qualified), triage `qualified · not_qualified · no_show · rescheduled`; anything else → 422. Calls
+  without a kind (older days) accept any outcome. Metrics split `closer` / `triage` / `unspecified`: show-up rate,
+  close rate = closed_won / (showed − not_qualified), qualify rate = qualified / showed. `lost` reads "No cerrada".

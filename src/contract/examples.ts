@@ -39,6 +39,7 @@ const calendarBlocks: BlockInputT[] = [
     start: "10:00",
     end: "10:45",
     type: "call",
+    callKind: "closer",
     title: "Llamada de cierre",
     detail: "Programa de 12 semanas · 2ª llamada",
     lead: {
@@ -57,6 +58,7 @@ const calendarBlocks: BlockInputT[] = [
     start: "14:00",
     end: "14:45",
     type: "call",
+    callKind: "triage",
     title: "Primera llamada",
     lead: {
       name: "Laura Pérez",
@@ -147,6 +149,7 @@ function materializeBlock(b: BlockInputT, optionId: string, order: number, at = 
     end: b.end ?? null,
     title: b.title,
     type: b.type,
+    callKind: b.callKind ?? null,
     detail: b.detail ?? null,
     lead: b.lead ?? null,
     source: b.source,

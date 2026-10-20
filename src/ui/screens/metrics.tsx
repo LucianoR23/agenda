@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OUTCOMES_BY_KIND } from "@/contract/planning";
 import { useMetrics } from "@/client/queries";
 import type { Metrics } from "@/client/types";
 import { BLOCK_TYPES, typeColor } from "../block-types";
@@ -43,7 +44,6 @@ export function MetricsScreen() {
   const { data: m, isLoading } = useMetrics(range, anchor);
 
   const period = m ? (range === "week" ? `${m.from.slice(8)}/${m.from.slice(5, 7)} – ${m.to.slice(8)}/${m.to.slice(5, 7)}` : range === "month" ? monthLabel(m.from) : m.from.slice(0, 4)) : "";
-  const showed = m ? m.calls.total - m.calls.outcomes.unset - m.calls.outcomes.no_show - m.calls.outcomes.rescheduled : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,9 +74,11 @@ export function MetricsScreen() {
         <>
           <div className="grid grid-cols-2 gap-2.5">
             <StatCard label="Bloques hechos" value={pct(m.blocks.doneRate)} note={`${m.blocks.done} de ${m.blocks.total}`} />
-            <StatCard label="Llamadas cerradas" value={`${m.calls.outcomes.closed_won} / ${Math.max(showed, 0)}`} note={`cierre ${pct(m.calls.closeRate)}`} />
-            <StatCard label="Se presentaron" value={pct(m.calls.showUpRate)} note={`${m.calls.outcomes.no_show} no se presentaron`} />
             <StatCard label="Gym" value={String(m.gym.total)} note={m.gym.weeks.length === 1 && m.gym.weeks[0].target ? `meta ${m.gym.weeks[0].target} por semana` : "sesiones"} />
+            <StatCard label="Cierre · closer" value={pct(m.calls.closer.closeRate)} note={`${m.calls.closer.outcomes.closed_won} cerradas de ${m.calls.closer.total}`} />
+            <StatCard label="Calificación · triage" value={pct(m.calls.triage.qualifyRate)} note={`${m.calls.triage.outcomes.qualified} calificadas de ${m.calls.triage.total}`} />
+            <StatCard label="Se presentaron" value={pct(m.calls.showUpRate)} note={`${m.calls.outcomes.no_show} no se presentaron`} />
+            <StatCard label="Llamadas" value={String(m.calls.total)} note={`${m.calls.closer.total} closer · ${m.calls.triage.total} triage`} />
           </div>
 
           <ChartCard title="Llamadas" period={range === "week" ? "por día" : range === "month" ? "por semana" : "por mes"} reading={`${m.calls.total} llamadas en el período.`}>
@@ -89,14 +91,11 @@ export function MetricsScreen() {
             </ChartCard>
           )}
 
-          <ChartCard title="Resultado de llamadas" period={`${m.calls.total} llamadas`} reading={Object.entries(m.calls.outcomes).map(([k, v]) => `${k} ${v}`).join(", ")}>
-            <div className="flex flex-col gap-2">
-              {(Object.keys(OUTCOME_LABEL) as Array<keyof typeof OUTCOME_LABEL>).map((k) => (
-                <Bar key={k} label={OUTCOME_LABEL[k]} value={m.calls.outcomes[k]} max={Math.max(1, m.calls.total)} color="var(--call)" />
-              ))}
-              <Bar label="Sin resultado" value={m.calls.outcomes.unset} max={Math.max(1, m.calls.total)} color="var(--muted)" />
-            </div>
-          </ChartCard>
+          <OutcomesCard title="Resultados · closer" stats={m.calls.closer} keys={OUTCOMES_BY_KIND.closer} />
+          <OutcomesCard title="Resultados · triage" stats={m.calls.triage} keys={OUTCOMES_BY_KIND.triage} />
+          {m.calls.unspecified.total > 0 && (
+            <OutcomesCard title="Resultados · sin tipo" stats={m.calls.unspecified} keys={(Object.keys(OUTCOME_LABEL) as Outcome[]).filter((k) => m.calls.unspecified.outcomes[k] > 0)} />
+          )}
 
           <ChartCard title="Hecho por tipo" period={pct(m.blocks.doneRate)} reading={m.blocks.byType.map((t) => `${t.type} ${pct(t.doneRate)}`).join(", ")}>
             <div className="flex flex-col gap-2">
@@ -143,5 +142,24 @@ function Bar({ label, value, max, color, suffix }: { label: string; value: numbe
       </span>
       <span className="text-right font-mono text-muted">{suffix ?? value}</span>
     </div>
+  );
+}
+
+type Outcome = keyof typeof OUTCOME_LABEL;
+type Stats = Metrics["calls"]["closer"];
+
+/** Outcome bars for one kind of call (only the outcomes that kind can have). */
+function OutcomesCard({ title, stats, keys }: { title: string; stats: Stats; keys: readonly Outcome[] }) {
+  if (!stats.total) return null;
+  const max = Math.max(1, stats.total);
+  return (
+    <ChartCard title={title} period={`${stats.total} llamadas`} reading={keys.map((k) => `${OUTCOME_LABEL[k]} ${stats.outcomes[k]}`).join(", ")}>
+      <div className="flex flex-col gap-2">
+        {keys.map((k) => (
+          <Bar key={k} label={OUTCOME_LABEL[k]} value={stats.outcomes[k]} max={max} color="var(--call)" />
+        ))}
+        <Bar label="Sin resultado" value={stats.outcomes.unset} max={max} color="var(--muted)" />
+      </div>
+    </ChartCard>
   );
 }

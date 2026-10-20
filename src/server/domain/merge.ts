@@ -13,7 +13,7 @@ import type { BlockInput } from "@/contract/planning";
 import type { BlockRow, NewBlock } from "./rows";
 
 type In = z.infer<typeof BlockInput>;
-export const SCHEDULE = ["start", "end", "title", "type", "detail", "lead", "order"] as const;
+export const SCHEDULE = ["start", "end", "title", "type", "callKind", "detail", "lead", "order"] as const;
 export type ScheduleKey = (typeof SCHEDULE)[number];
 
 export interface BlockRef {
@@ -69,6 +69,7 @@ export function planMerge(existing: BlockRow[], input: In[], now: Date): MergePl
       end: inb.end ?? null,
       title: inb.title,
       type: inb.type,
+      callKind: inb.type === "call" ? (inb.callKind ?? null) : null,
       detail: inb.detail ?? null,
       lead: inb.lead ?? null,
       order: inb.order ?? index,
@@ -88,6 +89,7 @@ export function planMerge(existing: BlockRow[], input: In[], now: Date): MergePl
         end: inb.end ?? null,
         title: inb.title,
         type: inb.type,
+        callKind: inb.type === "call" ? (inb.callKind ?? null) : null,
         detail: inb.detail ?? null,
         lead: inb.lead ?? null,
         order: inb.order ?? index,

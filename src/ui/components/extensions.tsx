@@ -4,6 +4,7 @@
  * Components the design does not include yet, built only from Sistema Calma tokens and patterns
  * (section card, sheet rows, segmented, banners). See docs/design.md → "Extensiones".
  */
+import { OUTCOMES_BY_KIND } from "@/contract/planning";
 import type { z } from "zod";
 import type { ProposalDiff } from "@/contract/planning";
 import type { SleepLog } from "@/contract/sleep";
@@ -278,10 +279,20 @@ export function DayReviewCard({ energy, mood, pending, onChange }: { energy: num
 }
 
 /** Outcome picker rows for call blocks. */
-export function OutcomePicker({ value, onChange }: { value: keyof typeof OUTCOME_LABEL | null; onChange?: (v: keyof typeof OUTCOME_LABEL) => void }) {
+/** Call outcomes; a closer or triage call only offers its own (D93). */
+export function OutcomePicker({
+  value,
+  kind,
+  onChange,
+}: {
+  value: keyof typeof OUTCOME_LABEL | null;
+  kind?: keyof typeof OUTCOMES_BY_KIND | null;
+  onChange?: (v: keyof typeof OUTCOME_LABEL) => void;
+}) {
+  const keys = kind ? OUTCOMES_BY_KIND[kind] : (Object.keys(OUTCOME_LABEL) as Array<keyof typeof OUTCOME_LABEL>);
   return (
     <RowGroup>
-      {(Object.keys(OUTCOME_LABEL) as Array<keyof typeof OUTCOME_LABEL>).map((k) => (
+      {keys.map((k) => (
         <button key={k} type="button" onClick={() => onChange?.(k)} className="flex min-h-14 items-center gap-3 px-3.5 text-left">
           <Icon name={value === k ? "radio_button_checked" : "radio_button_unchecked"} className={value === k ? "text-call" : "text-muted"} />
           <span className="flex-1 text-[15px] text-text">{OUTCOME_LABEL[k]}</span>

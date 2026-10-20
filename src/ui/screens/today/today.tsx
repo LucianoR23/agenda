@@ -273,7 +273,7 @@ export function TodayScreen() {
               setSheet(null);
             }}
             onCreate={(d) => {
-              const body = { id: uuidv7(), start: d.start, ...(d.end ? { end: d.end } : {}), title: d.title.trim(), type: d.type, ...(d.detail ? { detail: d.detail } : {}), locked: d.locked, remind: d.remind };
+              const body = { id: uuidv7(), start: d.start, ...(d.end ? { end: d.end } : {}), title: d.title.trim(), type: d.type, ...(d.type === "call" && d.callKind ? { callKind: d.callKind } : {}), ...(d.detail ? { detail: d.detail } : {}), locked: d.locked, remind: d.remind };
               void writes.send("POST", `/api/days/${date}/blocks${day?.status === "draft" ? `?option=${option?.label}` : ""}`, body, "Bloque nuevo");
               setSheet(null);
             }}

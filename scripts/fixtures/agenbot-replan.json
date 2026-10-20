@@ -19,6 +19,7 @@
           "start": "10:00",
           "end": "10:45",
           "type": "call",
+          "callKind": "closer",
           "title": "Llamada de cierre",
           "detail": "Programa de 12 semanas · 2ª llamada",
           "lead": {
@@ -37,6 +38,7 @@
           "start": "15:00",
           "end": "15:45",
           "type": "call",
+          "callKind": "triage",
           "title": "Primera llamada",
           "lead": {
             "name": "Laura Pérez",

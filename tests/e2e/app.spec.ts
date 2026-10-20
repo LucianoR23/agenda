@@ -173,11 +173,16 @@ test("timeline at 15:12: now line, calls, swipe done with undo toast", async () 
 });
 
 test("call block: calendar editor (tracking only) with outcome picker", async () => {
+  const martin = page.getByTestId("timeline").locator('[data-testid^="block-"]', { hasText: "Martín Gómez" });
+  await expect(martin.getByText("Closer", { exact: true })).toBeVisible();
   await page.getByText("Martín Gómez").first().click();
   await expect(page.getByTestId("block-editor")).toBeVisible();
   await expect(page.getByRole("link", { name: "Editar en Google Calendar" })).toBeVisible();
   await shot("09-editor-calendar-call");
   await page.getByRole("button", { name: /Resultado/ }).click();
+  // a closer call: its own outcomes, "No calificada" included, but not triage's "Calificada"
+  await expect(page.getByRole("button", { name: "No calificada" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Calificada", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Seguimiento" }).click();
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByText("Seguimiento").first()).toBeVisible();
@@ -323,7 +328,7 @@ test("Tareas y hábitos, Historial, Métricas", async () => {
   await expect(page.getByText("Bloques hechos")).toBeVisible();
   await shot("20-metricas-semana");
   await page.getByRole("radio", { name: "Mes" }).click();
-  await expect(page.getByText("Llamadas cerradas")).toBeVisible();
+  await expect(page.getByText("Cierre · closer")).toBeVisible();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/21-metricas-mes.png`, fullPage: true });
 });

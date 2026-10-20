@@ -7,6 +7,7 @@
  * 3. Tracking fields (status, outcome, note) are mine: the agent may set them only while unset / pending.
  *    `locked` and `remind` are mine only.
  */
+import { outcomeFits } from "@/contract/planning";
 import type { BlockRow } from "./rows";
 import { SCHEDULE, type ScheduleKey } from "./merge";
 
@@ -30,7 +31,9 @@ export interface PatchPlan {
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const TRACKING = ["status", "outcome", "note"] as const;
 
-export function planBlockPatch(b: BlockRow, patch: BlockPatchInput, actor: "agent" | "user", now: Date): PatchPlan | Violation {
+export function planBlockPatch(b: BlockRow, input: BlockPatchInput, actor: "agent" | "user", now: Date): PatchPlan | Violation {
+  // a call that stops being a call loses its kind
+  const patch: BlockPatchInput = input.type && input.type !== "call" && b.callKind && input.callKind === undefined ? { ...input, callKind: null } : input;
   const changed = (k: keyof BlockPatchInput) => k in patch && patch[k] !== undefined && !same(patch[k], b[k as keyof BlockRow]);
   const schedule = SCHEDULE.filter((f) => changed(f));
   const tracking = TRACKING.filter((f) => changed(f));
@@ -40,8 +43,14 @@ export function planBlockPatch(b: BlockRow, patch: BlockPatchInput, actor: "agen
   const type = patch.type ?? b.type;
   if ((patch.outcome ?? b.outcome) && type !== "call" && changed("outcome")) return { kind: "invalid", path: "/outcome", message: "Only call blocks have an outcome" };
   if (patch.lead && type !== "call") return { kind: "invalid", path: "/lead", message: "Only call blocks have a lead" };
+  if (patch.callKind && type !== "call") return { kind: "invalid", path: "/callKind", message: "Only call blocks have a callKind" };
   if (patch.type && patch.type !== "call" && b.type === "call" && (b.lead || b.outcome) && patch.lead !== null)
     return { kind: "invalid", path: "/type", message: "Clear lead and outcome before changing a call's type" };
+  // closer vs triage outcomes (D93)
+  const kind = "callKind" in patch && patch.callKind !== undefined ? patch.callKind : b.callKind;
+  const outcome = "outcome" in patch && patch.outcome !== undefined ? patch.outcome : b.outcome;
+  if (!outcomeFits(type === "call" ? kind : null, outcome))
+    return { kind: "invalid", path: changed("outcome") ? "/outcome" : "/callKind", message: `${outcome} is not an outcome of a ${kind} call` };
 
   if (actor === "user") {
     if (b.source === "calendar" && schedule.length) return { kind: "calendar_owned", fields: schedule };

@@ -16,6 +16,7 @@ const row = (o: Partial<BlockRow>): BlockRow => ({
   end: "10:45",
   title: "Llamada de cierre",
   type: "call",
+  callKind: null,
   detail: null,
   lead: null,
   source: "calendar",

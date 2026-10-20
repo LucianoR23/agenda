@@ -5,13 +5,21 @@ import { agent, type Client, resetAll, setNow, setupUser } from "../helpers/api"
 /**
  * Fixture week Mon 12 – Fri 16 Oct 2026, option A each day:
  *   dogs 07:00 (agent) · calls (calendar) · gym 18:00 · reading 21:00
- * calls/day 2,1,3,2,1 with outcomes closed_won, follow_up | no_show | follow_up, rescheduled, closed_won | lost, follow_up | (none)
+ * calls/day 2,1,3,2,1 (C closer, T triage): C closed_won, T qualified | C no_show | C follow_up, T rescheduled, C closed_won |
+ *   C lost, T not_qualified | T (none)
  * gym done Mon/Wed/Fri, skipped Tue/Thu · reading done Tue–Fri · dogs done Mon/Fri, skipped Tue–Thu
  * habits: gym weekly 3 (linked to gym blocks), reading daily (linked to reading blocks)
  * sleep: 12th 23:50→07:00 (430), 13th 00:30→07:10 (400), 14th bed 23:40 only · review on the 15th · undone task on the 16th
  */
 const DAYS = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"];
-const CALLS: Array<Array<string | null>> = [["closed_won", "follow_up"], ["no_show"], ["follow_up", "rescheduled", "closed_won"], ["lost", "follow_up"], [null]];
+type Call = [outcome: string | null, kind: "closer" | "triage"];
+const CALLS: Call[][] = [
+  [["closed_won", "closer"], ["qualified", "triage"]],
+  [["no_show", "closer"]],
+  [["follow_up", "closer"], ["rescheduled", "triage"], ["closed_won", "closer"]],
+  [["lost", "closer"], ["not_qualified", "triage"]],
+  [[null, "triage"]],
+];
 const GYM = ["done", "skipped", "done", "skipped", "done"];
 const READING = ["pending", "done", "done", "done", "done"];
 const DOGS = ["done", "skipped", "skipped", "skipped", "done"];
@@ -23,7 +31,7 @@ async function loadDay(i: number) {
   setNow(`${date}T07:00:00-03:00`);
   const blocks = [
     { source: "agent" as const, start: "07:00", end: "07:30", type: "dogs" as const, title: "Paseo con las perras" },
-    ...CALLS[i].map((_, k) => ({ source: "calendar" as const, externalId: `c-${date}-${k}`, calendar: "work" as const, start: `${10 + k}:00`, end: `${10 + k}:45`, type: "call" as const, title: "Llamada", lead: { name: `Lead ${k}` } })),
+    ...CALLS[i].map((_, k) => ({ source: "calendar" as const, externalId: `c-${date}-${k}`, calendar: "work" as const, start: `${10 + k}:00`, end: `${10 + k}:45`, type: "call" as const, callKind: CALLS[i][k][1], title: "Llamada", lead: { name: `Lead ${k}` } })),
     { source: "agent" as const, start: "18:00", end: "19:00", type: "gym" as const, title: "Gym" },
     { source: "agent" as const, start: "21:00", end: "21:30", type: "reading" as const, title: "Lectura" },
   ];
@@ -32,7 +40,7 @@ async function loadDay(i: number) {
   setNow(`${date}T22:00:00-03:00`);
   const by = (t: string) => day.options[0].blocks.filter((b: { type: string }) => b.type === t);
   for (const [k, c] of by("call").entries()) {
-    const outcome = CALLS[i][k];
+    const outcome = CALLS[i][k][0];
     if (outcome) await user.patch(`/api/days/${date}/blocks/${c.id}`, { status: "done", outcome });
   }
   const set = async (t: string, status: string) => {
@@ -101,9 +109,30 @@ describe("metrics (week of the 12th, seen on Monday 19)", () => {
     expect(m.calls).toEqual({
       total: 9,
       perDay: [2, 1, 3, 2, 1, 0, 0].map((count, i) => ({ date: `2026-10-${12 + i}`, count })),
-      outcomes: { closed_won: 2, follow_up: 3, no_show: 1, rescheduled: 1, lost: 1, unset: 1 },
+      outcomes: { closed_won: 2, follow_up: 1, lost: 1, qualified: 1, not_qualified: 1, no_show: 1, rescheduled: 1, unset: 1 },
       showUpRate: 0.86, // 6 showed / 7 (8 with outcome − 1 rescheduled)
-      closeRate: 0.33, // 2 / 6
+      closeRate: 0.5, // calls that are not triage: 2 closed / 4 showed
+      closer: {
+        total: 5,
+        outcomes: { closed_won: 2, follow_up: 1, lost: 1, qualified: 0, not_qualified: 0, no_show: 1, rescheduled: 0, unset: 0 },
+        showUpRate: 0.8,
+        closeRate: 0.5,
+        qualifyRate: null,
+      },
+      triage: {
+        total: 4,
+        outcomes: { closed_won: 0, follow_up: 0, lost: 0, qualified: 1, not_qualified: 1, no_show: 0, rescheduled: 1, unset: 1 },
+        showUpRate: 1, // 2 showed / 2 (4 − rescheduled − unset)
+        closeRate: null,
+        qualifyRate: 0.5,
+      },
+      unspecified: {
+        total: 0,
+        outcomes: { closed_won: 0, follow_up: 0, lost: 0, qualified: 0, not_qualified: 0, no_show: 0, rescheduled: 0, unset: 0 },
+        showUpRate: null,
+        closeRate: null,
+        qualifyRate: null,
+      },
     });
     expect(m.gym).toEqual({ habitSlug: "gym", weeks: [{ weekStart: "2026-10-12", count: 3, target: 3 }], total: 3 });
     expect(m.reading).toEqual({ habitSlug: "reading", days: 4, totalDays: 7 });

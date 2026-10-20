@@ -1,5 +1,5 @@
 import { Actor, BlockTime, ExpectedVersion, LocalDate, LocalTime, Mutable, orNull, Timestamp, Uuid } from "./common";
-import { BlockType, CallOutcome, HabitLog, Review, Task, TaskKind, WeeklyGym } from "./planning";
+import { BlockType, CallKind, CallOutcome, HabitLog, Review, Task, TaskKind, WeeklyGym } from "./planning";
 import { SleepLog } from "./sleep";
 import { z } from "./zod";
 
@@ -120,6 +120,17 @@ export const TaskPatch = z
 
 const Rate = z.number().min(0).max(1).nullable();
 
+const n = z.int();
+const CallStats = z
+  .strictObject({
+    total: n,
+    outcomes: z.strictObject({ closed_won: n, follow_up: n, lost: n, qualified: n, not_qualified: n, no_show: n, rescheduled: n, unset: n }),
+    showUpRate: Rate.openapi({ description: "(calls with outcome − no_show − rescheduled) / (calls with outcome − rescheduled)." }),
+    closeRate: Rate.openapi({ description: "Closer: closed_won / (showed up − not_qualified). Null for triage." }),
+    qualifyRate: Rate.openapi({ description: "Triage: qualified / showed up. Null for closer." }),
+  })
+  .openapi("CallStats");
+
 export const Metrics = z
   .strictObject({
     range: z.enum(["week", "month", "year"]),
@@ -144,16 +155,12 @@ export const Metrics = z
     calls: z.strictObject({
       total: z.int(),
       perDay: z.array(z.strictObject({ date: LocalDate, count: z.int() })),
-      outcomes: z.strictObject({
-        closed_won: z.int(),
-        follow_up: z.int(),
-        no_show: z.int(),
-        rescheduled: z.int(),
-        lost: z.int(),
-        unset: z.int(),
-      }),
-      showUpRate: Rate.openapi({ description: "(calls with outcome − no_show − rescheduled) / (calls with outcome − rescheduled)." }),
-      closeRate: Rate.openapi({ description: "closed_won / calls that showed up." }),
+      outcomes: CallStats.shape.outcomes,
+      showUpRate: Rate.openapi({ description: "All calls: (with outcome − no_show − rescheduled) / (with outcome − rescheduled)." }),
+      closeRate: Rate.openapi({ description: "Calls that are not triage: closed_won / (showed up − not_qualified)." }),
+      closer: CallStats,
+      triage: CallStats,
+      unspecified: CallStats.openapi({ description: "Calls without `callKind` (older days)." }),
     }),
     sleep: z.strictObject({
       nightsLogged: z.int().openapi({ description: "Nights with both bed and wake times." }),
@@ -267,7 +274,14 @@ export const WebhookChange = z
     action: ChangeAction,
     fields: z.record(z.string(), z.strictObject({ from: z.unknown(), to: z.unknown() })).optional(),
     block: z
-      .strictObject({ title: z.string(), type: BlockType, start: BlockTime, externalId: z.string().nullable(), outcome: orNull(CallOutcome).optional() })
+      .strictObject({
+        title: z.string(),
+        type: BlockType,
+        start: BlockTime,
+        externalId: z.string().nullable(),
+        outcome: orNull(CallOutcome).optional(),
+        callKind: orNull(CallKind).optional().openapi({ description: "On calls: `closer` | `triage`." }),
+      })
       .optional(),
     task: z.strictObject({ title: z.string(), kind: TaskKind }).optional(),
     habit: z.strictObject({ slug: z.string(), name: z.string() }).optional(),

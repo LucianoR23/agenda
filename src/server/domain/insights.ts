@@ -50,6 +50,21 @@ export async function listDays(ctx: Ctx, from: string, to: string) {
   }));
 }
 
+/** Outcome counts and rates for a set of calls (D93). */
+function callStats(calls: BlockRow[], kind?: "closer" | "triage") {
+  const outcomes = { closed_won: 0, follow_up: 0, lost: 0, qualified: 0, not_qualified: 0, no_show: 0, rescheduled: 0, unset: 0 };
+  for (const c of calls) outcomes[c.outcome ?? "unset"]++;
+  const showDen = calls.length - outcomes.unset - outcomes.rescheduled;
+  const showed = showDen - outcomes.no_show;
+  return {
+    total: calls.length,
+    outcomes,
+    showUpRate: rate(showed, showDen),
+    closeRate: kind === "triage" ? null : rate(outcomes.closed_won, showed - outcomes.not_qualified),
+    qualifyRate: kind === "closer" || !kind ? null : rate(outcomes.qualified, showed),
+  };
+}
+
 async function linkedHabit(ctx: Ctx, type: "gym" | "reading"): Promise<HabitRow | null> {
   const [h] = await ctx.db.select().from(habit).where(and(eq(habit.blockType, type), eq(habit.active, true))).limit(1);
   if (h) return h;
@@ -77,11 +92,7 @@ export async function metrics(ctx: Ctx, range: "week" | "month" | "year", anchor
   });
 
   const calls = all.filter((b) => b.type === "call");
-  const outcomes = { closed_won: 0, follow_up: 0, no_show: 0, rescheduled: 0, lost: 0, unset: 0 };
-  for (const c of calls) outcomes[c.outcome ?? "unset"]++;
-  const withOutcome = calls.length - outcomes.unset;
-  const showDen = withOutcome - outcomes.rescheduled;
-  const showed = showDen - outcomes.no_show;
+  const overall = callStats(calls);
 
   const gym = await linkedHabit(ctx, "gym");
   const gymLogs = gym ? points(await ctx.db.select().from(habitLog).where(and(eq(habitLog.habitId, gym.id), gte(habitLog.date, weekStart(from)), lte(habitLog.date, to)))) : [];
@@ -134,9 +145,12 @@ export async function metrics(ctx: Ctx, range: "week" | "month" | "year", anchor
     calls: {
       total: calls.length,
       perDay: dates.map((date) => ({ date, count: days.find((d) => d.day.date === date)?.blocks.filter((b) => b.type === "call").length ?? 0 })),
-      outcomes,
-      showUpRate: rate(showed, showDen),
-      closeRate: rate(outcomes.closed_won, showed),
+      outcomes: overall.outcomes,
+      showUpRate: overall.showUpRate,
+      closeRate: callStats(calls.filter((c) => c.callKind !== "triage")).closeRate,
+      closer: callStats(calls.filter((c) => c.callKind === "closer"), "closer"),
+      triage: callStats(calls.filter((c) => c.callKind === "triage"), "triage"),
+      unspecified: callStats(calls.filter((c) => c.callKind === null)),
     },
     sleep: {
       nightsLogged: complete.length,

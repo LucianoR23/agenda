@@ -18,10 +18,14 @@ export function blockRange(start: string, end: string | null): string {
 export const OUTCOME_LABEL = {
   closed_won: "Cerrada",
   follow_up: "Seguimiento",
+  lost: "No cerrada",
+  qualified: "Calificada",
+  not_qualified: "No calificada",
   no_show: "No se presentó",
   rescheduled: "Reprogramada",
-  lost: "Perdida",
 } as const;
+
+export const CALL_KIND_LABEL = { closer: "Closer", triage: "Triage" } as const;
 
 export const STATUS_LABEL = { pending: "Pendiente", done: "Hecho", skipped: "Salteado" } as const;
 
