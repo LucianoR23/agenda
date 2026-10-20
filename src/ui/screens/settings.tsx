@@ -84,6 +84,7 @@ export function SettingsScreen() {
       <SectionLabel>General</SectionLabel>
       <RowGroup>
         <SettingsRow icon="local_fire_department" title="Hábitos y metas" subtitle="Gym 3 por semana, lectura…" href="/ajustes/habitos" />
+        <SettingsRow icon="swap_horiz" title="Opciones del día" subtitle="Elegidas vs no elegidas" href="/ajustes/opciones" />
         <SettingsRow icon="lock" title="Seguridad" subtitle="PIN, huella, dispositivos" href="/ajustes/seguridad" />
       </RowGroup>
 

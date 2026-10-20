@@ -167,6 +167,7 @@ export function TodayScreen() {
 
       <AdjustmentsCard
         items={adjustments}
+        now={now}
         onOpenProposal={() => setSheet({ kind: "proposal" })}
         onCancel={(a) => {
           void writes.cancelAdjustment(a);

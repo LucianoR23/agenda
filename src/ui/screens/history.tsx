@@ -11,9 +11,9 @@ import { PageTitle } from "../components/page";
 import { HeatCell, StatCard, TimelineSkeleton } from "../components/surfaces";
 import { addDays, dayLabel, monthLabel, todayART } from "../time";
 
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
-const monthEnd = (d: string) => addDays(`${new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 1)).toISOString().slice(0, 10)}`, -1);
-const shiftMonth = (d: string, n: number) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 10);
+export const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
+export const monthEnd = (d: string) => addDays(`${new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 1)).toISOString().slice(0, 10)}`, -1);
+export const shiftMonth = (d: string, n: number) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 10);
 
 export function HistoryScreen() {
   const today = todayART();
