@@ -78,6 +78,21 @@ async function finger(p: Page, from: { x: number; y: number }, to: { x: number; 
 }
 const center = (b: { x: number; y: number; width: number; height: number }) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
 
+/**
+ * Waits until the page stops moving (a flick leaves momentum). A touch that lands on a page still scrolling only
+ * stops it: Chrome makes that touch sequence non-cancelable, like on the phone.
+ */
+async function settle(p: Page) {
+  let last = -1;
+  let still = 0;
+  for (let i = 0; i < 60 && still < 4; i++) {
+    const y = await p.evaluate(() => window.scrollY);
+    still = y === last ? still + 1 : 0;
+    last = y;
+    await p.waitForTimeout(100);
+  }
+}
+
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
@@ -192,7 +207,7 @@ test("touch: long press lifts a block without scrolling; a quick move scrolls", 
   const card = page.getByTestId("timeline").locator('[data-testid^="block-"]', { hasText: "Lectura (30 min)" });
   // mid-screen, so the drag stays away from the edges (where dnd-kit auto-scrolls on purpose)
   await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
-  await page.waitForTimeout(100);
+  await settle(page);
   const box = (await card.boundingBox())!;
   // no hold: a plain scroll, nothing lifts
   const scrolled = await page.evaluate(() => window.scrollY);
@@ -200,8 +215,9 @@ test("touch: long press lifts a block without scrolling; a quick move scrolls", 
   await flick.end();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(scrolled);
   await expect(page.getByText(/^Soltá acá/)).toHaveCount(0);
+  await settle(page);
   await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
-  await page.waitForTimeout(100);
+  await settle(page);
   const scrollY0 = await page.evaluate(() => window.scrollY);
   const before = await card.innerText();
   const drag = await finger(page, center(box), { x: center(box).x, y: center(box).y + 110 }, 600);
@@ -211,7 +227,6 @@ test("touch: long press lifts a block without scrolling; a quick move scrolls", 
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollY0);
   await drag.end();
   await expect.poll(() => card.innerText()).not.toBe(before); // dropped at a new time
-
 });
 
 test("touch: the sheet closes swiping down anywhere and the page behind it doesn't scroll", async () => {
