@@ -98,7 +98,20 @@ function Swipeable({ block, onSwipe, children }: { block: Block; onSwipe: (s: "d
   );
 }
 
-function SortableBlock({ block, onOpen, onSwipe, placeholder }: { block: Block; onOpen: () => void; onSwipe: (s: "done" | "skipped") => void; placeholder?: string | null }) {
+function SortableBlock({
+  block,
+  onOpen,
+  onSwipe,
+  placeholder,
+  liftedHeight,
+}: {
+  block: Block;
+  onOpen: () => void;
+  onSwipe: (s: "done" | "skipped") => void;
+  placeholder?: string | null;
+  /** Height of the card when it was lifted: the drop slot keeps it, so nothing jumps (or scroll-anchors) on lift. */
+  liftedHeight?: number;
+}) {
   const movable = block.source !== "calendar" && !block.locked && block.status === "pending";
   // only pointer listeners: dnd-kit's keyboard-sorting attributes would mark fixed blocks as aria-disabled
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id, disabled: !movable });
@@ -107,7 +120,9 @@ function SortableBlock({ block, onOpen, onSwipe, placeholder }: { block: Block; 
     return (
       <div ref={setNodeRef} style={style} className="grid grid-cols-[50px_1fr] gap-3">
         <span />
-        <div className="flex h-16 items-center justify-center rounded-lg border-[1.5px] border-dashed border-border2 text-caption text-muted">Soltá acá{placeholder ? ` · ${placeholder}` : ""}</div>
+        <div style={{ height: liftedHeight ?? 64 }} className="flex items-center justify-center rounded-lg border-[1.5px] border-dashed border-border2 text-caption text-muted">
+          Soltá acá{placeholder ? ` · ${placeholder}` : ""}
+        </div>
       </div>
     );
   return (
@@ -153,6 +168,7 @@ export function Timeline({
 }) {
   const [order, setOrder] = useState<string[] | null>(null);
   const [active, setActive] = useState<Block | null>(null);
+  const [liftedHeight, setLiftedHeight] = useState<number | undefined>(undefined);
   const [overId, setOverId] = useState<string | null>(null);
   // Touch: long press (350 ms, finger still) lifts the card; moving earlier is a normal scroll. TouchSensor (not
   // PointerSensor) because once lifted it cancels the touchmove, so the browser neither scrolls nor fires pointercancel.
@@ -181,6 +197,8 @@ export function Timeline({
       onDragStart={(e: DragStartEvent) => {
         haptic(20);
         setActive(byId.get(String(e.active.id)) ?? null);
+        // dnd-kit has not measured the node yet at this point (rect.initial is null): read it from the DOM
+        setLiftedHeight(document.querySelector(`[data-testid="block-${e.active.id}"]`)?.getBoundingClientRect().height);
         setOrder(blocks.map((b) => b.id));
       }}
       onDragOver={(e: DragOverEvent) => setOverId(e.over ? String(e.over.id) : null)}
@@ -202,7 +220,7 @@ export function Timeline({
           {list.map((b, i) => (
             <Fragment key={b.id}>
               {i === nowIndex && nowTime && <NowLine time={nowTime} />}
-              <SortableBlock block={b} onOpen={() => onOpen(b)} onSwipe={(s) => onSwipe(b, s)} placeholder={active?.id === b.id ? preview?.start && blockTime(preview.start).text : null} />
+              <SortableBlock block={b} onOpen={() => onOpen(b)} onSwipe={(s) => onSwipe(b, s)} placeholder={active?.id === b.id ? preview?.start && blockTime(preview.start).text : null} liftedHeight={active?.id === b.id ? liftedHeight : undefined} />
             </Fragment>
           ))}
           {nowTime && nowIndex === -1 && list.length > 0 && <NowLine time={nowTime} />}

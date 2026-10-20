@@ -206,6 +206,8 @@ test("touch: long press lifts a block without scrolling; a quick move scrolls", 
   const before = await card.innerText();
   const drag = await finger(page, center(box), { x: center(box).x, y: center(box).y + 110 }, 600);
   await expect(page.getByText(/^Soltá acá/)).toBeVisible();
+  // the drop slot keeps the card's height: nothing below jumps and the browser has nothing to scroll-anchor
+  expect(Math.abs((await page.getByText(/^Soltá acá/).boundingBox())!.height - box.height)).toBeLessThan(2);
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollY0);
   await drag.end();
   await expect.poll(() => card.innerText()).not.toBe(before); // dropped at a new time
