@@ -102,6 +102,8 @@ export function SectionCard({
   title,
   action,
   onAction,
+  expanded,
+  onToggle,
   children,
 }: {
   icon: IconName;
@@ -109,13 +111,25 @@ export function SectionCard({
   title: string;
   action?: string;
   onAction?: () => void;
+  /** With onToggle, the header folds/unfolds the card; the slot decides what stays visible when folded. */
+  expanded?: boolean;
+  onToggle?: () => void;
   children: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-3 rounded-xl bg-surface p-4">
       <div className="flex items-center gap-2.5">
         <Icon name={icon} color={iconColor} />
-        <h2 className="flex-1 text-[15px] font-semibold text-text">{title}</h2>
+        <h2 className="flex-1 text-[15px] font-semibold text-text">
+          {onToggle ? (
+            <button type="button" aria-expanded={!!expanded} onClick={onToggle} className="-my-3 flex min-h-11 w-full items-center justify-between gap-2 text-left">
+              {title}
+              <Icon name="chevron_right" size={20} className={cx("text-muted transition-transform", expanded && "rotate-90")} />
+            </button>
+          ) : (
+            title
+          )}
+        </h2>
         {action && (
           <button type="button" onClick={onAction} className="flex min-h-11 items-center text-body-sm text-accent">
             {action}

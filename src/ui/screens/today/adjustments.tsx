@@ -121,59 +121,65 @@ export function AdjustmentForm({ defaultDate, today, onSend }: { defaultDate: st
 /** How long the latest request stays open after Agenbot answers; then it folds with the rest. */
 const OPEN_AFTER_ANSWER_MS = 10 * 60_000;
 
-/** My requests for the day, folded: tap one to see the agent's note and the way to the proposal. */
+/** My requests for the day, folded (the list and each request): tap one to see the agent's note and the way to the proposal. */
 export function AdjustmentsCard({ items, now, onCancel, onOpenProposal }: { items: Adjustment[]; now: Date; onCancel: (a: Adjustment) => void; onOpenProposal: () => void }) {
+  const [listOpen, setListOpen] = useState(false);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   if (!items.length) return null;
-  // the latest one shows itself while it waits and for a while after the answer
+  // the latest one shows itself (even with the list folded) while it waits and for a while after the answer
   const latest = items.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
   const fresh = !latest.resolvedAt || now.getTime() - new Date(latest.resolvedAt).getTime() < OPEN_AFTER_ANSWER_MS;
+  const shown = listOpen ? items : fresh ? [latest] : [];
   return (
-    <SectionCard icon="auto_awesome" iconColor="var(--accent)" title="Pedidos a Agenbot">
-      <ul className="flex flex-col divide-y divide-border" data-testid="adjustments">
-        {items.map((a) => {
-          const st = adjustmentState(a);
-          const resolved = !!a.resolvedAt && !st.ready;
-          const open = toggled[a.id] ?? (a.id === latest.id && fresh);
-          return (
-            <li key={a.id} className={cx("flex flex-col gap-2 py-3 first:pt-0 last:pb-0", resolved && !open && "opacity-70")}>
-              <button
-                type="button"
-                aria-expanded={open}
-                onClick={() => setToggled((t) => ({ ...t, [a.id]: !open }))}
-                className="flex min-h-11 flex-col gap-1.5 text-left"
-              >
-                <span className="flex w-full items-center justify-between gap-2">
-                  <StatusChip tone={st.tone} icon={st.icon}>
-                    {st.label}
-                  </StatusChip>
-                  <span className="flex items-center gap-1 font-mono text-mono text-muted">
-                    {localHHmm(a.createdAt)}
-                    <Icon name="chevron_right" size={18} className={cx("transition-transform", open && "rotate-90")} />
-                  </span>
-                </span>
-                <span className={cx("text-body text-text", !open && "truncate")}>{a.text}</span>
-              </button>
-              {open && a.agentNote && (
-                <p className="flex gap-1.5 text-body-sm text-text2">
-                  <Icon name="auto_awesome" size={16} className="mt-0.5 shrink-0 text-muted" />
-                  {a.agentNote}
-                </p>
-              )}
-              {open && (st.ready || a.status === "pending") && (
-                <div className="flex gap-2">
-                  {st.ready && <Button onClick={onOpenProposal}>Ver propuesta</Button>}
-                  {a.status === "pending" && (
-                    <Button variant="ghost" onClick={() => onCancel(a)}>
-                      Cancelar pedido
-                    </Button>
+    <div data-testid="adjustments">
+      <SectionCard icon="auto_awesome" iconColor="var(--accent)" title={`Pedidos a Agenbot (${items.length})`} expanded={listOpen} onToggle={() => setListOpen((o) => !o)}>
+        {shown.length > 0 && (
+          <ul className="flex flex-col divide-y divide-border">
+            {shown.map((a) => {
+              const st = adjustmentState(a);
+              const resolved = !!a.resolvedAt && !st.ready;
+              const open = toggled[a.id] ?? (a.id === latest.id && fresh);
+              return (
+                <li key={a.id} className={cx("flex flex-col gap-2 py-3 first:pt-0 last:pb-0", resolved && !open && "opacity-70")}>
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setToggled((t) => ({ ...t, [a.id]: !open }))}
+                    className="flex min-h-11 flex-col gap-1.5 text-left"
+                  >
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <StatusChip tone={st.tone} icon={st.icon}>
+                        {st.label}
+                      </StatusChip>
+                      <span className="flex items-center gap-1 font-mono text-mono text-muted">
+                        {localHHmm(a.createdAt)}
+                        <Icon name="chevron_right" size={18} className={cx("transition-transform", open && "rotate-90")} />
+                      </span>
+                    </span>
+                    <span className={cx("text-body text-text", !open && "truncate")}>{a.text}</span>
+                  </button>
+                  {open && a.agentNote && (
+                    <p className="flex gap-1.5 text-body-sm text-text2">
+                      <Icon name="auto_awesome" size={16} className="mt-0.5 shrink-0 text-muted" />
+                      {a.agentNote}
+                    </p>
                   )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </SectionCard>
+                  {open && (st.ready || a.status === "pending") && (
+                    <div className="flex gap-2">
+                      {st.ready && <Button onClick={onOpenProposal}>Ver propuesta</Button>}
+                      {a.status === "pending" && (
+                        <Button variant="ghost" onClick={() => onCancel(a)}>
+                          Cancelar pedido
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </SectionCard>
+    </div>
   );
 }
