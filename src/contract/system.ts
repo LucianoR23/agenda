@@ -1,4 +1,4 @@
-import { LocalDate, orNull, Timestamp, Uuid } from "./common";
+import { orNull, Timestamp, Uuid } from "./common";
 import { z } from "./zod";
 
 // ---------- auth ----------
@@ -127,53 +127,3 @@ export const Health = z
     time: Timestamp,
   })
   .openapi("Health");
-
-export const CloseDayInput = z
-  .strictObject({
-    date: LocalDate.optional().openapi({ description: "Close only this date. Default: every unclosed day before today (ART)." }),
-  })
-  .openapi("CloseDayInput");
-
-export const CloseDayResult = z
-  .strictObject({
-    closed: z.array(LocalDate),
-    purgedIdempotencyKeys: z.int(),
-  })
-  .openapi("CloseDayResult");
-
-export const WebhookStatus = z
-  .strictObject({
-    configured: z.boolean(),
-    lastDelivery: z
-      .strictObject({
-        batchId: Uuid,
-        date: LocalDate,
-        status: z.enum(["collecting", "pending", "sent", "failed"]),
-        attempts: z.int(),
-        lastAttemptAt: orNull(Timestamp),
-        lastResponseStatus: z.int().nullable(),
-        lastError: z.string().nullable(),
-        sentAt: orNull(Timestamp),
-      })
-      .nullable(),
-    queued: z.int().openapi({ description: "Batches collecting or waiting for (re)delivery." }),
-    failedLast7Days: z.int(),
-  })
-  .openapi("WebhookStatus");
-
-export const ExportBundle = z
-  .strictObject({
-    exportedAt: Timestamp,
-    schemaVersion: z.literal(1),
-    days: z.array(z.unknown()),
-    habits: z.array(z.unknown()),
-    habitLogs: z.array(z.unknown()),
-    tasks: z.array(z.unknown()),
-    proposals: z.array(z.unknown()),
-    adjustments: z.array(z.unknown()),
-    sleepLogs: z.array(z.unknown()),
-    changeLog: z.array(z.unknown()),
-  })
-  .openapi("ExportBundle", {
-    description: "All personal data as JSON (no auth secrets: no PIN/recovery hashes, sessions or passkeys).",
-  });

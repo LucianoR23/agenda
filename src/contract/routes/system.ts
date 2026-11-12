@@ -4,11 +4,8 @@ import { problem } from "../problems";
 import type { RouteDef } from "../route-def";
 import {
   ChangePinInput,
-  CloseDayInput,
-  CloseDayResult,
   Device,
   DeviceRename,
-  ExportBundle,
   Health,
   PasskeyInfo,
   PasskeyVerifyInput,
@@ -25,7 +22,6 @@ import {
   UnlockInput,
   UnlockResult,
   WebAuthnJson,
-  WebhookStatus,
 } from "../system";
 import { z } from "../zod";
 
@@ -388,54 +384,5 @@ export const systemRoutes: RouteDef[] = [
     body: PushUnsubscribeInput,
     responses: { 204: { description: "Removed." } },
     exchanges: [{ name: "unsubscribe", summary: "Disable notifications", actor: "user", body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b" }, status: 204 }],
-  },
-  {
-    operationId: "webhookStatus",
-    method: "get",
-    path: "/api/webhook/status",
-    tag: "Agent",
-    summary: "Last webhook delivery to Agenbot (Ajustes → Agenbot)",
-    access: "user",
-    responses: { 200: { description: "Status.", schema: WebhookStatus } },
-    exchanges: [
-      {
-        name: "status",
-        summary: "Last batch delivered",
-        actor: "user",
-        status: 200,
-        response: {
-          configured: true,
-          lastDelivery: { batchId: ex.uid(900), date: ex.DATE, status: "sent", attempts: 1, lastAttemptAt: "2026-10-19T10:52:12.400-03:00", lastResponseStatus: 200, lastError: null, sentAt: "2026-10-19T10:52:12.400-03:00" },
-          queued: 0,
-          failedLast7Days: 0,
-        },
-      },
-    ],
-  },
-  {
-    operationId: "exportData",
-    method: "get",
-    path: "/api/export",
-    tag: "Ops",
-    summary: "Export all data as JSON",
-    access: "user",
-    responses: { 200: { description: "Download (`Content-Disposition: attachment`).", schema: ExportBundle } },
-    exchanges: [
-      { name: "export", summary: "Export", actor: "user", status: 200, response: { exportedAt: "2026-10-19T23:00:00.000-03:00", schemaVersion: 1, days: [], habits: [], habitLogs: [], tasks: [], proposals: [], adjustments: [], sleepLogs: [], changeLog: [] } },
-    ],
-  },
-  {
-    operationId: "closeDay",
-    method: "post",
-    path: "/api/internal/close-day",
-    tag: "Ops",
-    summary: "Close past days (Coolify scheduled task, 00:05 ART)",
-    description: "Closes every unclosed day before today and purges idempotency keys older than 48 h. Idempotent.",
-    access: "internal",
-    body: CloseDayInput,
-    responses: { 200: { description: "Result.", schema: CloseDayResult } },
-    exchanges: [
-      { name: "cron", summary: "00:05 on 2026-10-20", actor: "internal", body: {}, status: 200, response: { closed: ["2026-10-19"], purgedIdempotencyKeys: 14 } },
-    ],
   },
 ];

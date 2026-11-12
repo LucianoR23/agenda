@@ -5,7 +5,6 @@ const entries = {
   migrate: "src/server/db/migrate.ts",
   "auth-reset-pin": "scripts/auth-reset-pin.ts",
   "auth-recovery-codes": "scripts/auth-recovery-codes.ts",
-  "agent-token": "scripts/agent-token.ts",
 };
 
 await build({

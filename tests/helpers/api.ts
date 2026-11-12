@@ -6,7 +6,7 @@ import { resetEnv } from "@/server/env";
 import { resetRateLimits } from "@/server/http/ratelimit";
 import { setPushSender, type PushMessage } from "@/server/push";
 import { validateResponse } from "./contract";
-import { AGENT_TOKEN, INTERNAL_TOKEN, SETUP_CODE } from "./env";
+import { SETUP_CODE } from "./env";
 
 export interface Res<T = any> { // eslint-disable-line @typescript-eslint/no-explicit-any
   status: number;
@@ -15,7 +15,7 @@ export interface Res<T = any> { // eslint-disable-line @typescript-eslint/no-exp
   cookies: string[];
 }
 
-type As = "agent" | "user" | "anon" | "internal";
+type As = "user" | "anon";
 
 export interface Client {
   request<T = any>(method: string, path: string, opts?: { body?: unknown; headers?: Record<string, string>; raw?: string }): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -31,8 +31,6 @@ export interface Client {
 export function client(as: As, jar = new Map<string, string>()): Client {
   async function request(method: string, path: string, opts: { body?: unknown; headers?: Record<string, string>; raw?: string } = {}) {
     const headers: Record<string, string> = { "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile", ...(opts.headers ?? {}) };
-    if (as === "agent") headers.authorization = `Bearer ${AGENT_TOKEN}`;
-    if (as === "internal") headers["x-internal-token"] = INTERNAL_TOKEN;
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
     const body = opts.raw ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body));
     if (body !== undefined) headers["content-type"] = "application/json";
@@ -62,9 +60,7 @@ export function client(as: As, jar = new Map<string, string>()): Client {
   };
 }
 
-export const agent = () => client("agent");
 export const anon = (jar?: Map<string, string>) => client("anon", jar);
-export const internal = () => client("internal");
 
 export const PIN = "482913";
 
@@ -77,8 +73,7 @@ export async function setupUser(pin = PIN) {
 }
 
 const TABLES = [
-  "adjustment", "block", "plan_option", "proposal", "task", "habit_log", "habit", "sleep_log", "day", "change_log", "webhook_outbox",
-  "idempotency_key", "notification_log", "push_subscription", "passkey", "auth_attempt", "auth_lockout", "device",
+  "change_log", "idempotency_key", "push_subscription", "passkey", "auth_attempt", "auth_lockout", "device",
   "recovery_code", "pin_reset_code", "app_user",
 ];
 

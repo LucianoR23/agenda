@@ -1,40 +1,7 @@
-import { sql } from "drizzle-orm";
-import {
-  boolean,
-  date,
-  index,
-  integer,
-  jsonb,
-  pgEnum,
-  pgTable,
-  primaryKey,
-  smallint,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
-import { actorEnum, createdAt, id, updatedAt } from "./common";
+import { date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { actorEnum, createdAt, id } from "./common";
 
-export const changeActionEnum = pgEnum("change_action", [
-  "create",
-  "update",
-  "delete",
-  "replace",
-  "choose",
-  "close",
-  "propose",
-  "accept",
-  "reject",
-  "shift", // "Me atrasé": diff = { fromTime, minutes, blocks: [{ id, from, to }] }
-]);
-
-export const webhookStatusEnum = pgEnum("webhook_status", [
-  "collecting", // debounce window open, still accepting changes
-  "pending", // ready to deliver / waiting for retry
-  "sent",
-  "failed", // gave up after max attempts
-]);
+export const changeActionEnum = pgEnum("change_action", ["create", "update", "delete"]);
 
 export type FieldDiff = Record<string, { from: unknown; to: unknown }>;
 
@@ -46,12 +13,10 @@ export const changeLog = pgTable(
     actor: actorEnum().notNull(),
     entity: text().notNull(),
     entityId: uuid(),
-    // local day the change belongs to (null for global entities like habits/devices)
+    // local day the change belongs to (null for global entities)
     date: date({ mode: "string" }),
     action: changeActionEnum().notNull(),
     diff: jsonb().$type<{ before?: unknown; after?: unknown; fields?: FieldDiff }>(),
-    // true when the agent used `force` / `?mode=force`
-    forced: boolean().notNull().default(false),
     requestId: text().notNull(),
     at: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -62,34 +27,7 @@ export const changeLog = pgTable(
   ],
 );
 
-/** Outbound webhook batches to Agenbot (user changes only, debounced per day). */
-export const webhookOutbox = pgTable(
-  "webhook_outbox",
-  {
-    id: id(), // doubles as batchId and Idempotency-Key
-    date: date({ mode: "string" }).notNull(),
-    payload: jsonb().notNull(),
-    status: webhookStatusEnum().notNull().default("collecting"),
-    attempts: smallint().notNull().default(0),
-    nextAttemptAt: timestamp({ withTimezone: true }).notNull(),
-    lastAttemptAt: timestamp({ withTimezone: true }),
-    lastResponseStatus: smallint(),
-    lastError: text(),
-    sentAt: timestamp({ withTimezone: true }),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex("webhook_outbox_one_collecting_per_day_uq")
-      .on(t.date)
-      .where(sql`${t.status} = 'collecting'`),
-    index("webhook_outbox_due_idx")
-      .on(t.nextAttemptAt)
-      .where(sql`${t.status} IN ('collecting', 'pending')`),
-  ],
-);
-
-/** Idempotency-Key store (TTL 48 h, purged by the close-day job). */
+/** Idempotency-Key store (TTL 48 h). */
 export const idempotencyKey = pgTable(
   "idempotency_key",
   {
@@ -110,8 +48,3 @@ export const idempotencyKey = pgTable(
   ],
 );
 
-/** Dedup for scheduled pushes (call reminders, sleep reminder). `key` e.g. `remind:<blockId>:<start>`, `sleep:<date>`. */
-export const notificationLog = pgTable("notification_log", {
-  key: text().primaryKey(),
-  sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-});

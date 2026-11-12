@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createResetCode } from "@/server/auth/auth";
 import { getDb, closeDb } from "@/server/db/client";
 import { authLockout } from "@/server/db/schema";
-import { agent, anon, client, PIN, resetAll, setNow, setupUser } from "../helpers/api";
+import { anon, client, PIN, resetAll, setNow, setupUser } from "../helpers/api";
 import { SETUP_CODE } from "../helpers/env";
 
 beforeEach(() => resetAll());
@@ -27,14 +27,11 @@ describe("first-run setup", () => {
 });
 
 describe("who can call what", () => {
-  it("agent (Bearer), user (cookie), none", async () => {
+  it("user (cookie) or nobody; API tokens arrive in phase 3", async () => {
     const { user } = await setupUser();
-    expect((await anon().get("/api/habits")).status).toBe(401);
-    expect((await agent().get("/api/habits")).status).toBe(200);
-    expect((await user.get("/api/habits")).status).toBe(200);
-    expect((await client("anon").request("GET", "/api/habits", { headers: { authorization: "Bearer wrong" } })).status).toBe(401);
-    expect((await agent().get("/api/auth/devices")).status).toBe(403); // user only
-    expect((await user.put("/api/days/2026-10-19", { options: [{ label: "A", title: "x", blocks: [] }] })).status).toBe(403); // agent only
+    expect((await anon().get("/api/auth/devices")).status).toBe(401);
+    expect((await user.get("/api/auth/devices")).status).toBe(200);
+    expect((await client("anon").request("GET", "/api/auth/devices", { headers: { authorization: "Bearer wrong" } })).status).toBe(401);
     expect((await anon().get("/api/health")).status).toBe(200);
     expect((await anon().get("/api/openapi.json")).status).toBe(200);
   });
@@ -77,7 +74,7 @@ describe("PIN", () => {
     const phone = anon();
     await phone.get("/api/auth/session");
     expect((await phone.post("/api/auth/unlock", { pin: PIN })).status).toBe(200);
-    expect((await user.get("/api/habits")).status).toBe(200);
+    expect((await user.get("/api/auth/devices")).status).toBe(200);
     for (let n = 0; n < 4; n++) { // my login above reset the global count
       const b = anon();
       await b.get("/api/auth/session");
@@ -98,20 +95,20 @@ describe("PIN", () => {
     const nb = devices.find((d: { name: string }) => d.name === "Notebook");
     expect((await user.patch(`/api/auth/devices/${nb.id}`, { name: "Notebook del local" })).body.name).toBe("Notebook del local");
     expect((await user.del(`/api/auth/devices/${nb.id}`)).status).toBe(204);
-    expect((await laptop.get("/api/habits")).status).toBe(401);
+    expect((await laptop.get("/api/auth/devices")).status).toBe(401);
   });
 
   it("re-auth after 7 days unused; sliding expiry; 90 days → unknown device", async () => {
     const { user } = await setupUser();
     setNow("2026-10-26T06:00:00-03:00"); // 6 days 23 h later
-    expect((await user.get("/api/habits")).status).toBe(200);
+    expect((await user.get("/api/auth/devices")).status).toBe(200);
     setNow("2026-11-02T07:00:00-03:00"); // > 7 days after the last request
-    const locked = await user.get("/api/habits");
+    const locked = await user.get("/api/auth/devices");
     expect(locked.status).toBe(401);
     expect(locked.body.code).toBe("device_locked");
     expect((await user.get("/api/auth/session")).body.state).toBe("locked");
     expect((await user.post("/api/auth/unlock", { pin: PIN })).status).toBe(200);
-    expect((await user.get("/api/habits")).status).toBe(200);
+    expect((await user.get("/api/auth/devices")).status).toBe(200);
     expect((await user.get("/api/auth/devices")).body.devices).toHaveLength(1); // same device re-used
     setNow("2027-02-15T07:00:00-03:00");
     expect((await user.get("/api/auth/session")).body.state).toBe("unauthenticated");
@@ -123,7 +120,7 @@ describe("PIN", () => {
     expect((await user.post("/api/auth/pin", { currentPin: PIN, newPin: "730154" })).status).toBe(204);
     expect((await anon().post("/api/auth/unlock", { pin: "730154" })).status).toBe(200);
     expect((await user.post("/api/auth/logout")).status).toBe(204);
-    expect((await user.get("/api/habits")).status).toBe(401);
+    expect((await user.get("/api/auth/devices")).status).toBe(401);
   });
 });
 

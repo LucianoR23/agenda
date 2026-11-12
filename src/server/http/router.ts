@@ -2,16 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { ZodType } from "zod";
 import { routes } from "@/contract/openapi";
 import type { RouteDef } from "@/contract/route-def";
-import { randomToken, safeEqual, sha256 } from "../auth/crypto";
+import { randomToken } from "../auth/crypto";
 import { DEVICE_KEY_COOKIE, parseCookies, SESSION_COOKIE, setCookie } from "../auth/cookies";
 import { resolveSession, touchDevice } from "../auth/session";
 import { getDb } from "../db/client";
-import { env } from "../env";
 import { now as clockNow } from "../time";
 import type { Actor, Ctx, Handler, HandlerResult } from "./context";
 import { ApiError, validation } from "./errors";
 import { complete, release, reserve } from "./idempotency";
-import { AGENT_LIMIT_PER_MINUTE, hit } from "./ratelimit";
 
 type Compiled = { def: RouteDef; regex: RegExp; keys: string[]; literals: number };
 
@@ -24,7 +22,7 @@ const compiled: Compiled[] = routes
     });
     return { def, regex: new RegExp(`^${pattern}$`), keys, literals: def.path.split("/").filter((s) => s && !s.startsWith("{")).length };
   })
-  // literal segments beat parameters: /blocks/reorder before /blocks/{id}
+  // literal segments beat parameters: /items/reorder before /items/{id}
   .sort((a, b) => b.literals - a.literals);
 
 let handlers: Record<string, Handler> = {};
@@ -103,21 +101,12 @@ export async function handle(req: Request): Promise<Response> {
   try {
     const { route, params } = match(method, url.pathname);
 
-    // --- authentication ---
-    const authz = req.headers.get("authorization");
+    // --- authentication (session cookie only; named API tokens arrive in phase 3) ---
     let caller: Ctx["caller"] = "anonymous";
     const session = await resolveSession(db, cookies[SESSION_COOKIE], now);
 
-    if (route.access === "internal") {
-      const token = req.headers.get("x-internal-token") ?? "";
-      if (!safeEqual(token, env().INTERNAL_TOKEN)) throw new ApiError(401, "unauthorized", "Missing or invalid X-Internal-Token.");
-      caller = "internal";
-    } else if (route.access !== "public" && route.access !== "preauth") {
-      if (authz) {
-        const m = /^Bearer\s+(.+)$/i.exec(authz);
-        if (!m || !safeEqual(sha256(m[1].trim()), env().AGENT_TOKEN_HASH)) throw new ApiError(401, "unauthorized", "Invalid agent token.");
-        caller = "agent";
-      } else if (session && !session.locked) {
+    if (route.access === "user") {
+      if (session && !session.locked) {
         caller = "user";
         await touchDevice(db, session.device, now);
       } else if (session?.locked) {
@@ -125,13 +114,6 @@ export async function handle(req: Request): Promise<Response> {
       } else {
         throw new ApiError(401, "unauthorized", "Authentication required.");
       }
-      if (route.access === "agent" && caller !== "agent") throw new ApiError(403, "forbidden", "Agent only.");
-      if (route.access === "user" && caller !== "user") throw new ApiError(403, "forbidden", "User only.");
-    }
-
-    if (caller === "agent") {
-      const wait = hit("agent", AGENT_LIMIT_PER_MINUTE, now.getTime());
-      if (wait !== null) throw new ApiError(429, "rate_limited", "Agent rate limit: 120 requests per minute.", { retryAfterSeconds: wait }, { "Retry-After": String(wait) });
     }
 
     let deviceKey = cookies[DEVICE_KEY_COOKIE];
@@ -162,7 +144,7 @@ export async function handle(req: Request): Promise<Response> {
 
     // --- idempotency (outside the request transaction so 4xx responses are stored too) ---
     const key = req.headers.get("idempotency-key");
-    if (key && IDEMPOTENT_METHODS.has(method) && (caller === "agent" || caller === "user")) {
+    if (key && IDEMPOTENT_METHODS.has(method) && caller === "user") {
       const r = await reserve(db, caller, key, method, url.pathname + url.search, rawBody, now);
       if (r && "replay" in r) return respond(r.replay.status, r.replay.body ?? undefined, requestId, { "Idempotent-Replayed": "true" });
       idem = { actor: caller, key };

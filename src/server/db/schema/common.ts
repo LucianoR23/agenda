@@ -25,8 +25,3 @@ export const mutable = () => ({
   updatedBy: actorEnum().notNull(),
 });
 
-/**
- * Block times: local `HH:mm` on the block's day, 00:00–29:59. 24:00–29:59 means after midnight
- * (next calendar day, e.g. sleep pushed to `24:15` by "Me atrasé"); the block still belongs to the day it starts.
- */
-export const BLOCK_TIME_REGEX = "^([01][0-9]|2[0-9]):[0-5][0-9]$";

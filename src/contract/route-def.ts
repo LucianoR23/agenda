@@ -1,9 +1,9 @@
 import type { ZodType } from "zod";
 
-/** Who may call a route. Drives the OpenAPI `security`, `x-actors` and the automatic 401/403/429 responses. */
-export type Access = "agent+user" | "user" | "agent" | "public" | "preauth" | "internal";
+/** Who may call a route. Drives the OpenAPI `security`, `x-actors` and the automatic 401 responses. */
+export type Access = "user" | "public" | "preauth";
 
-export type ExampleActor = "agent" | "user" | "anonymous" | "internal";
+export type ExampleActor = "user" | "anonymous";
 
 /** A paired request/response example. Validated against the route's schemas at generation time. */
 export interface Exchange {

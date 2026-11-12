@@ -6,7 +6,6 @@
     "start": "node server.js",
     "db:migrate": "node cli/migrate.mjs",
     "auth:reset-pin": "node cli/auth-reset-pin.mjs",
-    "auth:recovery-codes": "node cli/auth-recovery-codes.mjs",
-    "agent:token": "node cli/agent-token.mjs"
+    "auth:recovery-codes": "node cli/auth-recovery-codes.mjs"
   }
 }

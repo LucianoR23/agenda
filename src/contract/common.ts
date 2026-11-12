@@ -27,28 +27,14 @@ export const LocalTime = z
     example: "09:30",
   });
 
-export const BlockTime = z
-  .string()
-  .regex(/^([01][0-9]|2[0-9]):[0-5][0-9]$/, "Expected HH:mm (00:00–29:59)")
-  .openapi("BlockTime", {
-    description:
-      "Block time on the block's day, `HH:mm`, 00:00–29:59. `24:00`–`29:59` = after midnight (shown as `00:15 (+1)`); the block still belongs to the day it starts. For `end`, a value lower than `start` also means the next day (sleep `23:30`→`07:00`).",
-    example: "24:15",
-  });
-
 export const Timestamp = z.iso.datetime({ offset: true }).openapi("Timestamp", {
-  description: "ISO 8601 timestamp with offset (the API always answers in -03:00).",
+  description: "ISO 8601 timestamp with offset .",
   example: "2026-10-19T07:00:12.345-03:00",
 });
 
 export const Uuid = z.uuid().openapi("Uuid", { example: "019a0a6e-5c3e-7b2a-9d41-3f0c8a1b2c3d" });
 
 export const Actor = z.enum(["agent", "user", "system"]).openapi("Actor");
-
-export const OptionLabel = z
-  .string()
-  .regex(/^[A-Z]$/)
-  .openapi("OptionLabel", { description: "Plan option label, `A`–`Z`.", example: "A" });
 
 /** Optimistic-concurrency field accepted in write bodies as an alternative to `If-Match`. */
 export const ExpectedVersion = z.int().min(1).optional().openapi({
@@ -69,22 +55,14 @@ export const ErrorCode = z
     "device_locked",
     "forbidden",
     "not_found",
-    "day_not_found",
     "method_not_allowed",
     "version_conflict",
-    "calendar_owned",
-    "user_edit_conflict",
-    "day_closed",
-    "invalid_transition",
-    "shift_out_of_range",
     "idempotency_key_reuse",
     "idempotency_in_progress",
     "rate_limited",
     "locked_out",
     "invalid_credentials",
     "setup_completed",
-    "adjustment_resolved",
-    "adjustment_invalid",
     "internal_error",
     "service_unavailable",
   ])
@@ -107,7 +85,7 @@ export const Problem = z
       .optional()
       .openapi({
         description:
-          "On `version_conflict` / `user_edit_conflict` / `calendar_owned`: the current server state of the resource.",
+          "On `version_conflict`: the current server state of the resource.",
       }),
     retryAfterSeconds: z.int().optional().openapi({ description: "On `rate_limited` / `locked_out`." }),
     remainingAttempts: z.int().optional().openapi({ description: "On `invalid_credentials` (PIN / codes)." }),

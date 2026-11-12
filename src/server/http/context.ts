@@ -1,14 +1,14 @@
 import type { DbLike } from "../db/client";
 import type { DeviceRow } from "../domain/rows";
 
-export type Actor = "agent" | "user";
+export type Actor = "user";
 
 export interface Ctx {
   requestId: string;
   req: Request;
   now: Date;
-  /** Who is calling. `anonymous` on public/pre-auth routes, `internal` for the cron token. */
-  caller: Actor | "anonymous" | "internal";
+  /** Who is calling. `anonymous` on public/pre-auth routes. Named API tokens arrive in phase 3. */
+  caller: Actor | "anonymous";
   /** Device of a valid session cookie, even if locked (pre-auth routes need it). */
   sessionDevice: DeviceRow | null;
   sessionLocked: boolean;
@@ -25,9 +25,8 @@ export interface Ctx {
   afterCommit: Array<() => Promise<void>>;
 }
 
-/** Actor for `updated_by` / ChangeLog: agent, user, or system (cron, lazy close). */
-export const writer = (ctx: Pick<Ctx, "caller">): "agent" | "user" | "system" =>
-  ctx.caller === "agent" ? "agent" : ctx.caller === "user" ? "user" : "system";
+/** Actor for `updated_by` / ChangeLog: user, or system (background jobs). */
+export const writer = (ctx: Pick<Ctx, "caller">): "user" | "system" => (ctx.caller === "user" ? "user" : "system");
 
 export interface HandlerResult {
   status: number;

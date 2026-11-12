@@ -4,8 +4,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
-    include: ["tests/unit/**/*.test.ts", "tests/api/**/*.test.ts"],
-    globalSetup: ["tests/helpers/global-setup.ts"],
+    // API tests (tests/api) need the schema; they come back in phase 2 with migration 0000 and the
+    // `_test` database guard (phase 1). Until then only DB-free unit tests run.
+    include: ["tests/unit/**/*.test.ts"],
     setupFiles: ["tests/helpers/env.ts"],
     // one shared test database: run files one after another
     fileParallelism: false,

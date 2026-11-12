@@ -1,7 +1,6 @@
-/** In-memory sliding window (single container, D26). */
+/** In-memory sliding window (single container). Rate limits for API tokens are wired in phase 8. */
 const windows = new Map<string, number[]>();
 
-export const AGENT_LIMIT_PER_MINUTE = 120;
 
 /** Returns null when allowed, or seconds to wait. */
 export function hit(key: string, limit: number, nowMs: number): number | null {
