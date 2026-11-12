@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Agenda",
-  description: "Tu día, cargado por Agenbot.",
+  description: "Tareas, recordatorios y eventos, con Sunday.",
   appleWebApp: { capable: true, title: "Agenda", statusBarStyle: "black-translucent" },
   icons: {
     icon: [

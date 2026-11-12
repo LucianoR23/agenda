@@ -14,7 +14,7 @@ const BANNER: Record<BannerKind, { box: string; icon: IconName; iconColor: strin
   conflict: { box: "bg-danger-soft border border-danger", icon: "sync_problem", iconColor: "text-danger" },
 };
 
-/** Banners: info · Agenbot proposal · offline · version conflict. */
+/** Banners: info · proposal · offline · version conflict. */
 export function Banner({
   kind,
   title,

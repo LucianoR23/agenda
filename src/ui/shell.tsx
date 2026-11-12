@@ -4,7 +4,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { onAuthProblem } from "@/client/api";
-import { hydrateFromIdb, makeQueryClient, useAdjustments, useSession } from "@/client/queries";
+import { hydrateFromIdb, makeQueryClient, useSession } from "@/client/queries";
 import { onRejected, resolveConflict, startSync, useSync } from "@/client/sync";
 import type { SessionState } from "@/client/types";
 import { Banner } from "./components/feedback";
@@ -13,10 +13,8 @@ import { BottomSheet, ToastHost, useToast } from "./components/overlay";
 import { Sidebar, TabBar, tabFor } from "./components/navigation";
 import { TimelineSkeleton } from "./components/surfaces";
 import { SetupScreen, UnlockScreen } from "./screens/auth";
-import { readyCount } from "./screens/today/adjustments";
 import { applyTheme, readTheme } from "./theme";
 import { registerServiceWorker } from "./pwa";
-import { todayART } from "./time";
 
 /** Client root: query cache hydrated from IndexedDB, sync engine, auth gate, navigation. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -79,11 +77,10 @@ function Gate({ children }: { children: ReactNode }) {
 function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const active = tabFor(pathname);
-  const badges = { today: readyCount(useAdjustments(todayART()).data?.adjustments) };
   return (
     <div className="flex min-h-dvh">
       <div className="sticky top-0 hidden h-dvh md:flex">
-        <Sidebar active={active} badges={badges} />
+        <Sidebar active={active} />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-4 px-4 pt-[max(16px,env(safe-area-inset-top))] pb-[calc(96px+env(safe-area-inset-bottom))] md:max-w-[720px] md:pb-10">
@@ -91,7 +88,7 @@ function Frame({ children }: { children: ReactNode }) {
           {children}
         </main>
         <div className="fixed inset-x-0 bottom-0 z-30 md:hidden">
-          <TabBar active={active} badges={badges} />
+          <TabBar active={active} />
         </div>
       </div>
       <Conflicts />
@@ -112,7 +109,7 @@ function SyncBanners() {
   );
 }
 
-const FIELD: Record<string, string> = { start: "Inicio", end: "Fin", status: "Estado", outcome: "Resultado", note: "Nota", title: "Título", done: "Hecho" };
+const FIELD: Record<string, string> = { title: "Título", done: "Hecho", note: "Nota" };
 
 /** Conflict sheet: never overwrite silently (mine vs server). */
 function Conflicts() {
@@ -125,12 +122,8 @@ function Conflicts() {
   const field = Object.keys(body).find((k) => k !== "version" && k !== "force") ?? "";
   const why =
     c.conflict?.code === "version_conflict"
-      ? "Cambió en el servidor mientras estabas sin conexión (Agenbot o otro dispositivo)."
-      : c.conflict?.code === "calendar_owned"
-        ? "Este horario lo maneja Google Calendar."
-        : c.conflict?.code === "day_closed"
-          ? "El día ya está cerrado."
-          : "Lo cambió otra parte antes que vos.";
+      ? "Cambió en el servidor mientras estabas sin conexión (Sunday u otro dispositivo)."
+      : "Lo cambió otra parte antes que vos.";
   const fmt = (v: unknown) => (v === null || v === undefined ? "—" : String(v));
   return (
     <BottomSheet open onClose={() => void resolveConflict(qc, c.id, "server")} label="Conflicto">

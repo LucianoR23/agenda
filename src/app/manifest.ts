@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Agenda",
     short_name: "Agenda",
-    description: "Tu día, cargado por Agenbot.",
+    description: "Tareas, recordatorios y eventos, con Sunday.",
     id: "/",
     start_url: "/",
     scope: "/",

@@ -17,13 +17,14 @@ const b64ToBytes = (b64: string) => {
 export const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
 /** Asks permission, subscribes and registers the subscription with the server. */
-export async function enablePush(vapidPublicKey: string, prefs: { callReminders: boolean; sleepReminders: boolean }) {
+/** Per-device push preferences (v1 toggles) are dropped; phase 5 defines reminder delivery. */
+export async function enablePush(vapidPublicKey: string) {
   if (!pushSupported()) throw new Error("Este navegador no soporta notificaciones push.");
   if ((await Notification.requestPermission()) !== "granted") throw new Error("Permiso de notificaciones denegado.");
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(vapidPublicKey) }));
   const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-  await api("POST", "/api/push/subscribe", { endpoint: json.endpoint, keys: json.keys, ...prefs });
+  await api("POST", "/api/push/subscribe", { endpoint: json.endpoint, keys: json.keys });
 }
 
 export async function disablePush() {
