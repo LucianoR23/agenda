@@ -3,13 +3,15 @@
 One phase at a time: plan → Lemy approves → implement → gate (`typecheck`, `check`, `test`, `build`) → tick boxes → summary. ⟶ sunday marks dependencies on the sunday repo.
 
 ## Before anything (Lemy)
-- [ ] Agenbot/Grok switched off (no more calls to the old API/webhook)
-- [ ] Old agenda app and old Postgres deleted in Coolify (or scheduled to be)
+- [x] Agenbot/Grok switched off (no more calls to the old API/webhook) — *not switched off in Grok (account is paywalled); effectively dead because the old app and DB it called no longer exist.*
+- [x] Old agenda app and old Postgres deleted in Coolify (or scheduled to be)
 
 ## Phase 0 — Branch and cleanup
-- [ ] Tag `v1` pushed; branch `v2` created; v2 docs committed
-- [ ] Old domain code, old docs, old migrations, ESLint removed (see `00`)
-- [ ] App still builds with a placeholder home (domain stubs OK)
+- [x] Tag `v1` pushed; branch `v2` created; v2 docs committed
+- [x] Old domain code, old docs, old migrations, ESLint removed (see `00`)
+- [x] App still builds with a placeholder home (domain stubs OK)
+
+> **Decision (Phase 0):** v1 habits, sleep and tasks were entangled with the day/block domain (sleep derived from the planned sleep block, tasks linked to blocks, `HH:mm` text times), so they were removed together with it instead of being stubbed. They come back rewritten against the new schema: **tasks in Phase 4**, **habits/streaks and sleep in Phase 7**. Port from tag `v1` and `docs/agenda-audit.md`. `streaks.ts` (pure logic) is kept. Hoy, Tareas, Historial and Métricas are placeholders until then. Agenbot bearer, internal token, webhook outbox and export endpoint are gone. API tests (`tests/api`) are kept but excluded from `pnpm test` until phase 2 (no migrations yet); e2e specs were v1-only and were deleted.
 
 ## Phase 1 — Tooling and foundations
 - [ ] Dependencies updated; Biome configured; React Compiler on; TS strict flags
@@ -41,7 +43,7 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 - [ ] Overview merges everything
 
 ## Phase 7 — Habits, sleep, review, metrics
-- [ ] Habits/streaks and sleep ported to new schema
+- [ ] Habits/streaks and sleep ported to new schema (removed in Phase 0; port from tag `v1`, reuse `streaks.ts`)
 - [ ] Cierre del día; Historial y métricas
 
 ## Phase 8 — Sunday API
