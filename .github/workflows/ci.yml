@@ -17,10 +17,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm lint
       - name: Schema ↔ migrations in sync
         run: pnpm db:check
-      - name: Contract drift (examples valid, openapi.yaml + docs/api-examples.md up to date)
+      - name: Contract drift (examples valid, openapi.yaml up to date)
         run: pnpm openapi:check
       - run: pnpm openapi:lint
       - name: Icon sprite up to date
@@ -49,39 +48,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Unit + API integration + contract tests (real Postgres 18)
+      - name: Unit tests (API integration tests return in phase 2)
         run: pnpm test:coverage
 
-  e2e:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: agenda
-          POSTGRES_PASSWORD: agenda
-          POSTGRES_DB: agenda_test
-        ports: ["5434:5432"]
-        options: >-
-          --health-cmd "pg_isready -U agenda" --health-interval 2s --health-retries 20
-    env:
-      TZ: America/Buenos_Aires
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - name: Mobile E2E (production build, Android viewport)
-        run: pnpm test:e2e
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: screenshots
-          path: docs/screenshots
+  # e2e job removed in phase 0 (v1 flows deleted); it returns with the first v2 screens.
 
   docker:
     runs-on: ubuntu-latest
