@@ -89,10 +89,6 @@ export const PushSubscribeInput = z
   .strictObject({
     endpoint: z.url(),
     keys: z.strictObject({ p256dh: z.string().min(1), auth: z.string().min(1) }),
-    callReminders: z.boolean().optional().openapi({ description: "10-minute reminder before each call block." }),
-    sleepReminders: z.boolean().optional().openapi({
-      description: "Morning reminder (SLEEP_REMINDER_TIME, default 10:00) when last night's bed or wake time is missing.",
-    }),
   })
   .openapi("PushSubscribeInput");
 
@@ -103,8 +99,6 @@ export const PushSubscription = z
     id: Uuid,
     deviceId: Uuid,
     endpoint: z.string(),
-    callReminders: z.boolean(),
-    sleepReminders: z.boolean(),
     createdAt: Timestamp,
   })
   .openapi("PushSubscription");

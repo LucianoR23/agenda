@@ -35,19 +35,14 @@ export const handlers: Record<string, Handler> = {
 
   // ---------- push ----------
   pushSubscribe: async (ctx, { body }) => {
-    const values = {
-      deviceId: requireDevice(ctx).id,
-      endpoint: body.endpoint,
-      p256dh: body.keys.p256dh,
-      auth: body.keys.auth,
-      ...(body.callReminders !== undefined ? { callReminders: body.callReminders } : {}),
-      ...(body.sleepReminders !== undefined ? { sleepReminders: body.sleepReminders } : {}),
-    };
+    const values = { deviceId: requireDevice(ctx).id, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth };
+    // subscribing again re-enables an endpoint that was disabled after failures
+    const reset = { failureCount: 0, lastError: null, disabledAt: null };
     const row = one(
       await ctx.db
         .insert(pushSubscription)
         .values(values)
-        .onConflictDoUpdate({ target: pushSubscription.endpoint, set: values })
+        .onConflictDoUpdate({ target: pushSubscription.endpoint, set: { ...values, ...reset } })
         .returning(),
       "push subscription upsert",
     );
@@ -55,8 +50,6 @@ export const handlers: Record<string, Handler> = {
       id: row.id,
       deviceId: row.deviceId,
       endpoint: row.endpoint,
-      callReminders: row.callReminders,
-      sleepReminders: row.sleepReminders,
       createdAt: formatInstant(row.createdAt, DEFAULT_TIMEZONE),
     });
   },

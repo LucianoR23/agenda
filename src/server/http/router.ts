@@ -8,7 +8,7 @@ import { resolveSession, touchDevice } from "../auth/session";
 import { getDb } from "../db/client";
 import { clock, toDate } from "../domain/time";
 import { log } from "../log";
-import type { Actor, Ctx, Handler, HandlerResult } from "./context";
+import type { Ctx, Handler, HandlerResult } from "./context";
 import { ApiError, validation } from "./errors";
 import { complete, release, reserve } from "./idempotency";
 
@@ -97,7 +97,7 @@ export async function handle(req: Request): Promise<Response> {
   const db = getDb();
   const cookies = parseCookies(req.headers.get("cookie"));
   const setCookies: string[] = [];
-  let idem: { actor: Actor; key: string } | null = null;
+  let idem: { scope: string; key: string } | null = null;
 
   try {
     const { route, params } = match(method, url.pathname);
@@ -146,9 +146,10 @@ export async function handle(req: Request): Promise<Response> {
     // --- idempotency (outside the request transaction so 4xx responses are stored too) ---
     const key = req.headers.get("idempotency-key");
     if (key && IDEMPOTENT_METHODS.has(method) && caller === "user") {
-      const r = await reserve(db, caller, key, method, url.pathname + url.search, rawBody, now);
+      const scope = "session"; // API tokens (phase 3) use `token:<id>`
+      const r = await reserve(db, scope, key, method, url.pathname + url.search, rawBody, now);
       if (r && "replay" in r) return respond(r.replay.status, r.replay.body ?? undefined, requestId, { "Idempotent-Replayed": "true" });
-      idem = { actor: caller, key };
+      idem = { scope, key };
     }
 
     const handler = handlers[route.operationId];
@@ -175,15 +176,15 @@ export async function handle(req: Request): Promise<Response> {
       return handler(ctx, { params: parsedParams, query: parsedQuery, body: parsedBody });
     });
 
-    if (idem) await complete(db, idem.actor, idem.key, result.status, result.body ?? null);
+    if (idem) await complete(db, idem.scope, idem.key, result.status, result.body ?? null);
     for (const fn of afterCommit) await fn().catch((err) => log.error("afterCommit failed", { err, requestId }));
     return respond(result.status, result.body, requestId, result.headers, setCookies);
   } catch (err) {
     const e = toApiError(err);
     const body = e.toBody(requestId);
     if (idem) {
-      if (e.status >= 500) await release(db, idem.actor, idem.key).catch(() => {});
-      else await complete(db, idem.actor, idem.key, e.status, body).catch(() => {});
+      if (e.status >= 500) await release(db, idem.scope, idem.key).catch(() => {});
+      else await complete(db, idem.scope, idem.key, e.status, body).catch(() => {});
     }
     return respond(e.status, body, requestId, e.headers, setCookies);
   }

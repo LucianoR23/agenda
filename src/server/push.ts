@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { sendNotification } from "web-push";
 import type { DbLike } from "./db/client";
 import { pushSubscription } from "./db/schema";
@@ -37,11 +37,10 @@ export const setPushSender = (s: PushSender | null) => {
   sender = s ?? webPushSender;
 };
 
-/** Sends to every subscription (optionally filtered by a per-device toggle). Expired subscriptions are removed. */
-export async function sendPush(db: DbLike, msg: PushMessage, only?: "callReminders" | "sleepReminders") {
-  const subs = await db.select().from(pushSubscription);
+/** Sends to every enabled subscription. Expired ones (404/410) are removed. Phase 5 adds failure counting/disable. */
+export async function sendPush(db: DbLike, msg: PushMessage) {
+  const subs = await db.select().from(pushSubscription).where(isNull(pushSubscription.disabledAt));
   for (const sub of subs) {
-    if (only && !sub[only]) continue;
     const { gone } = await sender(sub, msg);
     if (gone) await db.delete(pushSubscription).where(eq(pushSubscription.id, sub.id));
     else await db.update(pushSubscription).set({ lastSuccessAt: new Date(), failureCount: sql`0` }).where(eq(pushSubscription.id, sub.id));

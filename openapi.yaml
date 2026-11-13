@@ -225,12 +225,6 @@ components:
             - p256dh
             - auth
           additionalProperties: false
-        callReminders:
-          type: boolean
-          description: 10-minute reminder before each call block.
-        sleepReminders:
-          type: boolean
-          description: Morning reminder (SLEEP_REMINDER_TIME, default 10:00) when last night's bed or wake time is missing.
       required:
         - endpoint
         - keys
@@ -244,18 +238,12 @@ components:
           $ref: "#/components/schemas/Uuid"
         endpoint:
           type: string
-        callReminders:
-          type: boolean
-        sleepReminders:
-          type: boolean
         createdAt:
           $ref: "#/components/schemas/Timestamp"
       required:
         - id
         - deviceId
         - endpoint
-        - callReminders
-        - sleepReminders
         - createdAt
       additionalProperties: false
     PushUnsubscribeInput:
@@ -1538,8 +1526,6 @@ paths:
                   keys:
                     p256dh: BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM
                     auth: tBHItJI5svbpez7KI4CCXg
-                  callReminders: true
-                  sleepReminders: true
             schema:
               $ref: "#/components/schemas/PushSubscribeInput"
       responses:
@@ -1554,8 +1540,6 @@ paths:
                     id: 019a0a6e-1c00-7000-8000-000000000334
                     deviceId: 019a0a6e-1c00-7000-8000-000000000320
                     endpoint: https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b
-                    callReminders: true
-                    sleepReminders: true
                     createdAt: 2026-10-19T07:41:30.000-03:00
               schema:
                 $ref: "#/components/schemas/PushSubscription"
