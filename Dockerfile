@@ -2,18 +2,22 @@
 # Agenda — production image for linux/arm64 (Oracle Cloud Ampere). Also builds on amd64.
 #   docker buildx build --platform linux/arm64 -t agenda .
 ARG NODE_VERSION=26-alpine
+# Node 25+ no longer ships corepack: pnpm is installed with npm, pinned to package.json's packageManager.
+ARG PNPM_VERSION=11.17.0
 
 # ---------- deps ----------
 FROM node:${NODE_VERSION} AS deps
+ARG PNPM_VERSION
 WORKDIR /app
-RUN corepack enable
+RUN npm install -g pnpm@${PNPM_VERSION} --no-fund --no-audit
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 
 # ---------- build ----------
 FROM node:${NODE_VERSION} AS build
+ARG PNPM_VERSION
 WORKDIR /app
-RUN corepack enable
+RUN npm install -g pnpm@${PNPM_VERSION} --no-fund --no-audit
 ARG APP_VERSION=dev
 ENV NEXT_TELEMETRY_DISABLED=1 APP_VERSION=${APP_VERSION}
 COPY --from=deps /app/node_modules ./node_modules
@@ -22,13 +26,13 @@ RUN pnpm build && node scripts/build-cli.mjs
 
 # ---------- runtime ----------
 FROM node:${NODE_VERSION} AS runtime
+ARG PNPM_VERSION
 WORKDIR /app
 ARG APP_VERSION=dev
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 TZ=America/Buenos_Aires APP_VERSION=${APP_VERSION} \
-    COREPACK_HOME=/opt/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# pnpm available in the container terminal (`pnpm auth:reset-pin`), prepared at build time (no network at runtime)
-RUN apk add --no-cache tzdata && corepack enable && corepack prepare pnpm@11.17.0 --activate \
-  && chmod -R a+rX /opt/corepack && addgroup -S agenda && adduser -S agenda -G agenda
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 TZ=America/Buenos_Aires APP_VERSION=${APP_VERSION}
+# pnpm available in the container terminal (`pnpm auth:reset-pin`), installed at build time (no network at runtime)
+RUN apk add --no-cache tzdata && npm install -g pnpm@${PNPM_VERSION} --no-fund --no-audit && npm cache clean --force \
+  && addgroup -S agenda && adduser -S agenda -G agenda
 
 COPY --from=build --chown=agenda:agenda /app/.next/standalone ./
 COPY --from=build --chown=agenda:agenda /app/.next/static ./.next/static

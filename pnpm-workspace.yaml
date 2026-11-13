@@ -2,3 +2,10 @@ allowBuilds:
   esbuild: true
   sharp: false
   unrs-resolver: false
+
+# Security floors for transitive dev dependencies (pnpm audit):
+# - fast-uri (via ajv): GHSA-333x-w4r6-6crp and related advisories, fixed in 3.1.9
+# - esbuild (via drizzle-kit > @esbuild-kit): dev-server request advisory, fixed in 0.24.3
+overrides:
+  fast-uri: ">=3.1.9"
+  "@esbuild-kit/core-utils>esbuild": "^0.25.0"
