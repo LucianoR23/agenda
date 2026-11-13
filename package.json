@@ -44,6 +44,7 @@
     "postgres": "^4.1.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "temporal-polyfill": "1.0.8",
     "uuidv7": "^1.2.1",
     "web-push": "^4.0.0",
     "yaml": "^2.9.1",

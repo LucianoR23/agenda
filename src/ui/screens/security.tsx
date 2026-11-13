@@ -10,8 +10,7 @@ import { Icon } from "../components/icon";
 import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
 import { RowGroup, SheetRow } from "../components/surfaces";
-import { localHHmm } from "../format";
-import { addDays, todayART } from "../time";
+import { seenLabel } from "../time";
 
 const field =
   "h-12 w-full rounded-md border border-border2 bg-surface px-3.5 font-mono text-body text-text outline-none focus:border-accent";
@@ -19,13 +18,7 @@ const PIN = /^\d{6}$/;
 
 type Sheet = { kind: "pin" } | { kind: "codes" } | { kind: "device"; device: Device } | null;
 
-/** "hoy 17:31", "ayer 09:10", "12/10 20:00". */
-function seen(iso: string) {
-  const day = iso.slice(0, 10);
-  const today = todayART();
-  const when = day === today ? "hoy" : day === addDays(today, -1) ? "ayer" : `${day.slice(8)}/${day.slice(5, 7)}`;
-  return `${when} ${localHHmm(iso)}`;
-}
+const seen = (iso: string) => seenLabel(iso);
 
 const err = (e: unknown) =>
   e instanceof ApiProblem

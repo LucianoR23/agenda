@@ -4,9 +4,9 @@ import * as auth from "../auth/auth";
 import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
+import { DEFAULT_TIMEZONE, formatInstant } from "../domain/time";
 import { env } from "../env";
 import { type Handler, json, requireDevice } from "../http/context";
-import { isoLocal } from "../time";
 
 let openApiFull: unknown = null;
 let openApiCompact: unknown = null;
@@ -24,7 +24,7 @@ export const handlers: Record<string, Handler> = {
       status: db === "ok" ? "ok" : "degraded",
       db,
       version: env().APP_VERSION,
-      time: isoLocal(ctx.now),
+      time: formatInstant(ctx.now, DEFAULT_TIMEZONE),
     });
   },
   openapi: async (_ctx, { query }) => {
@@ -57,7 +57,7 @@ export const handlers: Record<string, Handler> = {
       endpoint: row.endpoint,
       callReminders: row.callReminders,
       sleepReminders: row.sleepReminders,
-      createdAt: isoLocal(row.createdAt),
+      createdAt: formatInstant(row.createdAt, DEFAULT_TIMEZONE),
     });
   },
   pushUnsubscribe: async (ctx, { body }) => {

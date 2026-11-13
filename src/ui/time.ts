@@ -1,39 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { addDays, DEFAULT_TIMEZONE, dateOf, dayOfWeek, type IsoDate, systemClock, timeOf, today } from "@/server/domain/time";
 
-const TZ = "America/Buenos_Aires";
+/**
+ * Client twin of `server/domain/time.ts`: the same pure Temporal helpers plus UI labels. `ensureTemporal()` runs
+ * before the app renders (AppShell) and loads the polyfill only in browsers without native Temporal.
+ */
+export { addDays, DEFAULT_TIMEZONE, dateOf, type IsoDate, timeOf, today };
 
-const parts = (d: Date) =>
-  Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: TZ,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(d)
-      .map((p) => [p.type, p.value]),
-  );
+/** Installs temporal-polyfill when `Temporal` is missing (no-op, and no download, where it's native). */
+export async function ensureTemporal() {
+  if (typeof globalThis.Temporal === "undefined") await import("temporal-polyfill/global");
+}
 
-/** Local date `YYYY-MM-DD` in Buenos Aires, whatever the device time zone. */
-export const todayART = (d = new Date()) => {
-  const p = parts(d);
-  return `${p.year}-${p.month}-${p.day}`;
-};
+/** The user's timezone. A server setting from phase 2 on; until then the default. */
+export const userTimeZone = () => DEFAULT_TIMEZONE;
 
-/** Local `HH:mm` in Buenos Aires. */
-export const nowHHmm = (d = new Date()) => {
-  const p = parts(d);
-  return `${p.hour}:${p.minute}`;
-};
+/** Today in the user's timezone, whatever the device's own zone. */
+export const todayLocal = (tz = userTimeZone()) => today(tz, systemClock);
 
-export const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-
-const DOW = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const DOW = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const DOW_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
 const MONTHS = [
   "enero",
   "febrero",
@@ -49,28 +37,38 @@ const MONTHS = [
   "diciembre",
 ];
 
-/** "Lunes 19" / "Hoy · Lunes 19". */
-export function dayLabel(date: string, today = todayART()) {
-  const d = new Date(`${date}T12:00:00Z`);
-  const base = `${DOW[d.getUTCDay()]} ${d.getUTCDate()}`;
-  if (date === today) return `Hoy · ${base}`;
-  if (date === addDays(today, -1)) return `Ayer · ${base}`;
-  if (date === addDays(today, 1)) return `Mañana · ${base}`;
-  return base;
+/** "Lunes 19" / "Hoy · Lunes 19" / "Ayer · …" / "Mañana · …". */
+export function dayLabel(date: IsoDate, base: IsoDate = todayLocal()) {
+  const d = Temporal.PlainDate.from(date);
+  const label = `${DOW[d.dayOfWeek - 1]} ${d.day}`;
+  if (date === base) return `Hoy · ${label}`;
+  if (date === addDays(base, -1)) return `Ayer · ${label}`;
+  if (date === addDays(base, 1)) return `Mañana · ${label}`;
+  return label;
 }
 
-export const monthLabel = (date: string) => {
-  const d = new Date(`${date}T12:00:00Z`);
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+/** "noviembre 2026". */
+export const monthLabel = (date: IsoDate) => {
+  const d = Temporal.PlainDate.from(date);
+  return `${MONTHS[d.month - 1]} ${d.year}`;
 };
 
-export const shortDow = (date: string) => ["D", "L", "M", "M", "J", "V", "S"][new Date(`${date}T12:00:00Z`).getUTCDay()];
+/** "L", "M", … "D". */
+export const shortDow = (date: IsoDate) => DOW_SHORT[dayOfWeek(date) - 1] ?? "";
 
-/** Re-renders every `ms` with the current time (the "now" line, the 22:00 review card). */
+/** "hoy 17:31", "ayer 09:10", "12/10 20:00" for an ISO instant, in the user's timezone. */
+export function seenLabel(iso: string, tz = userTimeZone(), base: IsoDate = todayLocal(tz)) {
+  const at = Temporal.Instant.from(iso);
+  const day = dateOf(at, tz);
+  const when = day === base ? "hoy" : day === addDays(base, -1) ? "ayer" : `${day.slice(8)}/${day.slice(5, 7)}`;
+  return `${when} ${timeOf(at, tz)}`;
+}
+
+/** Re-renders every `ms` (live clocks, time-dependent cards). */
 export function useNow(ms = 60_000) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => Temporal.Now.instant());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), ms);
+    const t = setInterval(() => setNow(Temporal.Now.instant()), ms);
     return () => clearInterval(t);
   }, [ms]);
   return now;
@@ -83,10 +81,10 @@ export const haptic = (ms = 12) => {
   } catch {}
 };
 
-/** "hace 3 min", "hace 2 h". */
-export function ago(ts: number | null, now = Date.now()) {
+/** "hace 3 min", "hace 2 h" from epoch milliseconds. */
+export function ago(ts: number | null, nowMs = Temporal.Now.instant().epochMilliseconds) {
   if (!ts) return "nunca";
-  const s = Math.round((now - ts) / 1000);
+  const s = Math.round((nowMs - ts) / 1000);
   if (s < 60) return "recién";
   if (s < 3600) return `hace ${Math.round(s / 60)} min`;
   if (s < 86_400) return `hace ${Math.round(s / 3600)} h`;

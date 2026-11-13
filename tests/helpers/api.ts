@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { vi } from "vitest";
 import { handle } from "@/server/api";
 import { getDb } from "@/server/db/client";
+import { fixedClock, setClock } from "@/server/domain/time";
 import { resetEnv } from "@/server/env";
 import { resetRateLimits } from "@/server/http/ratelimit";
 import { type PushMessage, setPushSender } from "@/server/push";
@@ -103,7 +104,7 @@ export const pushes: PushMessage[] = [];
 /** Clean slate between tests: empty tables, real clock at a fixed instant, captured pushes. */
 export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date(at));
+  setNow(at);
   resetEnv();
   resetRateLimits();
   pushes.length = 0;
@@ -114,4 +115,9 @@ export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
   await getDb().execute(sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`));
 }
 
-export const setNow = (at: string) => vi.setSystemTime(new Date(at));
+/** Moves both clocks: the injectable one (Temporal, domain code) and Date (code not yet on Temporal). */
+export function setNow(at: string) {
+  const instant = Temporal.Instant.from(at);
+  setClock(fixedClock(instant));
+  vi.setSystemTime(instant.epochMilliseconds);
+}

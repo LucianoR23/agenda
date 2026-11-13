@@ -11,10 +11,14 @@ import type { DbLike } from "../db/client";
 import { one } from "../db/one";
 import { appUser, device, passkey, pinResetCode, pushSubscription, recoveryCode } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
+import { DEFAULT_TIMEZONE, formatInstant } from "../domain/time";
 import { env } from "../env";
 import { type Ctx, requireDevice } from "../http/context";
 import { ApiError, notFound } from "../http/errors";
-import { isoLocal } from "../time";
+
+// the user timezone setting (app_user.timezone) arrives with the phase 2 schema
+const isoLocal = (d: Date) => formatInstant(d, DEFAULT_TIMEZONE);
+
 import { CHALLENGE_COOKIE, clearCookie, parseCookies, SESSION_COOKIE, setCookie } from "./cookies";
 import { hashSecret, recoveryCode as newRecoveryCode, normalizeRecoveryCode, sign, unsign, verifySecret } from "./crypto";
 import { assertNotLocked, failAttempt, succeedAttempt } from "./lockout";

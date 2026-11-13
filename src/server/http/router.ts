@@ -6,8 +6,8 @@ import { DEVICE_KEY_COOKIE, parseCookies, SESSION_COOKIE, setCookie } from "../a
 import { randomToken } from "../auth/crypto";
 import { resolveSession, touchDevice } from "../auth/session";
 import { getDb } from "../db/client";
+import { clock, toDate } from "../domain/time";
 import { log } from "../log";
-import { now as clockNow } from "../time";
 import type { Actor, Ctx, Handler, HandlerResult } from "./context";
 import { ApiError, validation } from "./errors";
 import { complete, release, reserve } from "./idempotency";
@@ -93,7 +93,7 @@ export async function handle(req: Request): Promise<Response> {
   const requestId = `req_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
-  const now = clockNow();
+  const now = toDate(clock().now()); // one reading per request; tests inject the clock
   const db = getDb();
   const cookies = parseCookies(req.headers.get("cookie"));
   const setCookies: string[] = [];

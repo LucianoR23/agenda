@@ -15,6 +15,7 @@ import { TimelineSkeleton } from "./components/surfaces";
 import { registerServiceWorker } from "./pwa";
 import { SetupScreen, UnlockScreen } from "./screens/auth";
 import { applyTheme, readTheme } from "./theme";
+import { ensureTemporal } from "./time";
 
 /** Client root: query cache hydrated from IndexedDB, sync engine, auth gate, navigation. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -22,7 +23,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     applyTheme(readTheme());
-    hydrateFromIdb(qc)
+    ensureTemporal()
+      .then(() => hydrateFromIdb(qc))
       .catch(() => {})
       .finally(() => setReady(true));
     const stop = startSync(qc);
