@@ -75,9 +75,9 @@ export function Toast({
   action,
   onAction,
 }: {
-  icon?: IconName;
+  icon?: IconName | undefined;
   message: string;
-  action?: string;
+  action?: string | undefined;
   onAction?: () => void;
 }) {
   return (

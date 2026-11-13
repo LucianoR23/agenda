@@ -38,15 +38,19 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
         mode = "scroll";
         return;
       }
-      x0 = e.touches[0].clientX;
-      y0 = lastY = e.touches[0].clientY;
+      const t = e.touches[0];
+      if (!t) return;
+      x0 = t.clientX;
+      y0 = lastY = t.clientY;
       lastT = e.timeStamp;
       dy = speed = 0;
       mode = "pending";
     };
     const touchMove = (e: TouchEvent) => {
       if (mode === "scroll") return;
-      const { clientX: x, clientY: y } = e.touches[0];
+      const t = e.touches[0];
+      if (!t) return;
+      const { clientX: x, clientY: y } = t;
       if (mode === "pending") {
         if (Math.abs(y - y0) < 8 && Math.abs(x - x0) < 8) return;
         // down, mostly vertical, content at the top → drag the sheet; anything else is a normal scroll

@@ -43,7 +43,7 @@ function match(method: string, pathname: string) {
     if (!m) continue;
     pathMatched = true;
     if (c.def.method.toUpperCase() !== method) continue;
-    const params = Object.fromEntries(c.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
+    const params = Object.fromEntries(c.keys.map((k, i) => [k, decodeURIComponent(m[i + 1] ?? "")]));
     return { route: c.def, params };
   }
   if (pathMatched) throw new ApiError(405, "method_not_allowed", `${method} is not allowed on ${pathname}.`);
@@ -163,7 +163,8 @@ export async function handle(req: Request): Promise<Response> {
         sessionDevice: session?.device ?? null,
         sessionLocked: session?.locked ?? false,
         deviceKey: deviceKey ?? "",
-        ip: req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? null,
+        // phase 3 replaces this with trusted-proxy handling (CF-Connecting-IP / Traefik), see docs/v2/07
+        ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
         userAgent: req.headers.get("user-agent"),
         ifMatch,
         setCookies,

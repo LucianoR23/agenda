@@ -135,7 +135,7 @@ describe("forgot PIN", () => {
     const phone = anon();
     const r = await phone.post("/api/auth/recover", {
       method: "recovery_code",
-      code: recoveryCodes[3].toLowerCase().replaceAll("-", " "),
+      code: recoveryCodes[3]?.toLowerCase().replaceAll("-", " "),
       newPin: "730154",
     });
     expect(r.status).toBe(200);

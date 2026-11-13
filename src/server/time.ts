@@ -28,7 +28,7 @@ export const isoLocalOrNull = (at: Date | string | null): string | null => (at =
 
 /** Instant for a local date + block time (`HH:mm`, 00:00–29:59). */
 export function instantAt(date: string, time: string): Date {
-  const [h, m] = time.split(":").map(Number);
+  const [h = 0, m = 0] = time.split(":").map(Number);
   return new Date(Date.parse(`${date}T00:00:00Z`) - OFFSET_MIN * 60_000 + (h * 60 + m) * 60_000);
 }
 

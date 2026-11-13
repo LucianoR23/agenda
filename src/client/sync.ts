@@ -129,7 +129,8 @@ export async function resolveConflict(qc: QueryClient, id: string, choice: "mine
     const body =
       item.body && typeof item.body === "object" && current?.version ? { ...(item.body as object), version: current.version } : item.body;
     // a fresh key: the old one is bound to the rejected request
-    const fresh = { ...item, body, id: uuidv7(), state: "pending" as const, conflict: undefined };
+    const { conflict: _resolved, ...rest } = item;
+    const fresh: OutboxItem = { ...rest, body, id: uuidv7(), state: "pending" };
     await idb().outbox.delete(id);
     await idb().outbox.add(fresh);
     void flush(qc);

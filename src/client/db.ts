@@ -22,7 +22,7 @@ export interface OutboxItem {
   label: string;
   createdAt: number;
   state: "pending" | "conflict";
-  conflict?: { code?: string; detail?: string; current?: unknown };
+  conflict?: { code?: string | undefined; detail?: string | undefined; current?: unknown } | undefined;
 }
 
 /**

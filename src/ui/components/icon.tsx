@@ -10,10 +10,10 @@ export function Icon({
 }: {
   name: IconName;
   size?: number;
-  className?: string;
-  label?: string;
-  /** CSS color, e.g. `var(--t-gym)`; defaults to currentColor. */
-  color?: string;
+  className?: string | undefined;
+  label?: string | undefined;
+  /** CSS color, e.g. `var(--accent)`; defaults to currentColor. */
+  color?: string | undefined;
 }) {
   return (
     <svg

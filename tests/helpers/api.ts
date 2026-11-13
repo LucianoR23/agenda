@@ -33,7 +33,11 @@ export interface Client {
 
 /** HTTP-level client: builds a Request, runs it through the real router and checks the response against openapi.yaml. */
 export function client(_as: As, jar = new Map<string, string>()): Client {
-  async function request(method: string, path: string, opts: { body?: unknown; headers?: Record<string, string>; raw?: string } = {}) {
+  async function request(
+    method: string,
+    path: string,
+    opts: { body?: unknown; headers?: Record<string, string> | undefined; raw?: string } = {},
+  ) {
     const headers: Record<string, string> = {
       "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile",
       ...(opts.headers ?? {}),
@@ -41,10 +45,12 @@ export function client(_as: As, jar = new Map<string, string>()): Client {
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
     const body = opts.raw ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body));
     if (body !== undefined) headers["content-type"] = "application/json";
-    const res = await handle(new Request(`https://agenda.lemydev.com${path}`, { method, headers, body }));
+    const res = await handle(
+      new Request(`https://agenda.lemydev.com${path}`, { method, headers, ...(body === undefined ? {} : { body }) }),
+    );
     const cookies = res.headers.getSetCookie();
     for (const c of cookies) {
-      const [pair, ...attrs] = c.split(";");
+      const [pair = "", ...attrs] = c.split(";");
       const i = pair.indexOf("=");
       const name = pair.slice(0, i);
       const value = decodeURIComponent(pair.slice(i + 1));

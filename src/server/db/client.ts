@@ -10,7 +10,7 @@ function create(url: string) {
 type Conn = ReturnType<typeof create>;
 
 // one pool per process, reused across dev hot reloads
-const globalForDb = globalThis as unknown as { agendaDb?: Conn };
+const globalForDb = globalThis as unknown as { agendaDb?: Conn | undefined };
 
 function conn(): Conn {
   if (!globalForDb.agendaDb) {

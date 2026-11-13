@@ -11,7 +11,7 @@ export const routes: RouteDef[] = [...systemRoutes];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
-const SECURITY: Record<Access, RouteConfig["security"]> = {
+const SECURITY: Record<Access, NonNullable<RouteConfig["security"]>> = {
   user: [{ session: [] }],
   public: [],
   preauth: [],
@@ -148,7 +148,7 @@ export function buildRegistry() {
           : {}),
       },
       responses,
-    } as RouteConfig;
+    } satisfies RouteConfig;
     registry.registerPath(config);
   }
 

@@ -50,7 +50,8 @@ export function requireDevice(ctx: Pick<Ctx, "sessionDevice">): DeviceRow {
   return ctx.sessionDevice;
 }
 
-export const json = (status: number, body: unknown, headers?: Record<string, string>): HandlerResult => ({ status, body, headers });
+export const json = (status: number, body: unknown, headers?: Record<string, string>): HandlerResult =>
+  headers ? { status, body, headers } : { status, body };
 
 /** Strong ETag from a version. */
 export const etag = (version: number) => ({ ETag: `"${version}"` });

@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
+import { one } from "../db/one";
 import { authAttempt, authLockout } from "../db/schema";
 import type { Ctx } from "../http/context";
 import { ApiError } from "../http/errors";
@@ -57,14 +58,17 @@ export async function failAttempt(ctx: Ctx, method: Method, detail: string): Pro
   let remaining: number = MAX_FAILURES.device;
   let lockedUntil: Date | null = null;
   for (const k of keys(ctx)) {
-    const [row] = await db
-      .insert(authLockout)
-      .values({ ...k, failedCount: 1, lastFailedAt: ctx.now })
-      .onConflictDoUpdate({
-        target: [authLockout.scope, authLockout.key],
-        set: { failedCount: sql`${authLockout.failedCount} + 1`, lastFailedAt: ctx.now },
-      })
-      .returning();
+    const row = one(
+      await db
+        .insert(authLockout)
+        .values({ ...k, failedCount: 1, lastFailedAt: ctx.now })
+        .onConflictDoUpdate({
+          target: [authLockout.scope, authLockout.key],
+          set: { failedCount: sql`${authLockout.failedCount} + 1`, lastFailedAt: ctx.now },
+        })
+        .returning(),
+      "lockout upsert",
+    );
     if (row.failedCount >= MAX_FAILURES[k.scope]) {
       const count = row.lockoutCount + 1;
       const until = new Date(ctx.now.getTime() + lockDuration(count));

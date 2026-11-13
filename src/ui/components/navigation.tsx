@@ -17,7 +17,7 @@ export const TABS: Array<{ key: string; label: string; icon: IconName; href: str
 export type Badges = Partial<Record<string, number>>;
 
 /** Small count on a tab icon (e.g. Hoy: proposals ready for my requests). */
-function Badge({ n }: { n?: number }) {
+function Badge({ n }: { n?: number | undefined }) {
   if (!n) return null;
   return (
     <span

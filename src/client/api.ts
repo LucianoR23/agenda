@@ -30,7 +30,7 @@ export async function api<T = unknown>(
       method,
       credentials: "same-origin",
       headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch {
     throw new ApiProblem({ status: 0, title: "Sin conexión" }, true);

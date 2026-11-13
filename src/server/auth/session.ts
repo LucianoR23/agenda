@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type { DbLike } from "../db/client";
+import { one } from "../db/one";
 import { device } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
 import { env } from "../env";
@@ -47,10 +48,13 @@ export async function issueSession(db: DbLike, deviceId: string, now: Date): Pro
 /** Creates a trusted device with a session; returns the row and the Set-Cookie header. */
 export async function createDevice(db: DbLike, name: string, userAgent: string | null, now: Date) {
   const token = randomToken();
-  const [row] = await db
-    .insert(device)
-    .values({ name, userAgent, sessionHash: sha256(token), lastSeenAt: now, lastUnlockAt: now })
-    .returning();
+  const row = one(
+    await db
+      .insert(device)
+      .values({ name, userAgent, sessionHash: sha256(token), lastSeenAt: now, lastUnlockAt: now })
+      .returning(),
+    "device insert",
+  );
   return { device: row, cookie: setCookie(SESSION_COOKIE, token, env().DEVICE_TRUST_DAYS * 86_400) };
 }
 

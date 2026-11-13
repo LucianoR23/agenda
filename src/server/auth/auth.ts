@@ -8,6 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import type { DbLike } from "../db/client";
+import { one } from "../db/one";
 import { appUser, device, passkey, pinResetCode, pushSubscription, recoveryCode } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
 import { env } from "../env";
@@ -55,8 +56,7 @@ async function newRecoveryCodes(db: DbLike) {
 async function trustDevice(ctx: Ctx, name?: string) {
   if (ctx.sessionDevice) {
     ctx.setCookies.push(await issueSession(ctx.db, ctx.sessionDevice.id, ctx.now));
-    const [d] = await ctx.db.select().from(device).where(eq(device.id, ctx.sessionDevice.id));
-    return d;
+    return one(await ctx.db.select().from(device).where(eq(device.id, ctx.sessionDevice.id)), "trusted device");
   }
   const { device: d, cookie } = await createDevice(ctx.db, name ?? deviceNameFromUA(ctx.userAgent), ctx.userAgent, ctx.now);
   ctx.setCookies.push(cookie);
@@ -212,10 +212,13 @@ export async function passkeyRegisterVerify(ctx: Ctx, response: Record<string, u
   if (!result.verified) throw new ApiError(401, "invalid_credentials", "Passkey verification failed.");
   const c = result.registrationInfo.credential;
   await ctx.db.delete(passkey).where(eq(passkey.deviceId, d.id));
-  const [row] = await ctx.db
-    .insert(passkey)
-    .values({ deviceId: d.id, credentialId: c.id, publicKey: c.publicKey, counter: c.counter, transports: c.transports ?? [] })
-    .returning();
+  const row = one(
+    await ctx.db
+      .insert(passkey)
+      .values({ deviceId: d.id, credentialId: c.id, publicKey: c.publicKey, counter: c.counter, transports: c.transports ?? [] })
+      .returning(),
+    "passkey insert",
+  );
   return { id: row.id, deviceId: row.deviceId, createdAt: isoLocal(row.createdAt), lastUsedAt: null };
 }
 
@@ -279,7 +282,7 @@ async function findDevice(ctx: Ctx, id: string) {
 
 export async function renameDevice(ctx: Ctx, id: string, name: string) {
   await findDevice(ctx, id);
-  const [d] = await ctx.db.update(device).set({ name }).where(eq(device.id, id)).returning();
+  const d = one(await ctx.db.update(device).set({ name }).where(eq(device.id, id)).returning(), "device rename");
   return deviceOut(ctx.db, d, ctx.sessionDevice?.id ?? null);
 }
 

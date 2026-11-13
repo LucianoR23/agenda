@@ -1,4 +1,4 @@
-import type { ZodType } from "zod";
+import type { ZodObject, ZodType } from "zod";
 
 /** Who may call a route. Drives the OpenAPI `security`, `x-actors` and the automatic 401 responses. */
 export type Access = "user" | "public" | "preauth";
@@ -36,8 +36,10 @@ export interface RouteDef {
   summary: string;
   description?: string;
   access: Access;
-  params?: ZodType;
-  query?: ZodType;
+  /** Path parameters: always an object schema (zod-to-openapi requires it). */
+  params?: ZodObject;
+  /** Query string: always an object schema. */
+  query?: ZodObject;
   body?: ZodType;
   /** Accepts `If-Match` for optimistic concurrency. */
   ifMatch?: boolean;

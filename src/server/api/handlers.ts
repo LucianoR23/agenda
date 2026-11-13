@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { generateOpenApiDocument, withoutExamples } from "@/contract/openapi";
 import * as auth from "../auth/auth";
 import { getDb } from "../db/client";
+import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
 import { env } from "../env";
 import { type Handler, json, requireDevice } from "../http/context";
@@ -42,11 +43,14 @@ export const handlers: Record<string, Handler> = {
       ...(body.callReminders !== undefined ? { callReminders: body.callReminders } : {}),
       ...(body.sleepReminders !== undefined ? { sleepReminders: body.sleepReminders } : {}),
     };
-    const [row] = await ctx.db
-      .insert(pushSubscription)
-      .values(values)
-      .onConflictDoUpdate({ target: pushSubscription.endpoint, set: values })
-      .returning();
+    const row = one(
+      await ctx.db
+        .insert(pushSubscription)
+        .values(values)
+        .onConflictDoUpdate({ target: pushSubscription.endpoint, set: values })
+        .returning(),
+      "push subscription upsert",
+    );
     return json(201, {
       id: row.id,
       deviceId: row.deviceId,

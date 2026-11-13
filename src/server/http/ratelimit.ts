@@ -5,9 +5,10 @@ const windows = new Map<string, number[]>();
 export function hit(key: string, limit: number, nowMs: number): number | null {
   const since = nowMs - 60_000;
   const list = (windows.get(key) ?? []).filter((t) => t > since);
-  if (list.length >= limit) {
+  const oldest = list[0];
+  if (list.length >= limit && oldest !== undefined) {
     windows.set(key, list);
-    return Math.max(1, Math.ceil((list[0] - since) / 1000));
+    return Math.max(1, Math.ceil((oldest - since) / 1000));
   }
   list.push(nowMs);
   windows.set(key, list);
