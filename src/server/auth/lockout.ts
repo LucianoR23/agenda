@@ -22,10 +22,19 @@ export const lockDuration = (lockoutCount: number) => Math.min(CAP_MS, BASE_MS *
 /** Throws 429 locked_out if the device or the whole app is locked. */
 export async function assertNotLocked(ctx: Ctx) {
   for (const k of keys(ctx)) {
-    const [row] = await getDb().select().from(authLockout).where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
+    const [row] = await getDb()
+      .select()
+      .from(authLockout)
+      .where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
     if (row?.lockedUntil && row.lockedUntil > ctx.now) {
       const wait = Math.ceil((row.lockedUntil.getTime() - ctx.now.getTime()) / 1000);
-      throw new ApiError(429, "locked_out", `Try again in ${Math.ceil(wait / 60)} minutes.`, { retryAfterSeconds: wait }, { "Retry-After": String(wait) });
+      throw new ApiError(
+        429,
+        "locked_out",
+        `Try again in ${Math.ceil(wait / 60)} minutes.`,
+        { retryAfterSeconds: wait },
+        { "Retry-After": String(wait) },
+      );
     }
   }
 }
@@ -36,7 +45,15 @@ export async function assertNotLocked(ctx: Ctx) {
  */
 export async function failAttempt(ctx: Ctx, method: Method, detail: string): Promise<never> {
   const db = getDb();
-  await db.insert(authAttempt).values({ method, success: false, deviceKey: ctx.deviceKey || null, deviceId: ctx.sessionDevice?.id ?? null, ip: ctx.ip, userAgent: ctx.userAgent, at: ctx.now });
+  await db.insert(authAttempt).values({
+    method,
+    success: false,
+    deviceKey: ctx.deviceKey || null,
+    deviceId: ctx.sessionDevice?.id ?? null,
+    ip: ctx.ip,
+    userAgent: ctx.userAgent,
+    at: ctx.now,
+  });
   let remaining: number = MAX_FAILURES.device;
   let lockedUntil: Date | null = null;
   for (const k of keys(ctx)) {
@@ -51,13 +68,22 @@ export async function failAttempt(ctx: Ctx, method: Method, detail: string): Pro
     if (row.failedCount >= MAX_FAILURES[k.scope]) {
       const count = row.lockoutCount + 1;
       const until = new Date(ctx.now.getTime() + lockDuration(count));
-      await db.update(authLockout).set({ failedCount: 0, lockoutCount: count, lockedUntil: until }).where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
+      await db
+        .update(authLockout)
+        .set({ failedCount: 0, lockoutCount: count, lockedUntil: until })
+        .where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
       if (!lockedUntil || until > lockedUntil) lockedUntil = until;
     } else remaining = Math.min(remaining, MAX_FAILURES[k.scope] - row.failedCount);
   }
   if (lockedUntil) {
     const wait = Math.ceil((lockedUntil.getTime() - ctx.now.getTime()) / 1000);
-    throw new ApiError(429, "locked_out", `Try again in ${Math.ceil(wait / 60)} minutes.`, { retryAfterSeconds: wait }, { "Retry-After": String(wait) });
+    throw new ApiError(
+      429,
+      "locked_out",
+      `Try again in ${Math.ceil(wait / 60)} minutes.`,
+      { retryAfterSeconds: wait },
+      { "Retry-After": String(wait) },
+    );
   }
   throw new ApiError(401, "invalid_credentials", detail, { remainingAttempts: remaining });
 }
@@ -65,7 +91,12 @@ export async function failAttempt(ctx: Ctx, method: Method, detail: string): Pro
 /** Success resets both counters (and the doubling). Runs inside the request transaction (the device may be new). */
 export async function succeedAttempt(ctx: Ctx, method: Method, deviceId: string | null) {
   const db = ctx.db;
-  await db.insert(authAttempt).values({ method, success: true, deviceKey: ctx.deviceKey || null, deviceId, ip: ctx.ip, userAgent: ctx.userAgent, at: ctx.now });
+  await db
+    .insert(authAttempt)
+    .values({ method, success: true, deviceKey: ctx.deviceKey || null, deviceId, ip: ctx.ip, userAgent: ctx.userAgent, at: ctx.now });
   for (const k of [...keys(ctx), ...(deviceId ? [{ scope: "device" as const, key: deviceId }] : [])])
-    await db.update(authLockout).set({ failedCount: 0, lockoutCount: 0, lockedUntil: null }).where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
+    await db
+      .update(authLockout)
+      .set({ failedCount: 0, lockoutCount: 0, lockedUntil: null })
+      .where(and(eq(authLockout.scope, k.scope), eq(authLockout.key, k.key)));
 }

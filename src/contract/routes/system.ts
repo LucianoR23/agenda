@@ -47,8 +47,16 @@ const laptop = {
   lastUnlockAt: "2026-10-12T20:00:00.000-03:00",
 };
 const codes = [
-  "K7QM-2XPA-9TRC", "H3ZD-8WNB-4LFE", "P6VJ-5RYK-2MQS", "X9CA-7HTU-3NGE", "B4LR-6QWZ-8KDP",
-  "M2FX-9JVA-5RHT", "T8NS-3PKC-7YWB", "E5GU-4ZMD-6XLQ", "R3WH-2BNF-9CAV", "Z7KP-8LTE-4SJM",
+  "K7QM-2XPA-9TRC",
+  "H3ZD-8WNB-4LFE",
+  "P6VJ-5RYK-2MQS",
+  "X9CA-7HTU-3NGE",
+  "B4LR-6QWZ-8KDP",
+  "M2FX-9JVA-5RHT",
+  "T8NS-3PKC-7YWB",
+  "E5GU-4ZMD-6XLQ",
+  "R3WH-2BNF-9CAV",
+  "Z7KP-8LTE-4SJM",
 ];
 const cookie = { "Set-Cookie": "agenda_session=<token>; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000" };
 
@@ -63,8 +71,26 @@ const authRoutes: RouteDef[] = [
     access: "preauth",
     responses: { 200: { description: "State.", schema: SessionState } },
     exchanges: [
-      { name: "locked", summary: "Phone unused for 8 days", actor: "anonymous", status: 200, response: { state: "locked", passkeyEnabled: true, lockedUntil: null, device: { id: phone.id, name: phone.name }, vapidPublicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" } },
-      { name: "setup", summary: "Fresh install", actor: "anonymous", status: 200, response: { state: "setup_required", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null } },
+      {
+        name: "locked",
+        summary: "Phone unused for 8 days",
+        actor: "anonymous",
+        status: 200,
+        response: {
+          state: "locked",
+          passkeyEnabled: true,
+          lockedUntil: null,
+          device: { id: phone.id, name: phone.name },
+          vapidPublicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+        },
+      },
+      {
+        name: "setup",
+        summary: "Fresh install",
+        actor: "anonymous",
+        status: 200,
+        response: { state: "setup_required", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null },
+      },
     ],
   },
   {
@@ -109,8 +135,23 @@ const authRoutes: RouteDef[] = [
       429: { description: "`locked_out` with `retryAfterSeconds`.", headers: ["Retry-After"] },
     },
     exchanges: [
-      { name: "ok", summary: "Correct PIN", actor: "anonymous", body: { pin: "482913" }, status: 200, response: { device: phone }, responseHeaders: cookie },
-      { name: "wrong", summary: "Wrong PIN", actor: "anonymous", body: { pin: "111111" }, status: 401, response: problem(401, "invalid_credentials", "Wrong PIN.", { remainingAttempts: 3 }) },
+      {
+        name: "ok",
+        summary: "Correct PIN",
+        actor: "anonymous",
+        body: { pin: "482913" },
+        status: 200,
+        response: { device: phone },
+        responseHeaders: cookie,
+      },
+      {
+        name: "wrong",
+        summary: "Wrong PIN",
+        actor: "anonymous",
+        body: { pin: "111111" },
+        status: 401,
+        response: problem(401, "invalid_credentials", "Wrong PIN.", { remainingAttempts: 3 }),
+      },
       {
         name: "lockedOut",
         summary: "5th failure",
@@ -131,7 +172,11 @@ const authRoutes: RouteDef[] = [
     access: "preauth",
     body: RecoverInput,
     responses: {
-      200: { description: "New PIN set, device trusted. A used recovery code is consumed.", schema: RecoverResult, headers: ["Set-Cookie"] },
+      200: {
+        description: "New PIN set, device trusted. A used recovery code is consumed.",
+        schema: RecoverResult,
+        headers: ["Set-Cookie"],
+      },
       401: { description: "`invalid_credentials`." },
       429: { description: "`locked_out`.", headers: ["Retry-After"] },
     },
@@ -164,7 +209,11 @@ const authRoutes: RouteDef[] = [
     summary: "Change PIN (Ajustes → Seguridad)",
     access: "user",
     body: ChangePinInput,
-    responses: { 204: { description: "Changed." }, 401: { description: "`invalid_credentials`." }, 429: { description: "`locked_out`.", headers: ["Retry-After"] } },
+    responses: {
+      204: { description: "Changed." },
+      401: { description: "`invalid_credentials`." },
+      429: { description: "`locked_out`.", headers: ["Retry-After"] },
+    },
     exchanges: [{ name: "change", summary: "Change PIN", actor: "user", body: { currentPin: "482913", newPin: "730154" }, status: 204 }],
   },
   {
@@ -176,7 +225,9 @@ const authRoutes: RouteDef[] = [
     access: "user",
     body: PinConfirmInput,
     responses: { 200: { description: "New codes, shown once.", schema: RecoveryCodes }, 401: { description: "`invalid_credentials`." } },
-    exchanges: [{ name: "regen", summary: "Regenerate", actor: "user", body: { pin: "482913" }, status: 200, response: { recoveryCodes: codes } }],
+    exchanges: [
+      { name: "regen", summary: "Regenerate", actor: "user", body: { pin: "482913" }, status: 200, response: { recoveryCodes: codes } },
+    ],
   },
   {
     operationId: "passkeyRegisterOptions",
@@ -190,14 +241,17 @@ const authRoutes: RouteDef[] = [
     exchanges: [
       {
         name: "options",
-        summary: "Enable \"Desbloquear con huella\"",
+        summary: 'Enable "Desbloquear con huella"',
         actor: "user",
         status: 200,
         response: {
           challenge: "dGhpcy1pcy1hLWNoYWxsZW5nZQ",
           rp: { name: "Agenda", id: "agenda.lemydev.com" },
           user: { id: "cmFuZG9tLXVzZXItaGFuZGxl", name: "luciano", displayName: "Luciano" },
-          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 },
+          ],
           authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
           timeout: 60000,
           attestation: "none",
@@ -213,13 +267,23 @@ const authRoutes: RouteDef[] = [
     summary: "Fingerprint: verify registration",
     access: "user",
     body: PasskeyVerifyInput,
-    responses: { 201: { description: "Passkey stored for this device.", schema: PasskeyInfo }, 401: { description: "`invalid_credentials`: verification failed." } },
+    responses: {
+      201: { description: "Passkey stored for this device.", schema: PasskeyInfo },
+      401: { description: "`invalid_credentials`: verification failed." },
+    },
     exchanges: [
       {
         name: "verify",
         summary: "Browser attestation response",
         actor: "user",
-        body: { response: { id: "Y3JlZC1pZA", rawId: "Y3JlZC1pZA", type: "public-key", response: { clientDataJSON: "…", attestationObject: "…", transports: ["internal"] } } },
+        body: {
+          response: {
+            id: "Y3JlZC1pZA",
+            rawId: "Y3JlZC1pZA",
+            type: "public-key",
+            response: { clientDataJSON: "…", attestationObject: "…", transports: ["internal"] },
+          },
+        },
         status: 201,
         response: { id: ex.uid(810), deviceId: phone.id, createdAt: now, lastUsedAt: null },
       },
@@ -233,14 +297,23 @@ const authRoutes: RouteDef[] = [
     summary: "Fingerprint: unlock options",
     description: "Only for a known (locked) device that has a passkey.",
     access: "preauth",
-    responses: { 200: { description: "`PublicKeyCredentialRequestOptionsJSON`.", schema: WebAuthnJson }, 404: { description: "`not_found`: no passkey on this device." } },
+    responses: {
+      200: { description: "`PublicKeyCredentialRequestOptionsJSON`.", schema: WebAuthnJson },
+      404: { description: "`not_found`: no passkey on this device." },
+    },
     exchanges: [
       {
         name: "options",
         summary: "Unlock screen offers fingerprint",
         actor: "anonymous",
         status: 200,
-        response: { challenge: "YW5vdGhlci1jaGFsbGVuZ2U", allowCredentials: [{ id: "Y3JlZC1pZA", type: "public-key", transports: ["internal"] }], userVerification: "required", timeout: 60000, rpId: "agenda.lemydev.com" },
+        response: {
+          challenge: "YW5vdGhlci1jaGFsbGVuZ2U",
+          allowCredentials: [{ id: "Y3JlZC1pZA", type: "public-key", transports: ["internal"] }],
+          userVerification: "required",
+          timeout: 60000,
+          rpId: "agenda.lemydev.com",
+        },
       },
     ],
   },
@@ -262,7 +335,14 @@ const authRoutes: RouteDef[] = [
         name: "verify",
         summary: "Fingerprint OK",
         actor: "anonymous",
-        body: { response: { id: "Y3JlZC1pZA", rawId: "Y3JlZC1pZA", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } },
+        body: {
+          response: {
+            id: "Y3JlZC1pZA",
+            rawId: "Y3JlZC1pZA",
+            type: "public-key",
+            response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" },
+          },
+        },
         status: 200,
         response: { device: phone },
         responseHeaders: cookie,
@@ -299,7 +379,17 @@ const authRoutes: RouteDef[] = [
     params: z.strictObject({ id: Uuid }),
     body: DeviceRename,
     responses: { 200: { description: "Renamed.", schema: Device }, 404: { description: "`not_found`." } },
-    exchanges: [{ name: "rename", summary: "Rename laptop", actor: "user", params: { id: laptop.id }, body: { name: "Notebook del local" }, status: 200, response: { ...laptop, name: "Notebook del local" } }],
+    exchanges: [
+      {
+        name: "rename",
+        summary: "Rename laptop",
+        actor: "user",
+        params: { id: laptop.id },
+        body: { name: "Notebook del local" },
+        status: 200,
+        response: { ...laptop, name: "Notebook del local" },
+      },
+    ],
   },
   {
     operationId: "revokeDevice",
@@ -322,7 +412,15 @@ const authRoutes: RouteDef[] = [
     description: "Revokes this device (same as revoking it from Dispositivos).",
     access: "user",
     responses: { 204: { description: "Logged out; cookie cleared.", headers: ["Set-Cookie"] } },
-    exchanges: [{ name: "logout", summary: "Log out", actor: "user", status: 204, responseHeaders: { "Set-Cookie": "agenda_session=; Path=/; Max-Age=0" } }],
+    exchanges: [
+      {
+        name: "logout",
+        summary: "Log out",
+        actor: "user",
+        status: 204,
+        responseHeaders: { "Set-Cookie": "agenda_session=; Path=/; Max-Age=0" },
+      },
+    ],
   },
 ];
 
@@ -336,8 +434,20 @@ export const systemRoutes: RouteDef[] = [
     access: "public",
     responses: { 200: { description: "Healthy.", schema: Health }, 503: { description: "DB unreachable.", schema: Health } },
     exchanges: [
-      { name: "ok", summary: "Healthy", actor: "anonymous", status: 200, response: { status: "ok", db: "ok", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" } },
-      { name: "down", summary: "DB down", actor: "anonymous", status: 503, response: { status: "degraded", db: "down", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" } },
+      {
+        name: "ok",
+        summary: "Healthy",
+        actor: "anonymous",
+        status: 200,
+        response: { status: "ok", db: "ok", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" },
+      },
+      {
+        name: "down",
+        summary: "DB down",
+        actor: "anonymous",
+        status: 503,
+        response: { status: "degraded", db: "down", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" },
+      },
     ],
   },
   {
@@ -346,11 +456,20 @@ export const systemRoutes: RouteDef[] = [
     path: "/api/openapi.json",
     tag: "Ops",
     summary: "This OpenAPI document",
-    description: "Compact by default (no examples, ~115 KB). `?examples=true` returns the full document (~320 KB), identical to `openapi.yaml`.",
+    description:
+      "Compact by default (no examples, ~115 KB). `?examples=true` returns the full document (~320 KB), identical to `openapi.yaml`.",
     access: "public",
     query: z.strictObject({ examples: z.enum(["true", "false"]).optional() }),
     responses: { 200: { description: "OpenAPI 3.1 document.", schema: z.record(z.string(), z.unknown()) } },
-    exchanges: [{ name: "doc", summary: "The contract", actor: "anonymous", status: 200, response: { openapi: "3.1.0", info: { title: "Agenda API", version: "1.0.0" } } }],
+    exchanges: [
+      {
+        name: "doc",
+        summary: "The contract",
+        actor: "anonymous",
+        status: 200,
+        response: { openapi: "3.1.0", info: { title: "Agenda API", version: "1.0.0" } },
+      },
+    ],
   },
   ...authRoutes,
   {
@@ -368,9 +487,24 @@ export const systemRoutes: RouteDef[] = [
         name: "subscribe",
         summary: "Enable notifications",
         actor: "user",
-        body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b", keys: { p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", auth: "tBHItJI5svbpez7KI4CCXg" }, callReminders: true, sleepReminders: true },
+        body: {
+          endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b",
+          keys: {
+            p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+            auth: "tBHItJI5svbpez7KI4CCXg",
+          },
+          callReminders: true,
+          sleepReminders: true,
+        },
         status: 201,
-        response: { id: ex.uid(820), deviceId: phone.id, endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b", callReminders: true, sleepReminders: true, createdAt: now },
+        response: {
+          id: ex.uid(820),
+          deviceId: phone.id,
+          endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b",
+          callReminders: true,
+          sleepReminders: true,
+          createdAt: now,
+        },
       },
     ],
   },
@@ -383,6 +517,14 @@ export const systemRoutes: RouteDef[] = [
     access: "user",
     body: PushUnsubscribeInput,
     responses: { 204: { description: "Removed." } },
-    exchanges: [{ name: "unsubscribe", summary: "Disable notifications", actor: "user", body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b" }, status: 204 }],
+    exchanges: [
+      {
+        name: "unsubscribe",
+        summary: "Disable notifications",
+        actor: "user",
+        body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b" },
+        status: 204,
+      },
+    ],
   },
 ];

@@ -39,7 +39,12 @@ export async function api<T = unknown>(
   const data = text ? JSON.parse(text) : undefined;
   if (!res.ok) {
     const problem: Problem = data ?? { status: res.status, title: res.statusText };
-    if (res.status === 401 && path !== "/api/auth/unlock" && !path.startsWith("/api/auth/recover") && !path.startsWith("/api/auth/passkey/auth"))
+    if (
+      res.status === 401 &&
+      path !== "/api/auth/unlock" &&
+      !path.startsWith("/api/auth/recover") &&
+      !path.startsWith("/api/auth/passkey/auth")
+    )
       authListeners.forEach((l) => l(problem));
     throw new ApiProblem(problem);
   }

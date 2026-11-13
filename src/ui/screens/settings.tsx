@@ -60,9 +60,15 @@ export function SettingsScreen() {
 
       <SectionLabel>Notificaciones</SectionLabel>
       <RowGroup>
-        <SheetRow icon="notifications" label="Notificaciones en este dispositivo" trailing={<Toggle checked={push} onChange={(v) => void togglePush(v)} label="Notificaciones" />} />
+        <SheetRow
+          icon="notifications"
+          label="Notificaciones en este dispositivo"
+          trailing={<Toggle checked={push} onChange={(v) => void togglePush(v)} label="Notificaciones" />}
+        />
       </RowGroup>
-      {!pushSupported() && <p className="px-1 text-caption text-muted">Este navegador no soporta notificaciones push. Instalá la app desde Chrome.</p>}
+      {!pushSupported() && (
+        <p className="px-1 text-caption text-muted">Este navegador no soporta notificaciones push. Instalá la app desde Chrome.</p>
+      )}
 
       <SectionLabel>Sesión</SectionLabel>
       <div className="flex flex-col gap-2">
@@ -92,7 +98,11 @@ function InstallCard({ onDone }: { onDone: () => void }) {
 
 function About() {
   const toast = useToast();
-  const version = useQuery({ queryKey: ["health"], queryFn: () => api<{ version: string }>("GET", "/api/health").then((r) => r.data.version), staleTime: Infinity }).data;
+  const version = useQuery({
+    queryKey: ["health"],
+    queryFn: () => api<{ version: string }>("GET", "/api/health").then((r) => r.data.version),
+    staleTime: Infinity,
+  }).data;
   const [installed] = useState(() => typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches);
 
   const checkUpdate = async () => {

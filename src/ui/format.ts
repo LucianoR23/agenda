@@ -14,4 +14,3 @@ export function localHHmm(iso: string): string {
     timeZone: "America/Buenos_Aires",
   }).format(new Date(iso));
 }
-

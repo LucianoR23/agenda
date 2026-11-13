@@ -19,11 +19,10 @@ const webPushSender: PushSender = async (sub, msg) => {
   const e = env();
   if (!e.VAPID_PUBLIC_KEY || !e.VAPID_PRIVATE_KEY || !e.VAPID_SUBJECT) return { gone: false };
   try {
-    await sendNotification(
-      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      JSON.stringify(msg),
-      { vapidDetails: { subject: e.VAPID_SUBJECT, publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY }, TTL: 3600 },
-    );
+    await sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(msg), {
+      vapidDetails: { subject: e.VAPID_SUBJECT, publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY },
+      TTL: 3600,
+    });
     return { gone: false };
   } catch (err) {
     const status = (err as { statusCode?: number }).statusCode;

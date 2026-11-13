@@ -4,11 +4,12 @@ import { handle } from "@/server/api";
 import { getDb } from "@/server/db/client";
 import { resetEnv } from "@/server/env";
 import { resetRateLimits } from "@/server/http/ratelimit";
-import { setPushSender, type PushMessage } from "@/server/push";
+import { type PushMessage, setPushSender } from "@/server/push";
 import { validateResponse } from "./contract";
 import { SETUP_CODE } from "./env";
 
-export interface Res<T = any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+export interface Res<T = any> {
+  // eslint-disable-line @typescript-eslint/no-explicit-any
   status: number;
   body: T;
   headers: Headers;
@@ -18,7 +19,11 @@ export interface Res<T = any> { // eslint-disable-line @typescript-eslint/no-exp
 type As = "user" | "anon";
 
 export interface Client {
-  request<T = any>(method: string, path: string, opts?: { body?: unknown; headers?: Record<string, string>; raw?: string }): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  request<T = any>(
+    method: string,
+    path: string,
+    opts?: { body?: unknown; headers?: Record<string, string>; raw?: string },
+  ): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
   get<T = any>(path: string, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
   post<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
   put<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -30,7 +35,10 @@ export interface Client {
 /** HTTP-level client: builds a Request, runs it through the real router and checks the response against openapi.yaml. */
 export function client(as: As, jar = new Map<string, string>()): Client {
   async function request(method: string, path: string, opts: { body?: unknown; headers?: Record<string, string>; raw?: string } = {}) {
-    const headers: Record<string, string> = { "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile", ...(opts.headers ?? {}) };
+    const headers: Record<string, string> = {
+      "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile",
+      ...(opts.headers ?? {}),
+    };
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
     const body = opts.raw ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body));
     if (body !== undefined) headers["content-type"] = "application/json";
@@ -73,8 +81,16 @@ export async function setupUser(pin = PIN) {
 }
 
 const TABLES = [
-  "change_log", "idempotency_key", "push_subscription", "passkey", "auth_attempt", "auth_lockout", "device",
-  "recovery_code", "pin_reset_code", "app_user",
+  "change_log",
+  "idempotency_key",
+  "push_subscription",
+  "passkey",
+  "auth_attempt",
+  "auth_lockout",
+  "device",
+  "recovery_code",
+  "pin_reset_code",
+  "app_user",
 ];
 
 export const pushes: PushMessage[] = [];

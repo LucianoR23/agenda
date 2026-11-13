@@ -19,7 +19,12 @@ export const handlers: Record<string, Handler> = {
     } catch {
       db = "down";
     }
-    return json(db === "ok" ? 200 : 503, { status: db === "ok" ? "ok" : "degraded", db, version: env().APP_VERSION, time: isoLocal(ctx.now) });
+    return json(db === "ok" ? 200 : 503, {
+      status: db === "ok" ? "ok" : "degraded",
+      db,
+      version: env().APP_VERSION,
+      time: isoLocal(ctx.now),
+    });
   },
   openapi: async (_ctx, { query }) => {
     openApiFull ??= generateOpenApiDocument();
@@ -42,7 +47,14 @@ export const handlers: Record<string, Handler> = {
       .values(values)
       .onConflictDoUpdate({ target: pushSubscription.endpoint, set: values })
       .returning();
-    return json(201, { id: row.id, deviceId: row.deviceId, endpoint: row.endpoint, callReminders: row.callReminders, sleepReminders: row.sleepReminders, createdAt: isoLocal(row.createdAt) });
+    return json(201, {
+      id: row.id,
+      deviceId: row.deviceId,
+      endpoint: row.endpoint,
+      callReminders: row.callReminders,
+      sleepReminders: row.sleepReminders,
+      createdAt: isoLocal(row.createdAt),
+    });
   },
   pushUnsubscribe: async (ctx, { body }) => {
     await ctx.db.delete(pushSubscription).where(eq(pushSubscription.endpoint, body.endpoint));

@@ -10,7 +10,19 @@ import { Icon } from "./icon";
 import { SectionCard } from "./surfaces";
 
 /** Conflict sheet: my offline change vs the server version, never silently overwritten. */
-export function ConflictCompare({ field, mine, server, onKeepMine, onKeepServer }: { field: string; mine: string; server: string; onKeepMine?: () => void; onKeepServer?: () => void }) {
+export function ConflictCompare({
+  field,
+  mine,
+  server,
+  onKeepMine,
+  onKeepServer,
+}: {
+  field: string;
+  mine: string;
+  server: string;
+  onKeepMine?: () => void;
+  onKeepServer?: () => void;
+}) {
   return (
     <div className="flex flex-col gap-3.5">
       <span className="flex items-center gap-2 text-caption text-danger">
@@ -42,7 +54,17 @@ export function ConflictCompare({ field, mine, server, onKeepMine, onKeepServer 
 }
 
 /** "Cierre del día" card (from 22:00): energy, mood, note, pending items to resolve. */
-export function DayReviewCard({ energy, mood, pending, onChange }: { energy: number | null; mood: number | null; pending: number; onChange?: (k: "energy" | "mood", v: number) => void }) {
+export function DayReviewCard({
+  energy,
+  mood,
+  pending,
+  onChange,
+}: {
+  energy: number | null;
+  mood: number | null;
+  pending: number;
+  onChange?: (k: "energy" | "mood", v: number) => void;
+}) {
   const scale = (k: "energy" | "mood", value: number | null, label: string) => (
     <div className="flex flex-col gap-1.5">
       <span className="text-caption text-muted">{label}</span>

@@ -3,8 +3,8 @@ import type { DbLike } from "../db/client";
 import { device } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
 import { env } from "../env";
-import { randomToken, sha256 } from "./crypto";
 import { SESSION_COOKIE, setCookie } from "./cookies";
+import { randomToken, sha256 } from "./crypto";
 
 const DAY = 86_400_000;
 
@@ -37,7 +37,10 @@ export async function touchDevice(db: DbLike, d: DeviceRow, now: Date) {
 /** Issues a fresh session token for a device; returns the Set-Cookie header. */
 export async function issueSession(db: DbLike, deviceId: string, now: Date): Promise<string> {
   const token = randomToken();
-  await db.update(device).set({ sessionHash: sha256(token), lastSeenAt: now, lastUnlockAt: now }).where(eq(device.id, deviceId));
+  await db
+    .update(device)
+    .set({ sessionHash: sha256(token), lastSeenAt: now, lastUnlockAt: now })
+    .where(eq(device.id, deviceId));
   return setCookie(SESSION_COOKIE, token, env().DEVICE_TRUST_DAYS * 86_400);
 }
 
@@ -54,7 +57,29 @@ export async function createDevice(db: DbLike, name: string, userAgent: string |
 /** "Galaxy S26 Ultra · Chrome"-ish name from a user agent. */
 export function deviceNameFromUA(ua: string | null): string {
   if (!ua) return "Dispositivo";
-  const os = /Android/.test(ua) ? (/SM-S9\d\d/.test(ua) ? "Galaxy" : "Android") : /iPhone|iPad/.test(ua) ? "iPhone" : /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Dispositivo";
-  const browser = /Edg\//.test(ua) ? "Edge" : /SamsungBrowser/.test(ua) ? "Samsung Internet" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Navegador";
+  const os = /Android/.test(ua)
+    ? /SM-S9\d\d/.test(ua)
+      ? "Galaxy"
+      : "Android"
+    : /iPhone|iPad/.test(ua)
+      ? "iPhone"
+      : /Windows/.test(ua)
+        ? "Windows"
+        : /Mac OS X/.test(ua)
+          ? "Mac"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : "Dispositivo";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /SamsungBrowser/.test(ua)
+      ? "Samsung Internet"
+      : /Chrome\//.test(ua)
+        ? "Chrome"
+        : /Firefox\//.test(ua)
+          ? "Firefox"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : "Navegador";
   return `${os} · ${browser}`;
 }

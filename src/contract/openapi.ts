@@ -1,8 +1,4 @@
-import {
-  OpenAPIRegistry,
-  OpenApiGeneratorV31,
-  type RouteConfig,
-} from "@asteasolutions/zod-to-openapi";
+import { OpenAPIRegistry, OpenApiGeneratorV31, type RouteConfig } from "@asteasolutions/zod-to-openapi";
 import type { ZodType } from "zod";
 import { Problem } from "./common";
 import type { Access, Exchange, ResponseDef, RouteDef } from "./route-def";
@@ -63,22 +59,30 @@ export function buildRegistry() {
 
   const IdempotencyKey = registry.registerParameter(
     "IdempotencyKey",
-    z.string().min(1).max(200).optional().openapi({
-      param: { name: "Idempotency-Key", in: "header" },
-      description: "Same key + same body → stored response replayed; different body → 422. Kept 48 h, scoped per actor.",
-      example: "019a0a6e-1c00-7000-8000-000000000001",
-    }),
+    z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .openapi({
+        param: { name: "Idempotency-Key", in: "header" },
+        description: "Same key + same body → stored response replayed; different body → 422. Kept 48 h, scoped per actor.",
+        example: "019a0a6e-1c00-7000-8000-000000000001",
+      }),
   );
   // registered only when a route uses it, so the spec has no unused components
   const IfMatch = routes.some((r) => r.ifMatch)
     ? registry.registerParameter(
-    "IfMatch",
-    z.string().optional().openapi({
-      param: { name: "If-Match", in: "header" },
-      description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `version_conflict` with the current resource.',
-      example: '"7"',
-    }),
-  )
+        "IfMatch",
+        z
+          .string()
+          .optional()
+          .openapi({
+            param: { name: "If-Match", in: "header" },
+            description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `version_conflict` with the current resource.',
+            example: '"7"',
+          }),
+      )
     : undefined;
 
   registry.register("Problem", Problem);
@@ -100,9 +104,7 @@ export function buildRegistry() {
       const mediaType = status >= 400 && !def.schema ? "application/problem+json" : "application/json";
       responses[status] = {
         description: def.description,
-        ...(def.headers?.length
-          ? { headers: Object.fromEntries([...new Set(def.headers)].map((h) => [h, HEADER_DOCS[h]])) }
-          : {}),
+        ...(def.headers?.length ? { headers: Object.fromEntries([...new Set(def.headers)].map((h) => [h, HEADER_DOCS[h]])) } : {}),
         ...(schema
           ? {
               content: {
@@ -181,7 +183,9 @@ export function validateExamples(): string[] {
     if (!schema) return;
     const res = schema.safeParse(value);
     if (res.success !== expectValid)
-      failures.push(`${where}: ${expectValid ? res.error?.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ") : "expected to be invalid"}`);
+      failures.push(
+        `${where}: ${expectValid ? res.error?.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ") : "expected to be invalid"}`,
+      );
   };
   for (const r of routes) {
     const responses = effectiveResponses(r);
@@ -217,7 +221,11 @@ export function withoutExamples<T>(doc: T): T {
     Array.isArray(o)
       ? o.map(strip)
       : o && typeof o === "object"
-        ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== "examples").map(([k, v]) => [k, strip(v)]))
+        ? Object.fromEntries(
+            Object.entries(o)
+              .filter(([k]) => k !== "examples")
+              .map(([k, v]) => [k, strip(v)]),
+          )
         : o;
   return strip(doc) as T;
 }

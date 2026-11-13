@@ -22,7 +22,12 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
   useEffect(() => {
     const el = sheet.current;
     if (!open || !el) return;
-    let x0 = 0, y0 = 0, dy = 0, lastY = 0, lastT = 0, speed = 0;
+    let x0 = 0,
+      y0 = 0,
+      dy = 0,
+      lastY = 0,
+      lastT = 0,
+      speed = 0;
     let mode: "pending" | "drag" | "scroll" = "scroll";
     const move = (y: number, animated = false) => {
       el.style.transition = animated ? "translate 200ms cubic-bezier(.2,.8,.2,1)" : "none";
@@ -73,7 +78,17 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
 }
 
 /** Modal bottom sheet: scrim, slide up (280 ms), swipe down (anywhere on touch, the handle with a mouse) or tap outside to close. */
-export function BottomSheet({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+export function BottomSheet({
+  open,
+  onClose,
+  label,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  label: string;
+  children: ReactNode;
+}) {
   const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -91,7 +106,14 @@ export function BottomSheet({ open, onClose, label, children }: { open: boolean;
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end">
-          <motion.div className="absolute inset-0 touch-none bg-[var(--scrim)]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={onClose} />
+          <motion.div
+            className="absolute inset-0 touch-none bg-[var(--scrim)]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+          />
           <motion.div
             ref={sheet}
             role="dialog"
@@ -159,7 +181,14 @@ export function ToastHost({ children }: { children: ReactNode }) {
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(88px+env(safe-area-inset-bottom))] z-[35] mx-auto flex max-w-[560px] flex-col gap-2 px-4 md:bottom-6">
         <AnimatePresence>
           {items.map((t) => (
-            <motion.div key={t.id} className="pointer-events-auto" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={{ duration: 0.2, ease: EASE }}>
+            <motion.div
+              key={t.id}
+              className="pointer-events-auto"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.2, ease: EASE }}
+            >
               <Toast
                 icon={t.icon}
                 message={t.message}

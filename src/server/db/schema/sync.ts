@@ -42,9 +42,5 @@ export const idempotencyKey = pgTable(
     responseBody: text(),
     createdAt: createdAt(),
   },
-  (t) => [
-    primaryKey({ name: "idempotency_key_pk", columns: [t.actor, t.key] }),
-    index("idempotency_key_created_idx").on(t.createdAt),
-  ],
+  (t) => [primaryKey({ name: "idempotency_key_pk", columns: [t.actor, t.key] }), index("idempotency_key_created_idx").on(t.createdAt)],
 );
-

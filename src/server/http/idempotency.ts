@@ -1,5 +1,5 @@
-import { and, eq, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
+import { and, eq, lt } from "drizzle-orm";
 import type { DbLike } from "../db/client";
 import { idempotencyKey } from "../db/schema";
 import type { Actor } from "./context";
@@ -13,7 +13,15 @@ export type Reservation = { replay: { status: number; body: unknown } } | { rese
  * Reserves an Idempotency-Key before running the handler (autocommit, outside the request transaction):
  * same key + same request → replay the stored response; different request → 422; still running → 409.
  */
-export async function reserve(db: DbLike, actor: Actor, key: string, method: string, path: string, rawBody: string, now: Date): Promise<Reservation> {
+export async function reserve(
+  db: DbLike,
+  actor: Actor,
+  key: string,
+  method: string,
+  path: string,
+  rawBody: string,
+  now: Date,
+): Promise<Reservation> {
   const requestHash = createHash("sha256").update(`${method} ${path}\n${rawBody}`).digest("hex");
   const inserted = await db
     .insert(idempotencyKey)

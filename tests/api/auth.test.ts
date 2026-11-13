@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createResetCode } from "@/server/auth/auth";
-import { getDb, closeDb } from "@/server/db/client";
+import { closeDb, getDb } from "@/server/db/client";
 import { authLockout } from "@/server/db/schema";
 import { anon, client, PIN, resetAll, setNow, setupUser } from "../helpers/api";
 import { SETUP_CODE } from "../helpers/env";
@@ -20,7 +20,11 @@ describe("first-run setup", () => {
     expect(ok.status).toBe(201);
     expect(ok.body.recoveryCodes).toHaveLength(10);
     expect(new Set(ok.body.recoveryCodes).size).toBe(10);
-    expect(ok.cookies.some((k) => k.startsWith("agenda_session=") && k.includes("HttpOnly") && k.includes("Secure") && k.includes("SameSite=Lax"))).toBe(true);
+    expect(
+      ok.cookies.some(
+        (k) => k.startsWith("agenda_session=") && k.includes("HttpOnly") && k.includes("Secure") && k.includes("SameSite=Lax"),
+      ),
+    ).toBe(true);
     expect((await c.get("/api/auth/session")).body.state).toBe("unlocked");
     expect((await anon().post("/api/auth/setup", { setupCode: SETUP_CODE, pin: PIN })).body.code).toBe("setup_completed");
   });
@@ -75,7 +79,8 @@ describe("PIN", () => {
     await phone.get("/api/auth/session");
     expect((await phone.post("/api/auth/unlock", { pin: PIN })).status).toBe(200);
     expect((await user.get("/api/auth/devices")).status).toBe(200);
-    for (let n = 0; n < 4; n++) { // my login above reset the global count
+    for (let n = 0; n < 4; n++) {
+      // my login above reset the global count
       const b = anon();
       await b.get("/api/auth/session");
       for (let i = 0; i < 5; i++) await b.post("/api/auth/unlock", { pin: "000000" });
@@ -128,10 +133,16 @@ describe("forgot PIN", () => {
   it("recovery code: consumed once, shows remaining count", async () => {
     const { recoveryCodes } = await setupUser();
     const phone = anon();
-    const r = await phone.post("/api/auth/recover", { method: "recovery_code", code: recoveryCodes[3].toLowerCase().replaceAll("-", " "), newPin: "730154" });
+    const r = await phone.post("/api/auth/recover", {
+      method: "recovery_code",
+      code: recoveryCodes[3].toLowerCase().replaceAll("-", " "),
+      newPin: "730154",
+    });
     expect(r.status).toBe(200);
     expect(r.body.remainingRecoveryCodes).toBe(9);
-    expect((await anon().post("/api/auth/recover", { method: "recovery_code", code: recoveryCodes[3], newPin: "111111" })).status).toBe(401);
+    expect((await anon().post("/api/auth/recover", { method: "recovery_code", code: recoveryCodes[3], newPin: "111111" })).status).toBe(
+      401,
+    );
     expect((await anon().post("/api/auth/unlock", { pin: "730154" })).status).toBe(200);
   });
 
@@ -139,8 +150,12 @@ describe("forgot PIN", () => {
     const { user, recoveryCodes } = await setupUser();
     const regen = await user.post("/api/auth/recovery-codes", { pin: PIN });
     expect(regen.body.recoveryCodes).toHaveLength(10);
-    expect((await anon().post("/api/auth/recover", { method: "recovery_code", code: recoveryCodes[0], newPin: "111111" })).status).toBe(401);
-    expect((await anon().post("/api/auth/recover", { method: "recovery_code", code: regen.body.recoveryCodes[0], newPin: "111111" })).status).toBe(200);
+    expect((await anon().post("/api/auth/recover", { method: "recovery_code", code: recoveryCodes[0], newPin: "111111" })).status).toBe(
+      401,
+    );
+    expect(
+      (await anon().post("/api/auth/recover", { method: "recovery_code", code: regen.body.recoveryCodes[0], newPin: "111111" })).status,
+    ).toBe(200);
   });
 
   it("CLI reset code (pnpm auth:reset-pin): valid 15 min, single use", async () => {

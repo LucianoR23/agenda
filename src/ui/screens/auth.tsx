@@ -4,7 +4,7 @@ import { startAuthentication } from "@simplewebauthn/browser";
 import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiProblem } from "@/client/api";
+import { ApiProblem, api } from "@/client/api";
 import type { SessionState } from "@/client/types";
 import { Button, Segmented } from "../components/controls";
 import { Icon } from "../components/icon";
@@ -69,7 +69,8 @@ const problemText = (e: unknown) => {
   if (e.offline) return "Sin conexión.";
   const p = e.problem;
   if (p.code === "locked_out") return `Demasiados intentos. Probá en ${Math.ceil((p.retryAfterSeconds ?? 60) / 60)} min.`;
-  if (p.code === "invalid_credentials") return p.remainingAttempts !== undefined ? `Incorrecto. Te quedan ${p.remainingAttempts} intentos.` : "Código incorrecto.";
+  if (p.code === "invalid_credentials")
+    return p.remainingAttempts !== undefined ? `Incorrecto. Te quedan ${p.remainingAttempts} intentos.` : "Código incorrecto.";
   return p.detail ?? p.title;
 };
 
@@ -134,7 +135,14 @@ export function SetupScreen() {
     return (
       <Screen>
         <Brand />
-        <PinPad title={step === "pin" ? "Elegí un PIN de 6 dígitos" : "Repetí el PIN"} filled={pad.digits.length} error={error} onDigit={pad.push} onBackspace={pad.back} recoverLabel={null} />
+        <PinPad
+          title={step === "pin" ? "Elegí un PIN de 6 dígitos" : "Repetí el PIN"}
+          filled={pad.digits.length}
+          error={error}
+          onDigit={pad.push}
+          onBackspace={pad.back}
+          recoverLabel={null}
+        />
       </Screen>
     );
   }
@@ -146,7 +154,9 @@ export function SetupScreen() {
           <Icon name="check_circle" size={16} /> Listo, este dispositivo ya es de confianza
         </span>
         <h1 className="text-title text-text">Códigos de recuperación</h1>
-        <p className="text-body-sm text-text2">Si olvidás el PIN, cada código sirve una vez. Guardalos fuera del celular: no se vuelven a mostrar.</p>
+        <p className="text-body-sm text-text2">
+          Si olvidás el PIN, cada código sirve una vez. Guardalos fuera del celular: no se vuelven a mostrar.
+        </p>
         <ol className="grid grid-cols-2 gap-2 rounded-lg bg-surface p-3.5 font-mono text-[15px] text-text" data-testid="recovery-codes">
           {codes.map((c) => (
             <li key={c}>{c}</li>
@@ -156,7 +166,12 @@ export function SetupScreen() {
           <Button variant="secondary" icon="check" className="flex-1" onClick={() => navigator.clipboard?.writeText(text)}>
             Copiar
           </Button>
-          <Button variant="secondary" icon="download" className="flex-1" href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Agenda — códigos de recuperación\n\n${text}\n`)}`}>
+          <Button
+            variant="secondary"
+            icon="download"
+            className="flex-1"
+            href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Agenda — códigos de recuperación\n\n${text}\n`)}`}
+          >
             Descargar
           </Button>
         </div>
@@ -191,7 +206,10 @@ export function UnlockScreen({ session }: { session: SessionState }) {
 
   const fingerprint = useCallback(async () => {
     try {
-      const { data: options } = await api<Parameters<typeof startAuthentication>[0]["optionsJSON"]>("POST", "/api/auth/passkey/auth/options");
+      const { data: options } = await api<Parameters<typeof startAuthentication>[0]["optionsJSON"]>(
+        "POST",
+        "/api/auth/passkey/auth/options",
+      );
       const response = await startAuthentication({ optionsJSON: options });
       await api("POST", "/api/auth/passkey/auth/verify", { response });
       await unlocked();
@@ -212,8 +230,12 @@ export function UnlockScreen({ session }: { session: SessionState }) {
   return (
     <Screen>
       <Brand />
-      {session.state === "unauthenticated" && <p className="max-w-xs text-center text-body-sm text-text2">Dispositivo nuevo: ingresá tu PIN para confiar en él.</p>}
-      {session.state === "locked" && <p className="max-w-xs text-center text-body-sm text-text2">Hace más de 7 días que no usás este dispositivo.</p>}
+      {session.state === "unauthenticated" && (
+        <p className="max-w-xs text-center text-body-sm text-text2">Dispositivo nuevo: ingresá tu PIN para confiar en él.</p>
+      )}
+      {session.state === "locked" && (
+        <p className="max-w-xs text-center text-body-sm text-text2">Hace más de 7 días que no usás este dispositivo.</p>
+      )}
       <PinPad
         filled={pin.digits.length}
         fingerprint={session.passkeyEnabled && session.state === "locked"}
@@ -251,7 +273,14 @@ function RecoverScreen({ onBack }: { onBack: () => void }) {
   if (step === "pin")
     return (
       <Screen>
-        <PinPad title="Elegí un PIN nuevo" filled={pin.digits.length} error={error} onDigit={pin.push} onBackspace={pin.back} recoverLabel={null} />
+        <PinPad
+          title="Elegí un PIN nuevo"
+          filled={pin.digits.length}
+          error={error}
+          onDigit={pin.push}
+          onBackspace={pin.back}
+          recoverLabel={null}
+        />
       </Screen>
     );
   if (step === "done")

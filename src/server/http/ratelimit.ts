@@ -1,7 +1,6 @@
 /** In-memory sliding window (single container). Rate limits for API tokens are wired in phase 8. */
 const windows = new Map<string, number[]>();
 
-
 /** Returns null when allowed, or seconds to wait. */
 export function hit(key: string, limit: number, nowMs: number): number | null {
   const since = nowMs - 60_000;

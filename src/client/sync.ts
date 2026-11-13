@@ -3,7 +3,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { uuidv7 } from "uuidv7";
-import { api, ApiProblem } from "./api";
+import { ApiProblem, api } from "./api";
 import { idb, type Optimistic, type OutboxItem } from "./db";
 
 // ---------- status store ----------
@@ -96,7 +96,10 @@ export function flush(qc: QueryClient): Promise<void> {
             break;
           }
           if (e.problem.status === 409 || e.problem.status === 412) {
-            await idb().outbox.update(item.id, { state: "conflict", conflict: { code: e.problem.code, detail: e.problem.detail, current: e.problem.current } });
+            await idb().outbox.update(item.id, {
+              state: "conflict",
+              conflict: { code: e.problem.code, detail: e.problem.detail, current: e.problem.current },
+            });
           } else {
             // rejected for good (validation, gone…): drop it and show the server's truth
             await idb().outbox.delete(item.id);
@@ -123,7 +126,8 @@ export async function resolveConflict(qc: QueryClient, id: string, choice: "mine
     for (const k of item.invalidate) await qc.invalidateQueries({ queryKey: JSON.parse(k) });
   } else {
     const current = item.conflict?.current as { version?: number } | undefined;
-    const body = item.body && typeof item.body === "object" && current?.version ? { ...(item.body as object), version: current.version } : item.body;
+    const body =
+      item.body && typeof item.body === "object" && current?.version ? { ...(item.body as object), version: current.version } : item.body;
     // a fresh key: the old one is bound to the rejected request
     const fresh = { ...item, body, id: uuidv7(), state: "pending" as const, conflict: undefined };
     await idb().outbox.delete(id);

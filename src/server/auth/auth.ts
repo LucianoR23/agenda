@@ -1,21 +1,21 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import type { DbLike } from "../db/client";
 import { appUser, device, passkey, pinResetCode, pushSubscription, recoveryCode } from "../db/schema";
+import type { DeviceRow } from "../domain/rows";
 import { env } from "../env";
 import type { Ctx } from "../http/context";
 import { ApiError, notFound } from "../http/errors";
 import { isoLocal } from "../time";
-import type { DeviceRow } from "../domain/rows";
 import { CHALLENGE_COOKIE, clearCookie, parseCookies, SESSION_COOKIE, setCookie } from "./cookies";
-import { hashSecret, normalizeRecoveryCode, recoveryCode as newRecoveryCode, sign, unsign, verifySecret } from "./crypto";
+import { hashSecret, recoveryCode as newRecoveryCode, normalizeRecoveryCode, sign, unsign, verifySecret } from "./crypto";
 import { assertNotLocked, failAttempt, succeedAttempt } from "./lockout";
 import { createDevice, deviceNameFromUA, issueSession } from "./session";
 
@@ -71,10 +71,17 @@ export async function sessionState(ctx: Ctx) {
   try {
     await assertNotLocked(ctx);
   } catch (e) {
-    if (e instanceof ApiError && e.code === "locked_out") lockedUntil = isoLocal(new Date(ctx.now.getTime() + (e.extra.retryAfterSeconds ?? 0) * 1000));
+    if (e instanceof ApiError && e.code === "locked_out")
+      lockedUntil = isoLocal(new Date(ctx.now.getTime() + (e.extra.retryAfterSeconds ?? 0) * 1000));
   }
   return {
-    state: !user ? ("setup_required" as const) : !d ? ("unauthenticated" as const) : ctx.sessionLocked ? ("locked" as const) : ("unlocked" as const),
+    state: !user
+      ? ("setup_required" as const)
+      : !d
+        ? ("unauthenticated" as const)
+        : ctx.sessionLocked
+          ? ("locked" as const)
+          : ("unlocked" as const),
     passkeyEnabled: !!pk,
     lockedUntil,
     device: d ? { id: d.id, name: d.name } : null,
@@ -104,7 +111,10 @@ export async function unlock(ctx: Ctx, body: { pin: string; deviceName?: string 
   return { device: await deviceOut(ctx.db, d, d.id) };
 }
 
-export async function recover(ctx: Ctx, body: { method: "recovery_code" | "reset_code"; code: string; newPin: string; deviceName?: string }) {
+export async function recover(
+  ctx: Ctx,
+  body: { method: "recovery_code" | "reset_code"; code: string; newPin: string; deviceName?: string },
+) {
   await requireUser(ctx);
   await assertNotLocked(ctx);
   if (body.method === "recovery_code") {
@@ -154,13 +164,19 @@ export async function regenerateRecoveryCodes(ctx: Ctx, pin: string) {
 const CHALLENGE_TTL_MS = 5 * 60_000;
 
 function storeChallenge(ctx: Ctx, purpose: "register" | "auth", challenge: string) {
-  ctx.setCookies.push(setCookie(CHALLENGE_COOKIE, sign({ purpose, challenge, exp: ctx.now.getTime() + CHALLENGE_TTL_MS }, env().SESSION_SECRET), 300));
+  ctx.setCookies.push(
+    setCookie(CHALLENGE_COOKIE, sign({ purpose, challenge, exp: ctx.now.getTime() + CHALLENGE_TTL_MS }, env().SESSION_SECRET), 300),
+  );
 }
 
 function takeChallenge(ctx: Ctx, purpose: "register" | "auth"): string {
-  const c = unsign<{ purpose: string; challenge: string; exp: number }>(parseCookies(ctx.req.headers.get("cookie"))[CHALLENGE_COOKIE], env().SESSION_SECRET);
+  const c = unsign<{ purpose: string; challenge: string; exp: number }>(
+    parseCookies(ctx.req.headers.get("cookie"))[CHALLENGE_COOKIE],
+    env().SESSION_SECRET,
+  );
   ctx.setCookies.push(clearCookie(CHALLENGE_COOKIE));
-  if (!c || c.purpose !== purpose || c.exp < ctx.now.getTime()) throw new ApiError(401, "invalid_credentials", "Challenge expired; start again.");
+  if (!c || c.purpose !== purpose || c.exp < ctx.now.getTime())
+    throw new ApiError(401, "invalid_credentials", "Challenge expired; start again.");
   return c.challenge;
 }
 
@@ -253,7 +269,10 @@ export async function listDevices(ctx: Ctx) {
 }
 
 async function findDevice(ctx: Ctx, id: string) {
-  const [d] = await ctx.db.select().from(device).where(and(eq(device.id, id), isNull(device.revokedAt)));
+  const [d] = await ctx.db
+    .select()
+    .from(device)
+    .where(and(eq(device.id, id), isNull(device.revokedAt)));
   if (!d) throw notFound("Device");
   return d;
 }

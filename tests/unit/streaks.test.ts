@@ -8,7 +8,18 @@ describe("streaks", () => {
 
   it("weekly: counts met weeks back from the current one; the running week doesn't break it", () => {
     // weeks of 09-28, 10-05 met (3 each); week of 10-12 met; current week (10-19) only 1 so far
-    const logs = gym(["2026-09-28", "2026-09-30", "2026-10-02", "2026-10-05", "2026-10-07", "2026-10-09", "2026-10-12", "2026-10-14", "2026-10-16", "2026-10-19"]);
+    const logs = gym([
+      "2026-09-28",
+      "2026-09-30",
+      "2026-10-02",
+      "2026-10-05",
+      "2026-10-07",
+      "2026-10-09",
+      "2026-10-12",
+      "2026-10-14",
+      "2026-10-16",
+      "2026-10-19",
+    ]);
     expect(streaks(weekly, logs, "2026-10-19")).toEqual({ current: 3, best: 3 });
   });
 

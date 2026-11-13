@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiProblem, get } from "./api";
+import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
 import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
 import type { Device, SessionState } from "./types";
@@ -27,7 +27,9 @@ export function makeQueryClient() {
 /** IndexedDB first: puts every cached response into the query cache before the first render. */
 export async function hydrateFromIdb(qc: QueryClient) {
   const cutoff = Date.now() - CACHE_DAYS * 86_400_000;
-  await idb().cache.filter((e) => e.at < cutoff || e.v !== CACHE_VERSION).delete();
+  await idb()
+    .cache.filter((e) => e.at < cutoff || e.v !== CACHE_VERSION)
+    .delete();
   // shown immediately, but marked stale so every screen revalidates against the server on mount
   for (const e of await idb().cache.toArray()) qc.setQueryData(JSON.parse(e.key), e.data, { updatedAt: 1 });
   await reapplyPending(qc);
@@ -59,7 +61,12 @@ function useCached<T>(key: unknown[], path: string | null, opts: { refetchInterv
 export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/api/auth/devices");
 
 export const useSession = () =>
-  useQuery<SessionState, ApiProblem>({ queryKey: ["session"], queryFn: () => get<SessionState>("/api/auth/session"), staleTime: 60_000, retry: 1 });
+  useQuery<SessionState, ApiProblem>({
+    queryKey: ["session"],
+    queryFn: () => get<SessionState>("/api/auth/session"),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
 // ---------- writes ----------
 

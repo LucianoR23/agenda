@@ -30,7 +30,10 @@ export function Banner({
 }) {
   const b = BANNER[kind];
   return (
-    <div role={kind === "conflict" ? "alert" : "status"} className={cx("flex gap-3 rounded-lg p-3.5 text-text", action ? "items-center" : "items-start", b.box)}>
+    <div
+      role={kind === "conflict" ? "alert" : "status"}
+      className={cx("flex gap-3 rounded-lg p-3.5 text-text", action ? "items-center" : "items-start", b.box)}
+    >
       <Icon name={b.icon} className={b.iconColor} />
       <div className="flex-1 text-body-sm">
         {title && <b className="font-semibold">{title}</b>}
@@ -66,9 +69,22 @@ export function SyncStatus({ state, lastSync }: { state: "syncing" | "idle" | "o
 }
 
 /** Undo toast (52 px, inverse). */
-export function Toast({ icon = "check_circle", message, action, onAction }: { icon?: IconName; message: string; action?: string; onAction?: () => void }) {
+export function Toast({
+  icon = "check_circle",
+  message,
+  action,
+  onAction,
+}: {
+  icon?: IconName;
+  message: string;
+  action?: string;
+  onAction?: () => void;
+}) {
   return (
-    <div role="status" className="flex min-h-[52px] items-center gap-2.5 rounded-[14px] bg-inverse py-0 pr-1.5 pl-4 text-on-inverse shadow-calma">
+    <div
+      role="status"
+      className="flex min-h-[52px] items-center gap-2.5 rounded-[14px] bg-inverse py-0 pr-1.5 pl-4 text-on-inverse shadow-calma"
+    >
       <Icon name={icon} />
       <span className="flex-1 text-body-sm">{message}</span>
       {action && (

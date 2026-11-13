@@ -42,7 +42,7 @@ pnpm dev                        # http://localhost:3000 (set APP_ORIGIN and WEBA
 |---|---|
 | `pnpm test` / `pnpm test:coverage` | Unit + API integration tests on the real Postgres test DB; every response is validated against `openapi.yaml` |
 | `pnpm test:e2e` | Playwright on the production build (Android viewport), saves `docs/screenshots` |
-| `pnpm openapi` / `openapi:check` / `openapi:lint` | Regenerate the contract and examples / CI drift check / Redocly |
+| `pnpm openapi:gen` / `openapi:check` / `openapi:lint` | Regenerate the contract and examples / CI drift check / Redocly |
 | `pnpm db:generate --name x` | New migration from the Drizzle schema (commit the SQL) |
 | `pnpm icons` / `pwa:icons` | Rebuild the icon sprite / the PWA PNG icons |
 | `pnpm agent:simulate` | Agenbot's daily flow with curl (see [Agent integration](#agent-integration-guide)) |

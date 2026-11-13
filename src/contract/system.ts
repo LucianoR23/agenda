@@ -47,13 +47,9 @@ export const RecoveryCodes = z
   })
   .openapi("RecoveryCodes");
 
-export const SetupResult = z
-  .strictObject({ device: Device, ...RecoveryCodes.shape })
-  .openapi("SetupResult");
+export const SetupResult = z.strictObject({ device: Device, ...RecoveryCodes.shape }).openapi("SetupResult");
 
-export const UnlockInput = z
-  .strictObject({ pin: Pin, deviceName: z.string().max(80).optional() })
-  .openapi("UnlockInput");
+export const UnlockInput = z.strictObject({ pin: Pin, deviceName: z.string().max(80).optional() }).openapi("UnlockInput");
 
 export const UnlockResult = z.strictObject({ device: Device }).openapi("UnlockResult");
 
@@ -68,9 +64,7 @@ export const RecoverInput = z
   })
   .openapi("RecoverInput");
 
-export const RecoverResult = z
-  .strictObject({ device: Device, remainingRecoveryCodes: z.int() })
-  .openapi("RecoverResult");
+export const RecoverResult = z.strictObject({ device: Device, remainingRecoveryCodes: z.int() }).openapi("RecoverResult");
 
 export const ChangePinInput = z.strictObject({ currentPin: Pin, newPin: Pin }).openapi("ChangePinInput");
 
@@ -79,11 +73,9 @@ export const PinConfirmInput = z.strictObject({ pin: Pin }).openapi("PinConfirmI
 export const DeviceRename = z.strictObject({ name: z.string().min(1).max(80) }).openapi("DeviceRename");
 
 /** WebAuthn JSON payloads are produced/consumed by @simplewebauthn; documented as opaque objects. */
-export const WebAuthnJson = z
-  .record(z.string(), z.unknown())
-  .openapi("WebAuthnJson", {
-    description: "`PublicKeyCredential*OptionsJSON` or `*ResponseJSON` from @simplewebauthn (opaque here).",
-  });
+export const WebAuthnJson = z.record(z.string(), z.unknown()).openapi("WebAuthnJson", {
+  description: "`PublicKeyCredential*OptionsJSON` or `*ResponseJSON` from @simplewebauthn (opaque here).",
+});
 
 export const PasskeyVerifyInput = z.strictObject({ response: WebAuthnJson }).openapi("PasskeyVerifyInput");
 

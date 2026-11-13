@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { ZodType } from "zod";
 import { routes } from "@/contract/openapi";
 import type { RouteDef } from "@/contract/route-def";
-import { randomToken } from "../auth/crypto";
 import { DEVICE_KEY_COOKIE, parseCookies, SESSION_COOKIE, setCookie } from "../auth/cookies";
+import { randomToken } from "../auth/crypto";
 import { resolveSession, touchDevice } from "../auth/session";
 import { getDb } from "../db/client";
 import { now as clockNow } from "../time";
@@ -155,22 +155,22 @@ export async function handle(req: Request): Promise<Response> {
 
     const afterCommit: Array<() => Promise<void>> = [];
     const result: HandlerResult = await db.transaction(async (tx) => {
-        const ctx: Ctx = {
-          requestId,
-          req,
-          now,
-          caller,
-          sessionDevice: session?.device ?? null,
-          sessionLocked: session?.locked ?? false,
-          deviceKey: deviceKey ?? "",
-          ip: req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? null,
-          userAgent: req.headers.get("user-agent"),
-          ifMatch,
-          setCookies,
-          db: tx,
-          afterCommit,
-        };
-        return handler(ctx, { params: parsedParams, query: parsedQuery, body: parsedBody });
+      const ctx: Ctx = {
+        requestId,
+        req,
+        now,
+        caller,
+        sessionDevice: session?.device ?? null,
+        sessionLocked: session?.locked ?? false,
+        deviceKey: deviceKey ?? "",
+        ip: req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? null,
+        userAgent: req.headers.get("user-agent"),
+        ifMatch,
+        setCookies,
+        db: tx,
+        afterCommit,
+      };
+      return handler(ctx, { params: parsedParams, query: parsedQuery, body: parsedBody });
     });
 
     if (idem) await complete(db, idem.actor, idem.key, result.status, result.body ?? null);

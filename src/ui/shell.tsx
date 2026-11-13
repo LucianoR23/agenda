@@ -7,14 +7,14 @@ import { onAuthProblem } from "@/client/api";
 import { hydrateFromIdb, makeQueryClient, useSession } from "@/client/queries";
 import { onRejected, resolveConflict, startSync, useSync } from "@/client/sync";
 import type { SessionState } from "@/client/types";
-import { Banner } from "./components/feedback";
 import { ConflictCompare } from "./components/extensions";
-import { BottomSheet, ToastHost, useToast } from "./components/overlay";
+import { Banner } from "./components/feedback";
 import { Sidebar, TabBar, tabFor } from "./components/navigation";
+import { BottomSheet, ToastHost, useToast } from "./components/overlay";
 import { TimelineSkeleton } from "./components/surfaces";
+import { registerServiceWorker } from "./pwa";
 import { SetupScreen, UnlockScreen } from "./screens/auth";
 import { applyTheme, readTheme } from "./theme";
-import { registerServiceWorker } from "./pwa";
 
 /** Client root: query cache hydrated from IndexedDB, sync engine, auth gate, navigation. */
 export function AppShell({ children }: { children: ReactNode }) {

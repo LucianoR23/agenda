@@ -34,7 +34,8 @@ export function instantAt(date: string, time: string): Date {
 
 export const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 
-export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+export const daysBetween = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 
 /** Monday of the ISO week containing `date`. */
 export function weekStart(date: string): string {
@@ -43,7 +44,8 @@ export function weekStart(date: string): string {
 }
 
 export const monthStart = (date: string) => `${date.slice(0, 7)}-01`;
-export const monthEnd = (date: string) => addDays(`${new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7), 1)).toISOString().slice(0, 10)}`, -1);
+export const monthEnd = (date: string) =>
+  addDays(`${new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7), 1)).toISOString().slice(0, 10)}`, -1);
 
 /** `HH:mm` (00:00–29:59) ↔ minutes since the day's 00:00. */
 export const toMinutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));

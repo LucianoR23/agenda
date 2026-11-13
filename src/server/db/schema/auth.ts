@@ -22,13 +22,7 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
 });
 
 export const lockoutScopeEnum = pgEnum("lockout_scope", ["device", "global"]);
-export const authMethodEnum = pgEnum("auth_method", [
-  "setup",
-  "pin",
-  "passkey",
-  "recovery_code",
-  "reset_code",
-]);
+export const authMethodEnum = pgEnum("auth_method", ["setup", "pin", "passkey", "recovery_code", "reset_code"]);
 
 /** The single human user. The unique `singleton` column makes a second row impossible. */
 export const appUser = pgTable(
@@ -89,10 +83,7 @@ export const passkey = pgTable("passkey", {
   credentialId: text().notNull().unique("passkey_credential_id_uq"), // base64url
   publicKey: bytea().notNull(),
   counter: bigint({ mode: "number" }).notNull().default(0),
-  transports: text()
-    .array()
-    .notNull()
-    .default(sql`'{}'::text[]`),
+  transports: text().array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
   lastUsedAt: timestamp({ withTimezone: true }),
 });

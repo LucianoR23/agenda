@@ -8,7 +8,11 @@ import { Icon } from "./icon";
 /** Bottom sheet surface: grabber, 28 px top radius, surface2, shadow. Positioning/animation is up to the caller. */
 export function Sheet({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div role="dialog" aria-label={label} className="flex flex-col gap-3.5 rounded-t-[28px] bg-surface2 px-5 pt-2.5 pb-5 shadow-calma pb-safe">
+    <div
+      role="dialog"
+      aria-label={label}
+      className="flex flex-col gap-3.5 rounded-t-[28px] bg-surface2 px-5 pt-2.5 pb-5 shadow-calma pb-safe"
+    >
       <div className="h-1 w-9 self-center rounded-sm bg-border2" />
       {children}
     </div>
@@ -40,14 +44,14 @@ export function SheetRow({
   onClick?: () => void;
 }) {
   return (
-    <div
-      role={onClick ? "button" : undefined}
-      onClick={onClick}
-      className="flex min-h-14 items-center gap-3 px-3.5"
-    >
+    <div role={onClick ? "button" : undefined} onClick={onClick} className="flex min-h-14 items-center gap-3 px-3.5">
       <Icon name={icon} className="text-muted" />
       <span className={cx("flex-1 text-[15px]", placeholder ? "text-muted" : "text-text")}>{label}</span>
-      {value && <span className={cx("text-[15px]", valueTone === "call" ? "text-call" : valueTone === "muted" ? "text-muted" : "text-text")}>{value}</span>}
+      {value && (
+        <span className={cx("text-[15px]", valueTone === "call" ? "text-call" : valueTone === "muted" ? "text-muted" : "text-text")}>
+          {value}
+        </span>
+      )}
       {trailing}
       {chevron && <Icon name="chevron_right" className="text-muted" />}
     </div>
@@ -122,7 +126,12 @@ export function SectionCard({
         <Icon name={icon} color={iconColor} />
         <h2 className="flex-1 text-[15px] font-semibold text-text">
           {onToggle ? (
-            <button type="button" aria-expanded={!!expanded} onClick={onToggle} className="-my-3 flex min-h-11 w-full items-center justify-between gap-2 text-left">
+            <button
+              type="button"
+              aria-expanded={!!expanded}
+              onClick={onToggle}
+              className="-my-3 flex min-h-11 w-full items-center justify-between gap-2 text-left"
+            >
               {title}
               <Icon name="chevron_right" size={20} className={cx("text-muted transition-transform", expanded && "rotate-90")} />
             </button>
@@ -210,12 +219,26 @@ export function TimelineSkeleton({ heights = [64, 86, 64] }: { heights?: number[
 }
 
 /** Stat card: label, big value, delta/period line. */
-export function StatCard({ label, value, note, noteTone = "muted" }: { label: string; value: string; note?: string; noteTone?: "muted" | "success" | "danger" }) {
+export function StatCard({
+  label,
+  value,
+  note,
+  noteTone = "muted",
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  noteTone?: "muted" | "success" | "danger";
+}) {
   return (
     <div className="flex flex-col gap-1 rounded-lg bg-surface p-3.5">
       <span className="text-caption text-muted">{label}</span>
       <span className="text-[30px] font-semibold tracking-[-.02em] text-text">{value}</span>
-      {note && <span className={cx("text-mono", noteTone === "success" ? "text-success" : noteTone === "danger" ? "text-danger" : "text-muted")}>{note}</span>}
+      {note && (
+        <span className={cx("text-mono", noteTone === "success" ? "text-success" : noteTone === "danger" ? "text-danger" : "text-muted")}>
+          {note}
+        </span>
+      )}
     </div>
   );
 }
@@ -234,7 +257,15 @@ export function ChartCard({ title, period, reading, children }: { title: string;
   );
 }
 
-export function BarChart({ bars, color = "var(--call)", highlight }: { bars: Array<{ label: string; value: number }>; color?: string; highlight?: number }) {
+export function BarChart({
+  bars,
+  color = "var(--call)",
+  highlight,
+}: {
+  bars: Array<{ label: string; value: number }>;
+  color?: string;
+  highlight?: number;
+}) {
   const max = Math.max(1, ...bars.map((b) => b.value));
   return (
     <div className="flex h-[84px] items-end gap-2.5">
@@ -242,7 +273,11 @@ export function BarChart({ bars, color = "var(--call)", highlight }: { bars: Arr
         <div key={i} className="flex flex-1 flex-col items-center gap-1">
           <div
             className="w-full max-w-12 rounded-t-md rounded-b-sm"
-            style={{ height: Math.max(4, (b.value / max) * 70), background: color, opacity: highlight === undefined || highlight === i ? 1 : 0.55 }}
+            style={{
+              height: Math.max(4, (b.value / max) * 70),
+              background: color,
+              opacity: highlight === undefined || highlight === i ? 1 : 0.55,
+            }}
           />
           <span className="font-mono text-[10px] text-muted">{b.label}</span>
         </div>
@@ -254,9 +289,7 @@ export function BarChart({ bars, color = "var(--call)", highlight }: { bars: Arr
 export function Sparkline({ values, color }: { values: number[]; color: string }) {
   const max = Math.max(1, ...values);
   const min = Math.min(0, ...values);
-  const pts = values
-    .map((v, i) => `${(i / Math.max(1, values.length - 1)) * 300},${62 - ((v - min) / (max - min || 1)) * 54}`)
-    .join(" ");
+  const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * 300},${62 - ((v - min) / (max - min || 1)) * 54}`).join(" ");
   return (
     <svg viewBox="0 0 300 70" className="h-[70px] w-full">
       <polyline points={pts} fill="none" style={{ stroke: color }} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />

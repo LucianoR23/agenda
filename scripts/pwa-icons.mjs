@@ -1,8 +1,9 @@
 // `pnpm pwa:icons` — writes the app icons (Claude Design "Agenda - Icono" v0.3): SVG masters + PNGs rendered with
 // headless Chromium + favicon.ico. The symbol is the "now" line crossing the timeline: a done block above, the next
 // call in amber and what follows.
-import { chromium } from "@playwright/test";
+
 import { writeFileSync } from "node:fs";
+import { chromium } from "@playwright/test";
 
 const BG = "#111312";
 // Design geometry shifted 8 px right so the composition (dot included) is centred on 256 both ways; its farthest
@@ -50,7 +51,9 @@ const page = await browser.newPage();
 const out = {};
 for (const [name, size, master] of pngs) {
   await page.setViewportSize({ width: size, height: size });
-  await page.setContent(`<html><body style="margin:0;background:transparent">${masters[master].replace("<svg ", `<svg width="${size}" height="${size}" `)}</body></html>`);
+  await page.setContent(
+    `<html><body style="margin:0;background:transparent">${masters[master].replace("<svg ", `<svg width="${size}" height="${size}" `)}</body></html>`,
+  );
   out[name] = await page.locator("svg").screenshot({ omitBackground: true });
   if (name !== "favicon-16.png") writeFileSync(`public/icons/${name}`, out[name]);
 }

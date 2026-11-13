@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { routes } from "@/contract/openapi";
-import { closeDb } from "@/server/db/client";
 import { handle } from "@/server/api";
+import { closeDb } from "@/server/db/client";
 import { implementedOperations } from "@/server/http/router";
 import { anon, resetAll, setupUser } from "../helpers/api";
 
@@ -41,5 +41,4 @@ describe("platform", () => {
     expect(b.body).toMatchObject({ id: a.body.id });
     expect((await user.del("/api/push/subscribe", { endpoint: sub.endpoint })).status).toBe(204);
   });
-
 });

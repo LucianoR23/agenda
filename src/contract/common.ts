@@ -80,13 +80,9 @@ export const Problem = z
       .optional()
       .openapi({ description: "Field-level validation errors (JSON-pointer-like paths)." }),
     requestId: z.string(),
-    current: z
-      .unknown()
-      .optional()
-      .openapi({
-        description:
-          "On `version_conflict`: the current server state of the resource.",
-      }),
+    current: z.unknown().optional().openapi({
+      description: "On `version_conflict`: the current server state of the resource.",
+    }),
     retryAfterSeconds: z.int().optional().openapi({ description: "On `rate_limited` / `locked_out`." }),
     remainingAttempts: z.int().optional().openapi({ description: "On `invalid_credentials` (PIN / codes)." }),
   })

@@ -1,6 +1,6 @@
+import { readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
-import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
 /**
@@ -48,5 +48,7 @@ export function validateResponse(method: string, pathname: string, status: numbe
     cache.set(key, validate);
   }
   if (!validate(body))
-    throw new Error(`Contract: ${method} ${pathname} ${status} does not match openapi.yaml:\n${ajv.errorsText(validate.errors, { separator: "\n" })}`);
+    throw new Error(
+      `Contract: ${method} ${pathname} ${status} does not match openapi.yaml:\n${ajv.errorsText(validate.errors, { separator: "\n" })}`,
+    );
 }
