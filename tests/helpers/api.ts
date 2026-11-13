@@ -86,19 +86,6 @@ export async function setupUser(pin = PIN) {
   return { user: c, recoveryCodes: r.body.recoveryCodes as string[], device: r.body.device };
 }
 
-const TABLES = [
-  "change_log",
-  "idempotency_key",
-  "push_subscription",
-  "passkey",
-  "auth_attempt",
-  "auth_lockout",
-  "device",
-  "recovery_code",
-  "pin_reset_code",
-  "app_user",
-];
-
 export const pushes: PushMessage[] = [];
 
 /** Clean slate between tests: empty tables, real clock at a fixed instant, captured pushes. */
@@ -112,7 +99,19 @@ export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
     pushes.push(msg);
     return { gone: false };
   });
-  await getDb().execute(sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`));
+  await resetDb();
+}
+
+/**
+ * Empties every table (the guard already ensured this is a *_test database) and restores what migrations seed:
+ * the Inbox list.
+ */
+export async function resetDb() {
+  const db = getDb();
+  const rows = await db.execute<{ tablename: string }>(sql`select tablename from pg_tables where schemaname = 'public'`);
+  const tables = rows.map((r) => `"${r.tablename}"`).join(", ");
+  await db.execute(sql.raw(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`));
+  await db.execute(sql`INSERT INTO task_list (name, is_inbox, sort_order, updated_by) VALUES ('Inbox', true, 0, 'system')`);
 }
 
 /** Moves both clocks: the injectable one (Temporal, domain code) and Date (code not yet on Temporal). */

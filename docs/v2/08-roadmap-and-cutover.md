@@ -22,9 +22,12 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 > **Decisions (Phase 1, 2026-11-13):** Node 26 everywhere (LTS, native Temporal; Docker installs pnpm with npm because Node 25+ has no corepack). TypeScript 7 (native compiler), postgres 4 (verified with drizzle against `agenda_test`), web-push 4. `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` on. Client loads `temporal-polyfill` only when Temporal is missing. **Error format:** adopt `03`'s `{ "error": { "code", "message", "details"? } }` in place of v1's RFC 9457 problem+json (implement in phase 3). With drizzle, never put a raw `Date` or array inside `sql```: use typed operators (`gte`, `arrayContains`) or ISO strings with a cast.
 
 ## Phase 2 — Schema 0000
-- [ ] Drizzle schema per `02`, triggers, indexes, seeds (Inbox)
-- [ ] Re-enable API tests (`tests/api`) in `pnpm test`; wire `app_user.timezone` into `formatInstant` / `userTimeZone()` (Phase 1 uses `DEFAULT_TIMEZONE`)
-- [ ] Migration applies cleanly on empty DB; `uuidv7()` defaults work
+- [x] Drizzle schema per `02`, triggers, indexes, seeds (Inbox)
+- [x] Re-enable API tests (`tests/api`) in `pnpm test`
+- [ ] Wire `app_user.timezone` into `formatInstant` / `userTimeZone()` (moved to phase 3, with the auth rewrite that reads `app_user`)
+- [x] Migration applies cleanly on empty DB; `uuidv7()` defaults work
+
+> **Decisions (Phase 2, 2026-11-13):** `0000_init.sql` is pure drizzle-kit output (regenerate freely until the first deploy); `0001_db_logic.sql` (`drizzle-kit generate --custom`) holds extensions, search functions/indexes, triggers and the Inbox seed. `item_source` (`user`/`sunday`/`system`) is the actor everywhere; `change_log`/`audit_event`/`notification_log` also store `token_id`. `sleep_log.date` = wake-up date (bed after noon counts for the next day). Additions over `02`: `reminder.event_occurrence_at` (idempotent event offsets), `reminder_delivery.action/action_at` (single-use action tokens), `push_subscription.last_error`, `version`/`updated_by` on `day_review`, `api_token`/`audit_event` checks, `auth_lockout` scope `ip`. **Search:** `f_search(title, notes, …)` (lowercase + unaccent) with trigram GIN indexes on task, reminder, event and external_event; query with the same expression (`f_search(cols) LIKE '%' || f_search($1) || '%'`, or `%` for fuzzy). Functions are schema-qualified because PG17+ builds indexes with a restricted search_path.
 
 ## Phase 3 — Auth and security
 - [ ] Setup flow, PIN, sessions, devices, WebAuthn, recovery/reset codes ported
