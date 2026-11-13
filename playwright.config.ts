@@ -1,8 +1,9 @@
 import { defineConfig } from "@playwright/test";
+import { assertTestDatabase } from "./src/server/db/guard";
 
 export const E2E = {
   port: 3200,
-  db: process.env.E2E_DATABASE_URL ?? "postgres://agenda:agenda@localhost:5434/agenda_e2e",
+  db: assertTestDatabase(process.env.E2E_DATABASE_URL ?? "postgres://agenda:agenda@localhost:5433/agenda_e2e_test"),
   setupCode: "e2e-setup",
   pin: "482913",
 };

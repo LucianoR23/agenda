@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { env } from "../env";
+import { assertTestDatabase, underTestRunner } from "./guard";
 import * as schema from "./schema";
 
 function create(url: string) {
@@ -15,7 +16,9 @@ const globalForDb = globalThis as unknown as { agendaDb?: Conn | undefined };
 
 function conn(): Conn {
   if (!globalForDb.agendaDb) {
-    globalForDb.agendaDb = create(env().DATABASE_URL);
+    const url = env().DATABASE_URL;
+    if (underTestRunner()) assertTestDatabase(url);
+    globalForDb.agendaDb = create(url);
   }
   return globalForDb.agendaDb;
 }
