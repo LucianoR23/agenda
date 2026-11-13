@@ -5,12 +5,14 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { api } from "@/client/api";
 import { useDirect, useSession } from "@/client/queries";
-import { Button, Segmented, Toggle } from "../components/controls";
-import { useToast } from "../components/overlay";
+import { Button, Segmented, TextField, Toggle } from "../components/controls";
+import { Icon } from "../components/icon";
+import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
 import { RowGroup, SettingsRow, SheetRow } from "../components/surfaces";
 import { canInstall, currentPushEndpoint, disablePush, enablePush, onInstallable, promptInstall, pushSupported } from "../pwa";
 import { applyTheme, readTheme, type ThemePref } from "../theme";
+import { userTimeZone } from "../time";
 
 export function SettingsScreen() {
   const session = useSession().data;
@@ -19,6 +21,8 @@ export function SettingsScreen() {
   const [theme, setTheme] = useState<ThemePref>(readTheme);
   const [push, setPush] = useState(false);
   const [installable, setInstallable] = useState(canInstall);
+  const [tzOpen, setTzOpen] = useState(false);
+  const tz = session?.timezone ?? userTimeZone();
 
   useEffect(() => {
     void currentPushEndpoint().then((e) => setPush(!!e));
@@ -45,7 +49,12 @@ export function SettingsScreen() {
       <SectionLabel>General</SectionLabel>
       <RowGroup>
         <SettingsRow icon="lock" title="Seguridad" subtitle="PIN, huella, dispositivos" href="/ajustes/seguridad" />
+        <SettingsRow icon="key" title="Tokens de API" subtitle="Acceso de Sunday a tu agenda" href="/ajustes/tokens" />
+        <SettingsRow icon="public" title="Zona horaria" subtitle={tz.replaceAll("_", " ")} onClick={() => setTzOpen(true)} />
       </RowGroup>
+      <BottomSheet open={tzOpen} onClose={() => setTzOpen(false)} label="Zona horaria">
+        {tzOpen && <TimezonePicker current={tz} onDone={() => setTzOpen(false)} />}
+      </BottomSheet>
 
       <SectionLabel>Apariencia</SectionLabel>
       <Segmented
@@ -131,5 +140,45 @@ function About() {
       </div>
       <SheetRow icon="system_update" label="Buscar actualización" onClick={() => void checkUpdate()} />
     </RowGroup>
+  );
+}
+
+/** Every IANA zone the browser knows, searchable ("madrid", "buenos aires"). Changing it re-dates everything. */
+function TimezonePicker({ current, onDone }: { current: string; onDone: () => void }) {
+  const direct = useDirect();
+  const toast = useToast();
+  const [q, setQ] = useState("");
+  const zones = Intl.supportedValuesOf("timeZone");
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replaceAll("_", " ");
+  const matches = zones.filter((z) => norm(z).includes(norm(q.trim()))).slice(0, 40);
+  const choose = async (timezone: string) => {
+    try {
+      await direct("PATCH", "/api/settings", { timezone }, [["session"], ["settings"]]);
+      toast({ icon: "check_circle", message: `Zona horaria: ${timezone.replaceAll("_", " ")}` });
+      onDone();
+    } catch (e) {
+      toast({ icon: "info", message: (e as Error).message });
+    }
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="text-title text-text">Zona horaria</h2>
+      <p className="text-body-sm text-text2">Las fechas y horas de tareas, recordatorios y eventos usan esta zona.</p>
+      <TextField label="Buscar zona" placeholder="Buscar (por ejemplo Madrid)" value={q} onChange={(e) => setQ(e.target.value)} />
+      <RowGroup>
+        {matches.map((z) => (
+          <button key={z} type="button" onClick={() => void choose(z)} className="flex min-h-12 items-center gap-3 px-3.5 text-left">
+            <span className="flex-1 text-[15px] text-text">{z.replaceAll("_", " ")}</span>
+            {z === current && <Icon name="check" className="text-accent" />}
+          </button>
+        ))}
+        {matches.length === 0 && <p className="px-3.5 py-3 text-body-sm text-muted">No encontré esa zona.</p>}
+      </RowGroup>
+    </div>
   );
 }

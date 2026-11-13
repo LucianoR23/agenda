@@ -5,27 +5,20 @@ import { useState } from "react";
 import { ApiProblem } from "@/client/api";
 import { useDevices, useDirect, useSession } from "@/client/queries";
 import type { Device } from "@/client/types";
-import { Button, Toggle } from "../components/controls";
+import { Button, TextField, Toggle } from "../components/controls";
 import { Icon } from "../components/icon";
 import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
 import { RowGroup, SheetRow } from "../components/surfaces";
 import { seenLabel } from "../time";
 
-const field =
-  "h-12 w-full rounded-md border border-border2 bg-surface px-3.5 font-mono text-body text-text outline-none focus:border-accent";
 const PIN = /^\d{6}$/;
 
 type Sheet = { kind: "pin" } | { kind: "codes" } | { kind: "device"; device: Device } | null;
 
 const seen = (iso: string) => seenLabel(iso);
 
-const err = (e: unknown) =>
-  e instanceof ApiProblem
-    ? e.problem.code === "invalid_credentials"
-      ? `PIN incorrecto. Te quedan ${e.problem.remainingAttempts ?? "?"} intentos.`
-      : (e.problem.detail ?? e.problem.title)
-    : (e as Error).message;
+const err = (e: unknown) => (e instanceof ApiProblem ? e.problem.message : (e as Error).message);
 
 export function SecurityScreen() {
   const session = useSession().data;
@@ -122,25 +115,25 @@ function ChangePin({ onDone }: { onDone: () => void }) {
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-title text-text">Cambiar PIN</h2>
-      <input
-        aria-label="PIN actual"
+      <TextField
+        label="PIN actual"
+        mono
         type="password"
         inputMode="numeric"
         maxLength={6}
         placeholder="PIN actual"
         value={cur}
         onChange={(e) => setCur(e.target.value)}
-        className={field}
       />
-      <input
-        aria-label="PIN nuevo"
+      <TextField
+        label="PIN nuevo"
+        mono
         type="password"
         inputMode="numeric"
         maxLength={6}
         placeholder="PIN nuevo (6 dígitos)"
         value={next}
         onChange={(e) => setNext(e.target.value)}
-        className={field}
       />
       {error && <p className="text-caption text-danger">{error}</p>}
       <Button
@@ -178,15 +171,15 @@ function RegenerateCodes() {
     <div className="flex flex-col gap-3">
       <h2 className="text-title text-text">Regenerar códigos</h2>
       <p className="text-body-sm text-text2">Confirmá con tu PIN. Los 10 códigos anteriores dejan de funcionar.</p>
-      <input
-        aria-label="PIN"
+      <TextField
+        label="PIN"
+        mono
         type="password"
         inputMode="numeric"
         maxLength={6}
         placeholder="PIN"
         value={pin}
         onChange={(e) => setPin(e.target.value)}
-        className={field}
       />
       {error && <p className="text-caption text-danger">{error}</p>}
       <Button
@@ -212,7 +205,7 @@ function DeviceSheet({ device, onDone }: { device: Device; onDone: () => void })
     <div className="flex flex-col gap-3">
       <h2 className="text-title text-text">{device.name}</h2>
       <p className="text-caption text-muted">{device.userAgent}</p>
-      <input aria-label="Nombre" value={name} onChange={(e) => setName(e.target.value)} className={field.replace("font-mono ", "")} />
+      <TextField label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
       <Button
         size="lg"
         disabled={!name.trim() || name === device.name}

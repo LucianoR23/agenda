@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Sans } from "next/font/google";
+import { headers } from "next/headers";
 import { THEME_BOOT } from "@/ui/theme";
 import "./globals.css";
 
@@ -38,13 +39,15 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // per-request CSP nonce from src/proxy.ts (Next adds it to its own scripts; this inline one needs it explicitly)
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="es-AR" className={`${instrumentSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
       <head>
         {/* saved theme before first paint (no flash) */}
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: constant inline script, no user input; CSP nonce comes in phase 3 */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: constant inline script, no user input; allowed by the CSP nonce */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

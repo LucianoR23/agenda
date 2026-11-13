@@ -18,8 +18,15 @@ export const SessionState = z
     lockedUntil: orNull(Timestamp).openapi({ description: "Set while PIN entry is locked out." }),
     device: z.strictObject({ id: Uuid, name: z.string() }).nullable(),
     vapidPublicKey: z.string().nullable().openapi({ description: "Web Push application server key; null when push is not configured." }),
+    timezone: z
+      .string()
+      .openapi({ description: "The user's IANA timezone (every local date/time uses it).", example: "America/Buenos_Aires" }),
   })
   .openapi("SessionState");
+
+export const ReauthResult = z
+  .strictObject({ validUntil: Timestamp.openapi({ description: "Sensitive actions (API tokens) are allowed until then." }) })
+  .openapi("ReauthResult");
 
 export const Device = z
   .strictObject({
@@ -113,3 +120,64 @@ export const Health = z
     time: Timestamp,
   })
   .openapi("Health");
+
+// ---------- settings ----------
+
+const HHmm = z
+  .string()
+  .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "Expected HH:mm")
+  .openapi({ example: "23:30" });
+
+export const Settings = z
+  .strictObject({
+    timezone: z.string().openapi({ description: "IANA timezone.", example: "America/Buenos_Aires" }),
+    locale: z.string(),
+    quietStart: HHmm.nullable().openapi({ description: "Quiet hours start (local). Non-urgent reminders wait until quietEnd." }),
+    quietEnd: HHmm.nullable(),
+    defaultSnoozeMinutes: z.int(),
+  })
+  .openapi("Settings");
+
+export const SettingsPatch = z
+  .strictObject({
+    timezone: z.string().min(1).max(64).optional(),
+    locale: z.string().min(2).max(16).optional(),
+    quietStart: HHmm.nullable().optional(),
+    quietEnd: HHmm.nullable().optional(),
+    defaultSnoozeMinutes: z.int().min(1).max(1440).optional(),
+  })
+  .openapi("SettingsPatch");
+
+// ---------- API tokens ----------
+
+export const TokenScope = z.enum(["read", "write", "notify"]).openapi("TokenScope", {
+  description: "`read`: query the agenda. `write`: create/change items. `notify`: send pushes.",
+});
+
+export const ApiToken = z
+  .strictObject({
+    id: Uuid,
+    name: z.string(),
+    prefix: z.string().openapi({ description: "First 8 characters, for recognising the token.", example: "agd_x7Kp" }),
+    scopes: z.array(TokenScope),
+    lastUsedAt: orNull(Timestamp),
+    lastUsedIp: z.string().nullable(),
+    expiresAt: orNull(Timestamp),
+    createdAt: Timestamp,
+  })
+  .openapi("ApiToken");
+
+export const TokenCreateInput = z
+  .strictObject({
+    name: z.string().trim().min(1).max(60),
+    scopes: z.array(TokenScope).min(1),
+    expiresAt: Timestamp.optional(),
+  })
+  .openapi("TokenCreateInput");
+
+export const TokenCreated = z
+  .strictObject({
+    ...ApiToken.shape,
+    token: z.string().openapi({ description: "The secret (`agd_…`). Shown only in this response.", example: "agd_x7Kp…" }),
+  })
+  .openapi("TokenCreated");

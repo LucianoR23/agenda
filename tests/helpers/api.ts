@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
 import { vi } from "vitest";
 import { handle } from "@/server/api";
+import { tuning as lockoutTuning } from "@/server/auth/lockout";
 import { getDb } from "@/server/db/client";
+import { resetSettingsCache } from "@/server/domain/settings";
 import { fixedClock, setClock } from "@/server/domain/time";
 import { resetEnv } from "@/server/env";
 import { resetRateLimits } from "@/server/http/ratelimit";
@@ -41,6 +43,8 @@ export function client(_as: As, jar = new Map<string, string>()): Client {
   ) {
     const headers: Record<string, string> = {
       "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile",
+      // what a browser sends on the app's own requests (the router rejects cookie writes from other origins)
+      origin: "https://agenda.lemydev.com",
       ...(opts.headers ?? {}),
     };
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
@@ -93,11 +97,13 @@ export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
   vi.useFakeTimers({ toFake: ["Date"] });
   setNow(at);
   resetEnv();
+  resetSettingsCache();
+  lockoutTuning.globalDelayMs = 0;
   resetRateLimits();
   pushes.length = 0;
   setPushSender(async (_sub, msg) => {
     pushes.push(msg);
-    return { gone: false };
+    return { ok: true };
   });
   await resetDb();
 }

@@ -1,28 +1,27 @@
-import type { ProblemBody } from "@/contract/common";
-import { problem } from "@/contract/problems";
+import type { ErrorBodyT, ErrorCodeT } from "@/contract/common";
+import { errorBody } from "@/contract/errors";
 
-type Code = NonNullable<ProblemBody["code"]>;
-
-/** Throw anywhere in a handler; the router turns it into problem+json. */
+/** Throw anywhere in a handler; the router turns it into `{ error: { code, message, details } }`. */
 export class ApiError extends Error {
+  readonly details: Record<string, unknown> | undefined;
   constructor(
     readonly status: number,
-    readonly code: Code,
-    detail?: string,
-    readonly extra: Partial<ProblemBody> = {},
+    readonly code: ErrorCodeT,
+    message?: string,
+    details?: Record<string, unknown>,
     readonly headers: Record<string, string> = {},
   ) {
-    super(detail ?? code);
+    super(message ?? code);
+    this.details = details;
   }
 
-  toBody(requestId: string): ProblemBody {
-    return problem(this.status, this.code, this.message === this.code ? undefined : this.message, this.extra, requestId);
+  toBody(requestId: string): ErrorBodyT {
+    return errorBody(this.code, this.message === this.code ? undefined : this.message, this.details, requestId);
   }
 }
 
-export const notFound = (what = "Resource") => new ApiError(404, "not_found", `${what} not found.`);
-export const forbidden = (detail = "Not allowed for this actor.") => new ApiError(403, "forbidden", detail);
-export const versionConflict = (expected: number, current: unknown, currentVersion: number) =>
-  new ApiError(409, "version_conflict", `Expected version ${expected}, current is ${currentVersion}.`, { current });
-export const validation = (errors: Array<{ path: string; message: string }>, status = 400) =>
-  new ApiError(status, "validation_error", `${errors.length} validation error${errors.length === 1 ? "" : "s"}.`, { errors });
+export const notFound = (message = "No encontré lo que buscabas.") => new ApiError(404, "NOT_FOUND", message);
+export const forbidden = (message?: string) => new ApiError(403, "FORBIDDEN", message);
+export const versionConflict = (current: unknown) => new ApiError(409, "VERSION_CONFLICT", undefined, { current });
+export const validation = (fields: Array<{ path: string; message: string }>) =>
+  new ApiError(400, "VALIDATION_ERROR", `Datos inválidos: ${fields.map((f) => `${f.path} (${f.message})`).join(", ")}.`, { fields });

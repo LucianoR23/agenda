@@ -12,6 +12,10 @@ export function safeEqual(a: string, b: string) {
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
 
+/** Constant-time comparison that also hides the length (both sides are hashed first). */
+export const digestEqual = (a: string, b: string) =>
+  timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
+
 /** Argon2id with OWASP-recommended parameters (19 MiB, t=2, p=1). Tests lower the memory via ARGON2_MEMORY_KIB. */
 export const hashSecret = (secret: string) =>
   argonHash(secret, { memoryCost: env().ARGON2_MEMORY_KIB, timeCost: 2, parallelism: 1, algorithm: 2 });

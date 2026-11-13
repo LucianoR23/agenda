@@ -1,10 +1,13 @@
 import { eq, sql } from "drizzle-orm";
 import { generateOpenApiDocument, withoutExamples } from "@/contract/openapi";
+import { audit } from "../auth/audit";
 import * as auth from "../auth/auth";
+import * as tokens from "../auth/tokens";
 import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
-import { DEFAULT_TIMEZONE, formatInstant } from "../domain/time";
+import { getSettings, updateSettings } from "../domain/settings";
+import { formatInstant } from "../domain/time";
 import { env } from "../env";
 import { type Handler, json, requireDevice } from "../http/context";
 
@@ -24,7 +27,7 @@ export const handlers: Record<string, Handler> = {
       status: db === "ok" ? "ok" : "degraded",
       db,
       version: env().APP_VERSION,
-      time: formatInstant(ctx.now, DEFAULT_TIMEZONE),
+      time: formatInstant(ctx.now, ctx.tz),
     });
   },
   openapi: async (_ctx, { query }) => {
@@ -50,7 +53,7 @@ export const handlers: Record<string, Handler> = {
       id: row.id,
       deviceId: row.deviceId,
       endpoint: row.endpoint,
-      createdAt: formatInstant(row.createdAt, DEFAULT_TIMEZONE),
+      createdAt: formatInstant(row.createdAt, ctx.tz),
     });
   },
   pushUnsubscribe: async (ctx, { body }) => {
@@ -83,7 +86,25 @@ export const handlers: Record<string, Handler> = {
     return { status: 204 };
   },
   logout: async (ctx) => {
-    await auth.revokeDevice(ctx, requireDevice(ctx).id);
+    await auth.revokeDevice(ctx, requireDevice(ctx).id, "logout");
+    return { status: 204 };
+  },
+  reauth: async (ctx, { body }) => json(200, await auth.reauth(ctx, body.pin)),
+
+  // ---------- settings ----------
+  getSettings: async (ctx) => json(200, await getSettings(ctx.db)),
+  updateSettings: async (ctx, { body }) => {
+    const before = await getSettings(ctx.db);
+    const next = await updateSettings(ctx.db, body);
+    await audit(ctx, "settings_changed", { before, after: next });
+    return json(200, next);
+  },
+
+  // ---------- API tokens ----------
+  listTokens: async (ctx) => json(200, { tokens: await tokens.listTokens(ctx) }),
+  createToken: async (ctx, { body }) => json(201, await tokens.createToken(ctx, body)),
+  revokeToken: async (ctx, { params }) => {
+    await tokens.revokeToken(ctx, params.id);
     return { status: 204 };
   },
 };

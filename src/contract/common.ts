@@ -38,7 +38,7 @@ export const Actor = z.enum(["agent", "user", "system"]).openapi("Actor");
 
 /** Optimistic-concurrency field accepted in write bodies as an alternative to `If-Match`. */
 export const ExpectedVersion = z.int().min(1).optional().openapi({
-  description: "Expected current version. Alternative to the `If-Match` header; mismatch → 409 `version_conflict`.",
+  description: "Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.",
 });
 
 export const Mutable = {
@@ -50,42 +50,47 @@ export const Mutable = {
 
 export const ErrorCode = z
   .enum([
-    "validation_error",
-    "unauthorized",
-    "device_locked",
-    "forbidden",
-    "not_found",
-    "method_not_allowed",
-    "version_conflict",
-    "idempotency_key_reuse",
-    "idempotency_in_progress",
-    "rate_limited",
-    "locked_out",
-    "invalid_credentials",
-    "setup_completed",
-    "internal_error",
-    "service_unavailable",
+    "VALIDATION_ERROR",
+    "UNSUPPORTED_MEDIA_TYPE",
+    "UNAUTHORIZED",
+    "DEVICE_LOCKED",
+    "REAUTH_REQUIRED",
+    "FORBIDDEN",
+    "ORIGIN_NOT_ALLOWED",
+    "INSUFFICIENT_SCOPE",
+    "NOT_FOUND",
+    "SETUP_REQUIRED",
+    "SETUP_COMPLETED",
+    "METHOD_NOT_ALLOWED",
+    "VERSION_CONFLICT",
+    "CONFLICT",
+    "IDEMPOTENCY_KEY_REUSE",
+    "IDEMPOTENCY_IN_PROGRESS",
+    "RATE_LIMITED",
+    "LOCKED_OUT",
+    "INVALID_CREDENTIALS",
+    "INTERNAL_ERROR",
+    "SERVICE_UNAVAILABLE",
   ])
   .openapi("ErrorCode");
+export type ErrorCodeT = z.infer<typeof ErrorCode>;
 
-export const Problem = z
-  .object({
-    type: z.string().openapi({ example: "https://agenda.lemydev.com/problems/version_conflict" }),
-    title: z.string(),
-    status: z.int(),
-    detail: z.string().optional(),
-    code: ErrorCode.optional(),
-    errors: z
-      .array(z.object({ path: z.string(), message: z.string() }))
-      .optional()
-      .openapi({ description: "Field-level validation errors (JSON-pointer-like paths)." }),
-    requestId: z.string(),
-    current: z.unknown().optional().openapi({
-      description: "On `version_conflict`: the current server state of the resource.",
+/**
+ * Every error response: `{ "error": { "code", "message", "details"?, "requestId" } }`. `message` is a plain
+ * Spanish sentence written for both the UI and an LLM caller (it says what to do next).
+ */
+export const ErrorBody = z
+  .strictObject({
+    error: z.strictObject({
+      code: ErrorCode,
+      message: z.string(),
+      details: z.record(z.string(), z.unknown()).optional().openapi({
+        description:
+          "Extra data by code: `fields` (VALIDATION_ERROR: [{ path, message }]), `retryAfterSeconds` (RATE_LIMITED, LOCKED_OUT), `remainingAttempts` (INVALID_CREDENTIALS), `current` (VERSION_CONFLICT: the server's copy), `requiredScope` (INSUFFICIENT_SCOPE).",
+      }),
+      requestId: z.string(),
     }),
-    retryAfterSeconds: z.int().optional().openapi({ description: "On `rate_limited` / `locked_out`." }),
-    remainingAttempts: z.int().optional().openapi({ description: "On `invalid_credentials` (PIN / codes)." }),
   })
-  .openapi("Problem", { description: "RFC 9457 problem details (`application/problem+json`)." });
+  .openapi("Error");
 
-export type ProblemBody = z.infer<typeof Problem>;
+export type ErrorBodyT = z.infer<typeof ErrorBody>;

@@ -4,7 +4,7 @@ import { QueryClient, skipToken, useQuery, useQueryClient } from "@tanstack/reac
 import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
 import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
-import type { Device, SessionState } from "./types";
+import type { ApiToken, Device, SessionState, Settings } from "./types";
 
 const CACHE_DAYS = 14;
 /** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
@@ -59,6 +59,8 @@ function useCached<T>(key: unknown[], path: string | null, opts: { refetchInterv
 }
 
 export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/api/auth/devices");
+export const useTokens = () => useCached<{ tokens: ApiToken[] }>(["tokens"], "/api/tokens");
+export const useSettings = () => useCached<Settings>(["settings"], "/api/settings");
 
 export const useSession = () =>
   useQuery<SessionState, ApiProblem>({

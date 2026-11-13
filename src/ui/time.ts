@@ -14,8 +14,25 @@ export async function ensureTemporal() {
   if (typeof globalThis.Temporal === "undefined") await import("temporal-polyfill/global");
 }
 
-/** The user's timezone. A server setting from phase 2 on; until then the default. */
-export const userTimeZone = () => DEFAULT_TIMEZONE;
+const TZ_KEY = "agenda:tz";
+let currentTz: string | null = null;
+
+/** The user's timezone (app_user.timezone, delivered with the session; remembered for offline starts). */
+export function userTimeZone(): string {
+  if (currentTz) return currentTz;
+  try {
+    currentTz = localStorage.getItem(TZ_KEY);
+  } catch {}
+  return currentTz ?? DEFAULT_TIMEZONE;
+}
+
+/** Called by the auth gate whenever the session (and so the timezone) loads or changes. */
+export function setUserTimeZone(tz: string) {
+  currentTz = tz;
+  try {
+    localStorage.setItem(TZ_KEY, tz);
+  } catch {}
+}
 
 /** Today in the user's timezone, whatever the device's own zone. */
 export const todayLocal = (tz = userTimeZone()) => today(tz, systemClock);

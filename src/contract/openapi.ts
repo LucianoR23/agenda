@@ -1,7 +1,7 @@
 import { OpenAPIRegistry, OpenApiGeneratorV31, type RouteConfig } from "@asteasolutions/zod-to-openapi";
 import type { ZodType } from "zod";
-import { Problem } from "./common";
-import type { Access, Exchange, ResponseDef, RouteDef } from "./route-def";
+import { ErrorBody } from "./common";
+import type { Exchange, ResponseDef, RouteDef } from "./route-def";
 import { systemRoutes } from "./routes/system";
 import { z } from "./zod";
 
@@ -11,17 +11,15 @@ export const routes: RouteDef[] = [...systemRoutes];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
-const SECURITY: Record<Access, NonNullable<RouteConfig["security"]>> = {
-  user: [{ session: [] }],
-  public: [],
-  preauth: [],
-};
+const security = (r: RouteDef): NonNullable<RouteConfig["security"]> =>
+  r.access === "user" ? [{ session: [] }, ...(r.token ? [{ apiToken: [r.token] }] : [])] : [];
 
-const ACTORS: Record<Access, string[]> = {
-  user: ["user"],
-  public: ["anyone"],
-  preauth: ["anyone (device-key cookie)"],
-};
+const actors = (r: RouteDef): string[] =>
+  r.access === "user"
+    ? ["user", ...(r.token ? [`API token with \`${r.token}\``] : [])]
+    : r.access === "public"
+      ? ["anyone"]
+      : ["anyone (device-key cookie)"];
 
 const HEADER_DOCS = {
   ETag: { description: 'Current `version` as a strong ETag, e.g. `"7"`.', schema: { type: "string" as const } },
@@ -37,12 +35,20 @@ const append = (base: ResponseDef | undefined, description: string, extra?: Part
 /** Route responses plus the generic ones every route of that kind can produce. */
 export function effectiveResponses(r: RouteDef): Record<number, ResponseDef> {
   const res: Record<number, ResponseDef> = { ...r.responses };
-  if (r.params || r.query || r.body) res[400] = append(res[400], "`validation_error`.");
-  if (r.access !== "public" && r.access !== "preauth")
-    res[401] = append(res[401], "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN).");
+  if (r.params || r.query || r.body) res[400] = append(res[400], "`VALIDATION_ERROR` (details.fields).");
+  if (r.body) res[415] = append(res[415], "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`.");
+  if (r.access === "user") {
+    res[401] = append(res[401], "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN).");
+    res[403] = append(
+      res[403],
+      r.token
+        ? "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+        : "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin).",
+    );
+  }
   if (WRITE_METHODS.has(r.method)) {
-    res[409] = append(res[409], "`idempotency_in_progress`.");
-    res[422] = append(res[422], "`idempotency_key_reuse`: same `Idempotency-Key`, different body.");
+    res[409] = append(res[409], "`IDEMPOTENCY_IN_PROGRESS`.");
+    res[422] = append(res[422], "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body.");
   }
   return res;
 }
@@ -56,6 +62,11 @@ export function buildRegistry() {
     name: "agenda_session",
     description: "Trusted-device session cookie. Actor = `user`.",
   });
+  registry.registerComponent("securitySchemes", "apiToken", {
+    type: "http",
+    scheme: "bearer",
+    description: "Named API token `agd_…` (Ajustes → Tokens de API). Scopes: `read`, `write`, `notify`. Actor = `sunday`.",
+  });
 
   const IdempotencyKey = registry.registerParameter(
     "IdempotencyKey",
@@ -66,7 +77,7 @@ export function buildRegistry() {
       .optional()
       .openapi({
         param: { name: "Idempotency-Key", in: "header" },
-        description: "Same key + same body → stored response replayed; different body → 422. Kept 48 h, scoped per actor.",
+        description: "Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.",
         example: "019a0a6e-1c00-7000-8000-000000000001",
       }),
   );
@@ -79,13 +90,13 @@ export function buildRegistry() {
           .optional()
           .openapi({
             param: { name: "If-Match", in: "header" },
-            description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `version_conflict` with the current resource.',
+            description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `VERSION_CONFLICT` with the current resource.',
             example: '"7"',
           }),
       )
     : undefined;
 
-  registry.register("Problem", Problem);
+  registry.register("Error", ErrorBody);
 
   for (const r of routes) {
     const headers: ZodType[] = [];
@@ -99,9 +110,9 @@ export function buildRegistry() {
     const responses: RouteConfig["responses"] = {};
     for (const [statusStr, def] of Object.entries(effectiveResponses(r))) {
       const status = Number(statusStr);
-      const schema = def.schema ?? (status >= 400 ? Problem : undefined);
+      const schema = def.schema ?? (status >= 400 ? ErrorBody : undefined);
       const exs = r.exchanges.filter((e) => e.status === status && e.response !== undefined);
-      const mediaType = status >= 400 && !def.schema ? "application/problem+json" : "application/json";
+      const mediaType = "application/json";
       responses[status] = {
         description: def.description,
         ...(def.headers?.length ? { headers: Object.fromEntries([...new Set(def.headers)].map((h) => [h, HEADER_DOCS[h]])) } : {}),
@@ -126,9 +137,9 @@ export function buildRegistry() {
       operationId: r.operationId,
       tags: [r.tag],
       summary: r.summary,
-      description: [r.description, `**Actors:** ${ACTORS[r.access].join(", ")}.`].filter(Boolean).join("\n\n"),
-      security: SECURITY[r.access],
-      "x-actors": ACTORS[r.access],
+      description: [r.description, `**Actors:** ${actors(r).join(", ")}.`].filter(Boolean).join("\n\n"),
+      security: security(r),
+      "x-actors": actors(r),
       request: {
         ...(r.params ? { params: r.params } : {}),
         ...(r.query ? { query: r.query } : {}),
@@ -165,14 +176,14 @@ export function generateOpenApiDocument() {
       description: [
         "Agenda v2: personal tasks, reminders and events. Base path `/api`, JSON only, user timezone America/Buenos_Aires.",
         "",
-        "- **Errors:** RFC 9457 `application/problem+json` with `code`, `errors[]` and `requestId`.",
+        '- **Errors:** `{ "error": { "code", "message", "details"?, "requestId" } }`; `message` is a Spanish sentence that says what to do.',
         "- **Concurrency:** resources carry `version` + `ETag`; writes accept `If-Match` or `version` in the body.",
         "- **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH.",
         "- Unknown fields are rejected everywhere.",
       ].join("\n"),
     },
     servers: [{ url: "https://agenda.lemydev.com" }, { url: "http://localhost:3000" }],
-    tags: [{ name: "Auth" }, { name: "Push" }, { name: "Ops" }],
+    tags: [{ name: "Auth" }, { name: "Settings" }, { name: "Tokens" }, { name: "Push" }, { name: "Ops" }],
   });
 }
 
@@ -203,7 +214,7 @@ export function validateExamples(): string[] {
         failures.push(`${at}: status ${e.status} not documented`);
         continue;
       }
-      const schema = def.schema ?? (e.status >= 400 ? Problem : undefined);
+      const schema = def.schema ?? (e.status >= 400 ? ErrorBody : undefined);
       if (schema) check(`${at} response`, schema, e.response);
       else if (e.response !== undefined) failures.push(`${at}: ${e.status} has no body schema`);
     }

@@ -1,8 +1,9 @@
 import { Uuid } from "../common";
+import { errorBody } from "../errors";
 import * as ex from "../examples";
-import { problem } from "../problems";
 import type { RouteDef } from "../route-def";
 import {
+  ApiToken,
   ChangePinInput,
   Device,
   DeviceRename,
@@ -13,12 +14,17 @@ import {
   PushSubscribeInput,
   PushSubscription,
   PushUnsubscribeInput,
+  ReauthResult,
   RecoverInput,
   RecoverResult,
   RecoveryCodes,
   SessionState,
+  Settings,
+  SettingsPatch,
   SetupInput,
   SetupResult,
+  TokenCreated,
+  TokenCreateInput,
   UnlockInput,
   UnlockResult,
   WebAuthnJson,
@@ -82,6 +88,7 @@ const authRoutes: RouteDef[] = [
           lockedUntil: null,
           device: { id: phone.id, name: phone.name },
           vapidPublicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+          timezone: "America/Buenos_Aires",
         },
       },
       {
@@ -89,7 +96,14 @@ const authRoutes: RouteDef[] = [
         summary: "Fresh install",
         actor: "anonymous",
         status: 200,
-        response: { state: "setup_required", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null },
+        response: {
+          state: "setup_required",
+          passkeyEnabled: false,
+          lockedUntil: null,
+          device: null,
+          vapidPublicKey: null,
+          timezone: "America/Buenos_Aires",
+        },
       },
     ],
   },
@@ -99,13 +113,13 @@ const authRoutes: RouteDef[] = [
     path: "/api/auth/setup",
     tag: "Auth",
     summary: "First-run setup",
-    description: "Only while no user exists; afterwards 404 forever. Returns the 10 recovery codes once and trusts this device.",
+    description: "Only while no user exists; afterwards 409 `SETUP_COMPLETED`. Returns the 10 recovery codes once and trusts this device.",
     access: "preauth",
     body: SetupInput,
     responses: {
       201: { description: "User created, device trusted.", schema: SetupResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials`: wrong SETUP_CODE (counts toward lockout)." },
-      404: { description: "`setup_completed`." },
+      401: { description: "`INVALID_CREDENTIALS`: wrong SETUP_CODE (counts toward lockout)." },
+      409: { description: "`SETUP_COMPLETED`." },
     },
     exchanges: [
       {
@@ -131,8 +145,8 @@ const authRoutes: RouteDef[] = [
     body: UnlockInput,
     responses: {
       200: { description: "Unlocked.", schema: UnlockResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials` with `remainingAttempts`." },
-      429: { description: "`locked_out` with `retryAfterSeconds`.", headers: ["Retry-After"] },
+      401: { description: "`INVALID_CREDENTIALS` with `remainingAttempts`." },
+      429: { description: "`LOCKED_OUT` with `retryAfterSeconds`.", headers: ["Retry-After"] },
     },
     exchanges: [
       {
@@ -150,7 +164,7 @@ const authRoutes: RouteDef[] = [
         actor: "anonymous",
         body: { pin: "111111" },
         status: 401,
-        response: problem(401, "invalid_credentials", "Wrong PIN.", { remainingAttempts: 3 }),
+        response: errorBody("INVALID_CREDENTIALS", "PIN incorrecto. Te quedan 3 intentos.", { remainingAttempts: 3 }),
       },
       {
         name: "lockedOut",
@@ -158,7 +172,11 @@ const authRoutes: RouteDef[] = [
         actor: "anonymous",
         body: { pin: "222222" },
         status: 429,
-        response: problem(429, "locked_out", "Try again in 15 minutes.", { retryAfterSeconds: 900 }),
+        response: errorBody(
+          "LOCKED_OUT",
+          "Demasiados intentos fallidos. Probá de nuevo en 15 min, o usá un código de recuperación desde otro dispositivo.",
+          { retryAfterSeconds: 900 },
+        ),
         responseHeaders: { "Retry-After": "900" },
       },
     ],
@@ -177,8 +195,8 @@ const authRoutes: RouteDef[] = [
         schema: RecoverResult,
         headers: ["Set-Cookie"],
       },
-      401: { description: "`invalid_credentials`." },
-      429: { description: "`locked_out`.", headers: ["Retry-After"] },
+      401: { description: "`INVALID_CREDENTIALS`." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
     },
     exchanges: [
       {
@@ -211,8 +229,8 @@ const authRoutes: RouteDef[] = [
     body: ChangePinInput,
     responses: {
       204: { description: "Changed." },
-      401: { description: "`invalid_credentials`." },
-      429: { description: "`locked_out`.", headers: ["Retry-After"] },
+      401: { description: "`INVALID_CREDENTIALS`." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
     },
     exchanges: [{ name: "change", summary: "Change PIN", actor: "user", body: { currentPin: "482913", newPin: "730154" }, status: 204 }],
   },
@@ -224,7 +242,7 @@ const authRoutes: RouteDef[] = [
     summary: "Regenerate recovery codes (invalidates the old ones)",
     access: "user",
     body: PinConfirmInput,
-    responses: { 200: { description: "New codes, shown once.", schema: RecoveryCodes }, 401: { description: "`invalid_credentials`." } },
+    responses: { 200: { description: "New codes, shown once.", schema: RecoveryCodes }, 401: { description: "`INVALID_CREDENTIALS`." } },
     exchanges: [
       { name: "regen", summary: "Regenerate", actor: "user", body: { pin: "482913" }, status: 200, response: { recoveryCodes: codes } },
     ],
@@ -269,7 +287,7 @@ const authRoutes: RouteDef[] = [
     body: PasskeyVerifyInput,
     responses: {
       201: { description: "Passkey stored for this device.", schema: PasskeyInfo },
-      401: { description: "`invalid_credentials`: verification failed." },
+      401: { description: "`INVALID_CREDENTIALS`: verification failed." },
     },
     exchanges: [
       {
@@ -299,7 +317,7 @@ const authRoutes: RouteDef[] = [
     access: "preauth",
     responses: {
       200: { description: "`PublicKeyCredentialRequestOptionsJSON`.", schema: WebAuthnJson },
-      404: { description: "`not_found`: no passkey on this device." },
+      404: { description: "`NOT_FOUND`: no passkey on this device." },
     },
     exchanges: [
       {
@@ -327,8 +345,8 @@ const authRoutes: RouteDef[] = [
     body: PasskeyVerifyInput,
     responses: {
       200: { description: "Unlocked.", schema: UnlockResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials` (counts toward lockout)." },
-      429: { description: "`locked_out`.", headers: ["Retry-After"] },
+      401: { description: "`INVALID_CREDENTIALS` (counts toward lockout)." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
     },
     exchanges: [
       {
@@ -378,7 +396,7 @@ const authRoutes: RouteDef[] = [
     access: "user",
     params: z.strictObject({ id: Uuid }),
     body: DeviceRename,
-    responses: { 200: { description: "Renamed.", schema: Device }, 404: { description: "`not_found`." } },
+    responses: { 200: { description: "Renamed.", schema: Device }, 404: { description: "`NOT_FOUND`." } },
     exchanges: [
       {
         name: "rename",
@@ -400,7 +418,7 @@ const authRoutes: RouteDef[] = [
     description: "Ends its session and deletes its passkey and push subscriptions. Revoking the current device logs out.",
     access: "user",
     params: z.strictObject({ id: Uuid }),
-    responses: { 204: { description: "Revoked." }, 404: { description: "`not_found`." } },
+    responses: { 204: { description: "Revoked." }, 404: { description: "`NOT_FOUND`." } },
     exchanges: [{ name: "revoke", summary: "Revoke laptop", actor: "user", params: { id: laptop.id }, status: 204 }],
   },
   {
@@ -421,6 +439,151 @@ const authRoutes: RouteDef[] = [
         responseHeaders: { "Set-Cookie": "agenda_session=; Path=/; Max-Age=0" },
       },
     ],
+  },
+];
+
+const tokenExample = {
+  id: ex.uid(900),
+  name: "sunday",
+  prefix: "agd_x7Kp",
+  scopes: ["read", "write", "notify"],
+  lastUsedAt: "2026-11-13T09:02:11.000-03:00",
+  lastUsedIp: "203.0.113.7",
+  expiresAt: null,
+  createdAt: "2026-11-01T18:30:00.000-03:00",
+};
+
+const securityRoutes: RouteDef[] = [
+  {
+    operationId: "reauth",
+    method: "post",
+    path: "/api/auth/reauth",
+    tag: "Auth",
+    summary: "Confirm the PIN for a sensitive action",
+    description: "Opens a 5-minute window for creating or revoking API tokens. A fingerprint unlock opens it too.",
+    access: "user",
+    body: PinConfirmInput,
+    responses: {
+      200: { description: "Confirmed.", schema: ReauthResult },
+      401: { description: "`INVALID_CREDENTIALS` with `remainingAttempts`." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
+    },
+    exchanges: [
+      {
+        name: "ok",
+        summary: "PIN confirmed",
+        actor: "user",
+        body: { pin: "482913" },
+        status: 200,
+        response: { validUntil: "2026-11-13T09:07:00.000-03:00" },
+      },
+    ],
+  },
+  {
+    operationId: "getSettings",
+    method: "get",
+    path: "/api/settings",
+    tag: "Settings",
+    summary: "User settings (timezone, quiet hours, snooze)",
+    access: "user",
+    token: "read",
+    responses: { 200: { description: "Settings.", schema: Settings } },
+    exchanges: [
+      {
+        name: "settings",
+        summary: "Defaults",
+        actor: "user",
+        status: 200,
+        response: { timezone: "America/Buenos_Aires", locale: "es-AR", quietStart: "23:30", quietEnd: "07:00", defaultSnoozeMinutes: 10 },
+      },
+    ],
+  },
+  {
+    operationId: "updateSettings",
+    method: "patch",
+    path: "/api/settings",
+    tag: "Settings",
+    summary: "Change settings",
+    description: "Timezone must be an IANA name. Quiet hours: both or neither (null turns them off).",
+    access: "user",
+    body: SettingsPatch,
+    responses: { 200: { description: "Updated settings.", schema: Settings } },
+    exchanges: [
+      {
+        name: "travel",
+        summary: "Traveling to Madrid",
+        actor: "user",
+        body: { timezone: "Europe/Madrid" },
+        status: 200,
+        response: { timezone: "Europe/Madrid", locale: "es-AR", quietStart: "23:30", quietEnd: "07:00", defaultSnoozeMinutes: 10 },
+      },
+      {
+        name: "bad",
+        summary: "Unknown zone",
+        actor: "user",
+        body: { timezone: "Mars/Olympus" },
+        status: 400,
+        response: errorBody("VALIDATION_ERROR", '"Mars/Olympus" no es una zona horaria IANA válida (por ejemplo America/Buenos_Aires).', {
+          fields: [{ path: "/timezone", message: "Unknown IANA timezone" }],
+        }),
+      },
+    ],
+  },
+  {
+    operationId: "listTokens",
+    method: "get",
+    path: "/api/tokens",
+    tag: "Tokens",
+    summary: "Active API tokens",
+    access: "user",
+    responses: { 200: { description: "Tokens (never the secrets).", schema: z.strictObject({ tokens: z.array(ApiToken) }) } },
+    exchanges: [{ name: "list", summary: "Sunday's token", actor: "user", status: 200, response: { tokens: [tokenExample] } }],
+  },
+  {
+    operationId: "createToken",
+    method: "post",
+    path: "/api/tokens",
+    tag: "Tokens",
+    summary: "Create an API token (shown once)",
+    description:
+      "Needs PIN or fingerprint confirmed in the last 5 minutes (`POST /api/auth/reauth`). Names are unique among active tokens.",
+    access: "user",
+    body: TokenCreateInput,
+    responses: {
+      201: { description: "Created; `token` is the secret, shown only now.", schema: TokenCreated },
+      403: { description: "`REAUTH_REQUIRED`." },
+      409: { description: "`CONFLICT`: an active token has that name." },
+    },
+    exchanges: [
+      {
+        name: "sunday",
+        summary: "Token for Sunday",
+        actor: "user",
+        body: { name: "sunday", scopes: ["read", "write", "notify"] },
+        status: 201,
+        response: { ...tokenExample, lastUsedAt: null, lastUsedIp: null, token: "agd_x7KpQ2mN8vR4tW6yZ1bC3dE5fG7hJ9kL0nP2qS4uV6w" },
+      },
+      {
+        name: "reauth",
+        summary: "PIN not confirmed recently",
+        actor: "user",
+        body: { name: "sunday", scopes: ["read"] },
+        status: 403,
+        response: errorBody("REAUTH_REQUIRED"),
+      },
+    ],
+  },
+  {
+    operationId: "revokeToken",
+    method: "delete",
+    path: "/api/tokens/{id}",
+    tag: "Tokens",
+    summary: "Revoke an API token",
+    description: "Stops working immediately. Needs a recent PIN or fingerprint confirmation.",
+    access: "user",
+    params: z.strictObject({ id: Uuid }),
+    responses: { 204: { description: "Revoked." }, 403: { description: "`REAUTH_REQUIRED`." }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [{ name: "revoke", summary: "Revoke", actor: "user", params: { id: tokenExample.id }, status: 204 }],
   },
 ];
 
@@ -472,6 +635,7 @@ export const systemRoutes: RouteDef[] = [
     ],
   },
   ...authRoutes,
+  ...securityRoutes,
   {
     operationId: "pushSubscribe",
     method: "post",

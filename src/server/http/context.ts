@@ -1,20 +1,28 @@
 import type { DbLike } from "../db/client";
+import type { ItemSource, TokenScope } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
 import { ApiError } from "./errors";
 
-export type Actor = "user";
+/** Who is calling: Lemy's app (session cookie), an API token, or nobody (public/pre-auth routes). */
+export type Caller =
+  | { kind: "user"; deviceId: string }
+  | { kind: "token"; tokenId: string; name: string; scopes: readonly TokenScope[] }
+  | { kind: "anonymous" };
 
 export interface Ctx {
   requestId: string;
   req: Request;
-  now: Date;
-  /** Who is calling. `anonymous` on public/pre-auth routes. Named API tokens arrive in phase 3. */
-  caller: Actor | "anonymous";
+  /** One clock reading per request (injectable in tests). */
+  now: Temporal.Instant;
+  caller: Caller;
+  /** The user's IANA timezone (app_user.timezone), for every local date/time in responses. */
+  tz: string;
   /** Device of a valid session cookie, even if locked (pre-auth routes need it). */
   sessionDevice: DeviceRow | null;
   sessionLocked: boolean;
   /** Pre-auth device key (cookie), used for per-device lockout before a device row exists. */
   deviceKey: string;
+  /** Client IP resolved from trusted proxy headers only (see ip.ts). */
   ip: string | null;
   userAgent: string | null;
   /** Expected version from `If-Match`. */
@@ -26,8 +34,11 @@ export interface Ctx {
   afterCommit: Array<() => Promise<void>>;
 }
 
-/** Actor for `updated_by` / ChangeLog: user, or system (background jobs). */
-export const writer = (ctx: Pick<Ctx, "caller">): "user" | "system" => (ctx.caller === "user" ? "user" : "system");
+/** `source` / `updated_by` for whatever this request writes. */
+export const sourceOf = (caller: Caller): ItemSource => (caller.kind === "user" ? "user" : caller.kind === "token" ? "sunday" : "system");
+
+/** The API token behind this request, for change_log / audit_event. */
+export const tokenIdOf = (caller: Caller): string | null => (caller.kind === "token" ? caller.tokenId : null);
 
 export interface HandlerResult {
   status: number;
@@ -44,9 +55,9 @@ type Validated = any;
 
 export type Handler = (ctx: Ctx, input: { params: Validated; query: Validated; body: Validated }) => Promise<HandlerResult>;
 
-/** Device of the authenticated session. The router guarantees it on `user` routes; anything else is a 401. */
+/** Device of the authenticated session. The router guarantees it on session routes; anything else is a 401. */
 export function requireDevice(ctx: Pick<Ctx, "sessionDevice">): DeviceRow {
-  if (!ctx.sessionDevice) throw new ApiError(401, "unauthorized", "Authentication required.");
+  if (!ctx.sessionDevice) throw new ApiError(401, "UNAUTHORIZED");
   return ctx.sessionDevice;
 }
 

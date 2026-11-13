@@ -11,17 +11,15 @@ import type { DbLike } from "../db/client";
 import { one } from "../db/one";
 import { appUser, device, passkey, pinResetCode, pushSubscription, recoveryCode } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
-import { DEFAULT_TIMEZONE, formatInstant } from "../domain/time";
+import { resetSettingsCache } from "../domain/settings";
+import { formatInstant, toDate } from "../domain/time";
 import { env } from "../env";
 import { type Ctx, requireDevice } from "../http/context";
 import { ApiError, notFound } from "../http/errors";
-
-// the user timezone setting (app_user.timezone) arrives with the phase 2 schema
-const isoLocal = (d: Date) => formatInstant(d, DEFAULT_TIMEZONE);
-
+import { audit } from "./audit";
 import { CHALLENGE_COOKIE, clearCookie, parseCookies, SESSION_COOKIE, setCookie } from "./cookies";
-import { hashSecret, recoveryCode as newRecoveryCode, normalizeRecoveryCode, sign, unsign, verifySecret } from "./crypto";
-import { assertNotLocked, failAttempt, succeedAttempt } from "./lockout";
+import { digestEqual, hashSecret, recoveryCode as newRecoveryCode, normalizeRecoveryCode, sign, unsign, verifySecret } from "./crypto";
+import { assertNotLocked, failAttempt, lockedUntil, succeedAttempt } from "./lockout";
 import { createDevice, deviceNameFromUA, issueSession } from "./session";
 
 async function getUser(db: DbLike) {
@@ -31,23 +29,26 @@ async function getUser(db: DbLike) {
 
 async function requireUser(ctx: Ctx) {
   const u = await getUser(ctx.db);
-  if (!u) throw new ApiError(404, "not_found", "Setup required.");
+  if (!u) throw new ApiError(404, "SETUP_REQUIRED");
   return u;
 }
 
-export async function deviceOut(db: DbLike, d: DeviceRow, currentId: string | null) {
-  const [pk] = await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.deviceId, d.id));
+export async function deviceOut(ctx: Ctx, d: DeviceRow) {
+  const [pk] = await ctx.db.select({ id: passkey.id }).from(passkey).where(eq(passkey.deviceId, d.id));
   return {
     id: d.id,
     name: d.name,
     userAgent: d.userAgent,
-    current: d.id === currentId,
+    current: d.id === ctx.sessionDevice?.id,
     passkeyEnabled: !!pk,
-    createdAt: isoLocal(d.createdAt),
-    lastSeenAt: isoLocal(d.lastSeenAt),
-    lastUnlockAt: isoLocal(d.lastUnlockAt),
+    createdAt: formatInstant(d.createdAt, ctx.tz),
+    lastSeenAt: formatInstant(d.lastSeenAt, ctx.tz),
+    lastUnlockAt: formatInstant(d.lastUnlockAt, ctx.tz),
   };
 }
+
+/** Device output right after this request trusted it (it's now the current device). */
+const trustedOut = async (ctx: Ctx, d: DeviceRow) => ({ ...(await deviceOut({ ...ctx, sessionDevice: d }, d)), current: true });
 
 async function newRecoveryCodes(db: DbLike) {
   await db.delete(recoveryCode);
@@ -71,13 +72,7 @@ export async function sessionState(ctx: Ctx) {
   const user = await getUser(ctx.db);
   const d = ctx.sessionDevice;
   const [pk] = d ? await ctx.db.select({ id: passkey.id }).from(passkey).where(eq(passkey.deviceId, d.id)) : [];
-  let lockedUntil: string | null = null;
-  try {
-    await assertNotLocked(ctx);
-  } catch (e) {
-    if (e instanceof ApiError && e.code === "locked_out")
-      lockedUntil = isoLocal(new Date(ctx.now.getTime() + (e.extra.retryAfterSeconds ?? 0) * 1000));
-  }
+  const until = user ? await lockedUntil(ctx) : null;
   return {
     state: !user
       ? ("setup_required" as const)
@@ -87,32 +82,50 @@ export async function sessionState(ctx: Ctx) {
           ? ("locked" as const)
           : ("unlocked" as const),
     passkeyEnabled: !!pk,
-    lockedUntil,
+    lockedUntil: until ? formatInstant(until, ctx.tz) : null,
     device: d ? { id: d.id, name: d.name } : null,
     vapidPublicKey: env().VAPID_PUBLIC_KEY || null,
+    timezone: ctx.tz,
   };
 }
 
 export async function setup(ctx: Ctx, body: { setupCode: string; pin: string; deviceName?: string }) {
-  if (await getUser(ctx.db)) throw new ApiError(404, "setup_completed", "Setup was already completed.");
+  if (await getUser(ctx.db)) throw new ApiError(409, "SETUP_COMPLETED");
   await assertNotLocked(ctx);
-  const a = Buffer.from(body.setupCode);
-  const b = Buffer.from(env().SETUP_CODE);
-  if (a.length !== b.length || !a.equals(b)) await failAttempt(ctx, "setup", "Wrong setup code.");
+  // constant time whatever the lengths (both sides hashed first)
+  if (!digestEqual(body.setupCode, env().SETUP_CODE)) await failAttempt(ctx, "setup", "Código de configuración incorrecto.");
   await ctx.db.insert(appUser).values({ pinHash: await hashSecret(body.pin), webauthnUserId: new Uint8Array(randomBytes(16)) });
+  resetSettingsCache();
   const codes = await newRecoveryCodes(ctx.db);
   const d = await trustDevice(ctx, body.deviceName);
   await succeedAttempt(ctx, "setup", d.id);
-  return { device: await deviceOut(ctx.db, d, d.id), recoveryCodes: codes };
+  await audit({ ...ctx, sessionDevice: d }, "setup");
+  return { device: await trustedOut(ctx, d), recoveryCodes: codes };
 }
 
 export async function unlock(ctx: Ctx, body: { pin: string; deviceName?: string }) {
   const user = await requireUser(ctx);
   await assertNotLocked(ctx);
-  if (!(await verifySecret(user.pinHash, body.pin))) await failAttempt(ctx, "pin", "Wrong PIN.");
+  if (!(await verifySecret(user.pinHash, body.pin))) await failAttempt(ctx, "pin", "PIN incorrecto.");
   const d = await trustDevice(ctx, body.deviceName);
   await succeedAttempt(ctx, "pin", d.id);
-  return { device: await deviceOut(ctx.db, d, d.id) };
+  await audit({ ...ctx, sessionDevice: d }, "unlock", { method: "pin" });
+  return { device: await trustedOut(ctx, d) };
+}
+
+/** Confirms the PIN on an unlocked device (sensitive actions: API tokens). Refreshes the 5-minute window. */
+export async function reauth(ctx: Ctx, pin: string) {
+  const d = requireDevice(ctx);
+  const user = await requireUser(ctx);
+  await assertNotLocked(ctx);
+  if (!(await verifySecret(user.pinHash, pin))) await failAttempt(ctx, "pin", "PIN incorrecto.");
+  await succeedAttempt(ctx, "pin", d.id);
+  await ctx.db
+    .update(device)
+    .set({ lastUnlockAt: toDate(ctx.now) })
+    .where(eq(device.id, d.id));
+  await audit(ctx, "reauth", { method: "pin" });
+  return { validUntil: formatInstant(ctx.now.add({ minutes: 5 }), ctx.tz) };
 }
 
 export async function recover(
@@ -121,56 +134,60 @@ export async function recover(
 ) {
   await requireUser(ctx);
   await assertNotLocked(ctx);
+  const now = toDate(ctx.now);
   if (body.method === "recovery_code") {
     const code = normalizeRecoveryCode(body.code);
     const unused = await ctx.db.select().from(recoveryCode).where(isNull(recoveryCode.usedAt));
     let hit: (typeof unused)[number] | undefined;
     for (const r of unused) if (await verifySecret(r.hash, code)) hit = r;
-    if (!hit) return failAttempt(ctx, "recovery_code", "Invalid or used recovery code.");
-    await ctx.db.update(recoveryCode).set({ usedAt: ctx.now }).where(eq(recoveryCode.id, hit.id));
+    if (!hit) return failAttempt(ctx, "recovery_code", "Código de recuperación inválido o ya usado.");
+    await ctx.db.update(recoveryCode).set({ usedAt: now }).where(eq(recoveryCode.id, hit.id));
   } else {
     const valid = await ctx.db
       .select()
       .from(pinResetCode)
-      .where(and(isNull(pinResetCode.usedAt), gt(pinResetCode.expiresAt, ctx.now)))
+      .where(and(isNull(pinResetCode.usedAt), gt(pinResetCode.expiresAt, now)))
       .orderBy(desc(pinResetCode.createdAt));
     let hit: (typeof valid)[number] | undefined;
     for (const r of valid) if (await verifySecret(r.hash, body.code.trim())) hit = r;
-    if (!hit) return failAttempt(ctx, "reset_code", "Invalid or expired reset code.");
-    await ctx.db.update(pinResetCode).set({ usedAt: ctx.now }).where(eq(pinResetCode.id, hit.id));
+    if (!hit) return failAttempt(ctx, "reset_code", "Código del servidor inválido o vencido.");
+    await ctx.db.update(pinResetCode).set({ usedAt: now }).where(eq(pinResetCode.id, hit.id));
   }
-  await ctx.db.update(appUser).set({ pinHash: await hashSecret(body.newPin), pinUpdatedAt: ctx.now });
+  await ctx.db.update(appUser).set({ pinHash: await hashSecret(body.newPin), pinUpdatedAt: now });
   const d = await trustDevice(ctx, body.deviceName);
   await succeedAttempt(ctx, body.method, d.id);
+  await audit({ ...ctx, sessionDevice: d }, "recover", { method: body.method });
   const remaining = (await ctx.db.select({ id: recoveryCode.id }).from(recoveryCode).where(isNull(recoveryCode.usedAt))).length;
-  return { device: await deviceOut(ctx.db, d, d.id), remainingRecoveryCodes: remaining };
+  return { device: await trustedOut(ctx, d), remainingRecoveryCodes: remaining };
 }
 
 async function checkPin(ctx: Ctx, pin: string) {
   const user = await requireUser(ctx);
   await assertNotLocked(ctx);
-  if (!(await verifySecret(user.pinHash, pin))) await failAttempt(ctx, "pin", "Wrong PIN.");
+  if (!(await verifySecret(user.pinHash, pin))) await failAttempt(ctx, "pin", "PIN incorrecto.");
   await succeedAttempt(ctx, "pin", ctx.sessionDevice?.id ?? null);
 }
 
 export async function changePin(ctx: Ctx, body: { currentPin: string; newPin: string }) {
   await checkPin(ctx, body.currentPin);
-  await ctx.db.update(appUser).set({ pinHash: await hashSecret(body.newPin), pinUpdatedAt: ctx.now });
+  await ctx.db.update(appUser).set({ pinHash: await hashSecret(body.newPin), pinUpdatedAt: toDate(ctx.now) });
+  await audit(ctx, "pin_changed");
 }
 
 export async function regenerateRecoveryCodes(ctx: Ctx, pin: string) {
   await checkPin(ctx, pin);
-  return { recoveryCodes: await newRecoveryCodes(ctx.db) };
+  const codes = await newRecoveryCodes(ctx.db);
+  await audit(ctx, "recovery_codes_regenerated");
+  return { recoveryCodes: codes };
 }
 
 // ---------- passkeys (fingerprint) ----------
 
-const CHALLENGE_TTL_MS = 5 * 60_000;
+const CHALLENGE_TTL_MINUTES = 5;
 
 function storeChallenge(ctx: Ctx, purpose: "register" | "auth", challenge: string) {
-  ctx.setCookies.push(
-    setCookie(CHALLENGE_COOKIE, sign({ purpose, challenge, exp: ctx.now.getTime() + CHALLENGE_TTL_MS }, env().SESSION_SECRET), 300),
-  );
+  const exp = ctx.now.add({ minutes: CHALLENGE_TTL_MINUTES }).epochMilliseconds;
+  ctx.setCookies.push(setCookie(CHALLENGE_COOKIE, sign({ purpose, challenge, exp }, env().SESSION_SECRET), CHALLENGE_TTL_MINUTES * 60));
 }
 
 function takeChallenge(ctx: Ctx, purpose: "register" | "auth"): string {
@@ -179,8 +196,8 @@ function takeChallenge(ctx: Ctx, purpose: "register" | "auth"): string {
     env().SESSION_SECRET,
   );
   ctx.setCookies.push(clearCookie(CHALLENGE_COOKIE));
-  if (!c || c.purpose !== purpose || c.exp < ctx.now.getTime())
-    throw new ApiError(401, "invalid_credentials", "Challenge expired; start again.");
+  if (!c || c.purpose !== purpose || c.exp < ctx.now.epochMilliseconds)
+    throw new ApiError(401, "INVALID_CREDENTIALS", "El desafío de la huella venció. Probá de nuevo.");
   return c.challenge;
 }
 
@@ -210,10 +227,10 @@ export async function passkeyRegisterVerify(ctx: Ctx, response: Record<string, u
     expectedOrigin: env().APP_ORIGIN,
     expectedRPID: env().WEBAUTHN_RP_ID,
     requireUserVerification: true,
-  }).catch((e: Error) => {
-    throw new ApiError(401, "invalid_credentials", e.message);
+  }).catch(() => {
+    throw new ApiError(401, "INVALID_CREDENTIALS", "No se pudo verificar la huella.");
   });
-  if (!result.verified) throw new ApiError(401, "invalid_credentials", "Passkey verification failed.");
+  if (!result.verified) throw new ApiError(401, "INVALID_CREDENTIALS", "No se pudo verificar la huella.");
   const c = result.registrationInfo.credential;
   await ctx.db.delete(passkey).where(eq(passkey.deviceId, d.id));
   const row = one(
@@ -223,13 +240,14 @@ export async function passkeyRegisterVerify(ctx: Ctx, response: Record<string, u
       .returning(),
     "passkey insert",
   );
-  return { id: row.id, deviceId: row.deviceId, createdAt: isoLocal(row.createdAt), lastUsedAt: null };
+  await audit(ctx, "passkey_registered");
+  return { id: row.id, deviceId: row.deviceId, createdAt: formatInstant(row.createdAt, ctx.tz), lastUsedAt: null };
 }
 
 async function devicePasskey(ctx: Ctx) {
-  if (!ctx.sessionDevice) throw notFound("Passkey");
+  if (!ctx.sessionDevice) throw notFound("Este dispositivo no tiene huella registrada.");
   const [pk] = await ctx.db.select().from(passkey).where(eq(passkey.deviceId, ctx.sessionDevice.id));
-  if (!pk) throw notFound("Passkey");
+  if (!pk) throw notFound("Este dispositivo no tiene huella registrada.");
   return pk;
 }
 
@@ -245,6 +263,7 @@ export async function passkeyAuthOptions(ctx: Ctx) {
   return options;
 }
 
+/** Fingerprint unlock (also counts as a fresh re-auth for sensitive actions). */
 export async function passkeyAuthVerify(ctx: Ctx, response: Record<string, unknown>) {
   const pk = await devicePasskey(ctx);
   await assertNotLocked(ctx);
@@ -257,22 +276,27 @@ export async function passkeyAuthVerify(ctx: Ctx, response: Record<string, unkno
     credential: { id: pk.credentialId, publicKey: new Uint8Array(pk.publicKey), counter: pk.counter, transports: pk.transports },
     requireUserVerification: true,
   }).catch(() => null);
-  if (!result?.verified) return failAttempt(ctx, "passkey", "Fingerprint verification failed.");
-  await ctx.db.update(passkey).set({ counter: result.authenticationInfo.newCounter, lastUsedAt: ctx.now }).where(eq(passkey.id, pk.id));
+  if (!result?.verified) return failAttempt(ctx, "passkey", "No se pudo verificar la huella.");
+  await ctx.db
+    .update(passkey)
+    .set({ counter: result.authenticationInfo.newCounter, lastUsedAt: toDate(ctx.now) })
+    .where(eq(passkey.id, pk.id));
   const d = await trustDevice(ctx);
   await succeedAttempt(ctx, "passkey", d.id);
-  return { device: await deviceOut(ctx.db, d, d.id) };
+  await audit({ ...ctx, sessionDevice: d }, "unlock", { method: "passkey" });
+  return { device: await trustedOut(ctx, d) };
 }
 
 export async function deletePasskey(ctx: Ctx) {
   await ctx.db.delete(passkey).where(eq(passkey.deviceId, requireDevice(ctx).id));
+  await audit(ctx, "passkey_removed");
 }
 
 // ---------- devices ----------
 
 export async function listDevices(ctx: Ctx) {
   const rows = await ctx.db.select().from(device).where(isNull(device.revokedAt)).orderBy(desc(device.lastSeenAt));
-  return Promise.all(rows.map((d) => deviceOut(ctx.db, d, ctx.sessionDevice?.id ?? null)));
+  return Promise.all(rows.map((d) => deviceOut(ctx, d)));
 }
 
 async function findDevice(ctx: Ctx, id: string) {
@@ -280,29 +304,34 @@ async function findDevice(ctx: Ctx, id: string) {
     .select()
     .from(device)
     .where(and(eq(device.id, id), isNull(device.revokedAt)));
-  if (!d) throw notFound("Device");
+  if (!d) throw notFound("No encontré ese dispositivo.");
   return d;
 }
 
 export async function renameDevice(ctx: Ctx, id: string, name: string) {
   await findDevice(ctx, id);
   const d = one(await ctx.db.update(device).set({ name }).where(eq(device.id, id)).returning(), "device rename");
-  return deviceOut(ctx.db, d, ctx.sessionDevice?.id ?? null);
+  await audit(ctx, "device_renamed", { deviceId: id });
+  return deviceOut(ctx, d);
 }
 
-export async function revokeDevice(ctx: Ctx, id: string) {
+export async function revokeDevice(ctx: Ctx, id: string, kind: "device_revoked" | "logout" = "device_revoked") {
   await findDevice(ctx, id);
-  await ctx.db.update(device).set({ revokedAt: ctx.now }).where(eq(device.id, id));
+  await ctx.db
+    .update(device)
+    .set({ revokedAt: toDate(ctx.now) })
+    .where(eq(device.id, id));
   await ctx.db.delete(passkey).where(eq(passkey.deviceId, id));
   await ctx.db.delete(pushSubscription).where(eq(pushSubscription.deviceId, id));
+  await audit(ctx, kind, { deviceId: id });
   if (id === ctx.sessionDevice?.id) ctx.setCookies.push(clearCookie(SESSION_COOKIE));
 }
 
 // ---------- CLI ----------
 
 /** `pnpm auth:reset-pin`: one-time 8-digit code valid 15 min. */
-export async function createResetCode(db: DbLike, code: string, now: Date) {
-  await db.insert(pinResetCode).values({ hash: await hashSecret(code), expiresAt: new Date(now.getTime() + 15 * 60_000) });
+export async function createResetCode(db: DbLike, code: string, now: Temporal.Instant) {
+  await db.insert(pinResetCode).values({ hash: await hashSecret(code), expiresAt: toDate(now.add({ minutes: 15 })) });
 }
 
 export { newRecoveryCodes };

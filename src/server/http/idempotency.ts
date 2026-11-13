@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
 import type { DbLike } from "../db/client";
 import { idempotencyKey } from "../db/schema";
+import { fromDate, toDate } from "../domain/time";
 import { ApiError } from "./errors";
 
 /** 24 h (docs/v2/02). */
@@ -23,12 +24,12 @@ export async function reserve(
   method: string,
   path: string,
   rawBody: string,
-  now: Date,
+  now: Temporal.Instant,
 ): Promise<Reservation> {
   const requestHash = createHash("sha256").update(`${method} ${path}\n${rawBody}`).digest("hex");
   const inserted = await db
     .insert(idempotencyKey)
-    .values({ scope, key, method, path, requestHash, createdAt: now })
+    .values({ scope, key, method, path, requestHash, createdAt: toDate(now) })
     .onConflictDoNothing()
     .returning({ key: idempotencyKey.key });
   if (inserted.length) return { reserved: true };
@@ -38,14 +39,12 @@ export async function reserve(
     .from(idempotencyKey)
     .where(and(eq(idempotencyKey.scope, scope), eq(idempotencyKey.key, key)));
   if (!row) return reserve(db, scope, key, method, path, rawBody, now);
-  if (now.getTime() - row.createdAt.getTime() > IDEMPOTENCY_TTL_MS) {
+  if (fromDate(row.createdAt).until(now).total("milliseconds") > IDEMPOTENCY_TTL_MS) {
     await release(db, scope, key);
     return reserve(db, scope, key, method, path, rawBody, now);
   }
-  if (row.requestHash !== requestHash)
-    throw new ApiError(422, "idempotency_key_reuse", "This Idempotency-Key was used with a different request.");
-  if (row.responseStatus === null)
-    throw new ApiError(409, "idempotency_in_progress", "A request with this Idempotency-Key is still in progress.");
+  if (row.requestHash !== requestHash) throw new ApiError(422, "IDEMPOTENCY_KEY_REUSE");
+  if (row.responseStatus === null) throw new ApiError(409, "IDEMPOTENCY_IN_PROGRESS");
   return { replay: { status: row.responseStatus, body: row.responseBody === null ? undefined : JSON.parse(row.responseBody) } };
 }
 
@@ -60,10 +59,10 @@ export async function release(db: DbLike, scope: IdempotencyScope, key: string) 
   await db.delete(idempotencyKey).where(and(eq(idempotencyKey.scope, scope), eq(idempotencyKey.key, key)));
 }
 
-export async function purgeExpired(db: DbLike, now: Date): Promise<number> {
+export async function purgeExpired(db: DbLike, now: Temporal.Instant): Promise<number> {
   const rows = await db
     .delete(idempotencyKey)
-    .where(lt(idempotencyKey.createdAt, new Date(now.getTime() - IDEMPOTENCY_TTL_MS)))
+    .where(lt(idempotencyKey.createdAt, toDate(now.subtract({ milliseconds: IDEMPOTENCY_TTL_MS }))))
     .returning({ key: idempotencyKey.key });
   return rows.length;
 }

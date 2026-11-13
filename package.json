@@ -20,6 +20,7 @@
     "icons": "tsx scripts/icons.ts",
     "icons:check": "tsx scripts/icons.ts --check",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
     "test:watch": "vitest",
     "auth:reset-pin": "tsx scripts/auth-reset-pin.ts",
     "auth:recovery-codes": "tsx scripts/auth-recovery-codes.ts",

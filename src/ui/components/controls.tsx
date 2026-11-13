@@ -233,3 +233,28 @@ export function PageDots({ count, active }: { count: number; active: number }) {
     </div>
   );
 }
+
+/**
+ * Text input of Sistema Calma: 48 px, surface background, accent border on focus, theme tokens only (works in both
+ * themes). `mono` for codes and secrets. Always pass `label` (visible or not) for screen readers.
+ */
+export function TextField({
+  label,
+  hideLabel = true,
+  mono,
+  className,
+  ...rest
+}: { label: string; hideLabel?: boolean; mono?: boolean } & Omit<ComponentProps<"input">, "aria-label">) {
+  return (
+    <label className={cx("flex flex-col gap-1.5", className)}>
+      <span className={hideLabel ? "sr-only" : "text-caption text-muted"}>{label}</span>
+      <input
+        {...rest}
+        className={cx(
+          "h-12 w-full rounded-md border border-border2 bg-surface px-3.5 text-body text-text outline-none placeholder:text-muted focus:border-accent",
+          mono && "font-mono",
+        )}
+      />
+    </label>
+  );
+}

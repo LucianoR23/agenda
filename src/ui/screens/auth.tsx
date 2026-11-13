@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { ApiProblem, api } from "@/client/api";
 import type { SessionState } from "@/client/types";
-import { Button, Segmented } from "../components/controls";
+import { Button, Segmented, TextField } from "../components/controls";
 import { Icon } from "../components/icon";
 import { PinPad } from "../components/pin-pad";
 import { haptic } from "../time";
@@ -64,11 +64,8 @@ function Brand() {
 const problemText = (e: unknown) => {
   if (!(e instanceof ApiProblem)) return "Algo salió mal.";
   if (e.offline) return "Sin conexión.";
-  const p = e.problem;
-  if (p.code === "locked_out") return `Demasiados intentos. Probá en ${Math.ceil((p.retryAfterSeconds ?? 60) / 60)} min.`;
-  if (p.code === "invalid_credentials")
-    return p.remainingAttempts !== undefined ? `Incorrecto. Te quedan ${p.remainingAttempts} intentos.` : "Código incorrecto.";
-  return p.detail ?? p.title;
+  // the server writes the message for the user (attempts left, wait time…)
+  return e.problem.message;
 };
 
 // ---------- setup ----------
@@ -102,7 +99,7 @@ export function SetupScreen() {
       setError(problemText(e));
       resetConfirm();
       create.reset();
-      setStep(e instanceof ApiProblem && e.problem.code === "invalid_credentials" ? "code" : "pin");
+      setStep(e instanceof ApiProblem && e.problem.code === "INVALID_CREDENTIALS" ? "code" : "pin");
     }
   }, step === "confirm");
 
@@ -113,13 +110,12 @@ export function SetupScreen() {
         <div className="flex w-full max-w-sm flex-col gap-3">
           <h1 className="text-title text-text">Configurar Agenda</h1>
           <p className="text-body-sm text-text2">Ingresá el código de configuración del servidor (SETUP_CODE). Se usa una sola vez.</p>
-          <input
-            // biome-ignore lint/a11y/noAutofocus: single-field auth step; focusing it opens the keyboard on mobile
+          <TextField
+            label="Código de configuración"
             autoFocus
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Código de configuración"
-            className="h-12 rounded-md border border-border2 bg-surface px-3.5 text-body text-text outline-none focus:border-accent"
           />
           {error && <p className="text-caption text-danger">{error}</p>}
           <Button size="lg" disabled={!code} onClick={() => setStep("pin")}>
@@ -317,15 +313,15 @@ function RecoverScreen({ onBack }: { onBack: () => void }) {
             ? "Uno de los 10 códigos que guardaste al configurar (XXXX-XXXX-XXXX)."
             : "El código de 8 dígitos que imprime `pnpm auth:reset-pin` en la terminal del contenedor (vale 15 min)."}
         </p>
-        <input
-          // biome-ignore lint/a11y/noAutofocus: single-field auth step; focusing it opens the keyboard on mobile
+        <TextField
+          label={method === "recovery_code" ? "Código de recuperación" : "Código del servidor"}
+          mono
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value)}
           inputMode={method === "reset_code" ? "numeric" : "text"}
           autoCapitalize="characters"
           placeholder={method === "recovery_code" ? "K7QM-2XPA-9TRC" : "58302917"}
-          className="h-12 rounded-md border border-border2 bg-surface px-3.5 font-mono text-body text-text outline-none focus:border-accent"
         />
         {error && <p className="text-caption text-danger">{error}</p>}
         <Button

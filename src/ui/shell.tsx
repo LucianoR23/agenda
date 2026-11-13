@@ -15,7 +15,7 @@ import { TimelineSkeleton } from "./components/surfaces";
 import { registerServiceWorker } from "./pwa";
 import { SetupScreen, UnlockScreen } from "./screens/auth";
 import { applyTheme, readTheme } from "./theme";
-import { ensureTemporal } from "./time";
+import { ensureTemporal, setUserTimeZone, userTimeZone } from "./time";
 
 /** Client root: query cache hydrated from IndexedDB, sync engine, auth gate, navigation. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -58,6 +58,7 @@ function Gate({ children }: { children: ReactNode }) {
 
   let s: SessionState | undefined = session.data;
   if (s) {
+    setUserTimeZone(s.timezone);
     try {
       localStorage.setItem(LAST_SESSION, s.state);
     } catch {}
@@ -67,7 +68,8 @@ function Gate({ children }: { children: ReactNode }) {
     try {
       last = localStorage.getItem(LAST_SESSION);
     } catch {}
-    if (last === "unlocked") s = { state: "unlocked", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null };
+    if (last === "unlocked")
+      s = { state: "unlocked", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null, timezone: userTimeZone() };
   }
 
   if (!s) return <Splash />;
@@ -123,7 +125,7 @@ function Conflicts() {
   const current = (c.conflict?.current ?? {}) as Record<string, unknown>;
   const field = Object.keys(body).find((k) => k !== "version" && k !== "force") ?? "";
   const why =
-    c.conflict?.code === "version_conflict"
+    c.conflict?.code === "VERSION_CONFLICT"
       ? "Cambió en el servidor mientras estabas sin conexión (Sunday u otro dispositivo)."
       : "Lo cambió otra parte antes que vos.";
   const fmt = (v: unknown) => (v === null || v === undefined ? "—" : String(v));

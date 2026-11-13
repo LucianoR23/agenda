@@ -1,5 +1,8 @@
 import type { ZodObject, ZodType } from "zod";
 
+/** API token permission. Mirrors the `token_scope` enum. */
+export type TokenScope = "read" | "write" | "notify";
+
 /** Who may call a route. Drives the OpenAPI `security`, `x-actors` and the automatic 401 responses. */
 export type Access = "user" | "public" | "preauth";
 
@@ -23,7 +26,7 @@ export interface Exchange {
 
 export interface ResponseDef {
   description: string;
-  /** Defaults to `Problem` for status >= 400; omit for empty bodies (204). */
+  /** Defaults to the `Error` body for status >= 400; omit for empty bodies (204). */
   schema?: ZodType;
   headers?: Array<"ETag" | "Retry-After" | "Set-Cookie">;
 }
@@ -36,6 +39,8 @@ export interface RouteDef {
   summary: string;
   description?: string;
   access: Access;
+  /** API tokens may call this route when they hold this scope (Sunday operations). Session users always can. */
+  token?: TokenScope;
   /** Path parameters: always an object schema (zod-to-openapi requires it). */
   params?: ZodObject;
   /** Query string: always an object schema. */

@@ -98,13 +98,13 @@ export function flush(qc: QueryClient): Promise<void> {
           if (e.problem.status === 409 || e.problem.status === 412) {
             await idb().outbox.update(item.id, {
               state: "conflict",
-              conflict: { code: e.problem.code, detail: e.problem.detail, current: e.problem.current },
+              conflict: { code: e.problem.code, detail: e.problem.message, current: e.problem.details?.current },
             });
           } else {
             // rejected for good (validation, gone…): drop it and show the server's truth
             await idb().outbox.delete(item.id);
             for (const k of item.invalidate) await qc.invalidateQueries({ queryKey: JSON.parse(k) });
-            notifyRejected(item, REASON[e.problem.code ?? ""] ?? e.problem.detail ?? e.problem.title);
+            notifyRejected(item, REASON[e.problem.code ?? ""] ?? e.problem.message);
           }
         }
       }

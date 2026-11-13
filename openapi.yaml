@@ -6,7 +6,7 @@ info:
   description: |-
     Agenda v2: personal tasks, reminders and events. Base path `/api`, JSON only, user timezone America/Buenos_Aires.
 
-    - **Errors:** RFC 9457 `application/problem+json` with `code`, `errors[]` and `requestId`.
+    - **Errors:** `{ "error": { "code", "message", "details"?, "requestId" } }`; `message` is a Spanish sentence that says what to do.
     - **Concurrency:** resources carry `version` + `ETag`; writes accept `If-Match` or `version` in the body.
     - **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH.
     - Unknown fields are rejected everywhere.
@@ -15,6 +15,8 @@ servers:
   - url: http://localhost:3000
 tags:
   - name: Auth
+  - name: Settings
+  - name: Tokens
   - name: Push
   - name: Ops
 components:
@@ -24,7 +26,50 @@ components:
       in: cookie
       name: agenda_session
       description: Trusted-device session cookie. Actor = `user`.
+    apiToken:
+      type: http
+      scheme: bearer
+      description: "Named API token `agd_…` (Ajustes → Tokens de API). Scopes: `read`, `write`, `notify`. Actor = `sunday`."
   schemas:
+    ApiToken:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        prefix:
+          type: string
+          description: First 8 characters, for recognising the token.
+          example: agd_x7Kp
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenScope"
+        lastUsedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        lastUsedIp:
+          type:
+            - string
+            - "null"
+        expiresAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+      required:
+        - id
+        - name
+        - prefix
+        - scopes
+        - lastUsedAt
+        - lastUsedIp
+        - expiresAt
+        - createdAt
+      additionalProperties: false
     ChangePinInput:
       type: object
       properties:
@@ -77,24 +122,54 @@ components:
       required:
         - name
       additionalProperties: false
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              $ref: "#/components/schemas/ErrorCode"
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: {}
+              description: "Extra data by code: `fields` (VALIDATION_ERROR: [{ path, message }]), `retryAfterSeconds` (RATE_LIMITED, LOCKED_OUT), `remainingAttempts` (INVALID_CREDENTIALS), `current` (VERSION_CONFLICT: the server's copy), `requiredScope` (INSUFFICIENT_SCOPE)."
+            requestId:
+              type: string
+          required:
+            - code
+            - message
+            - requestId
+          additionalProperties: false
+      required:
+        - error
+      additionalProperties: false
     ErrorCode:
       type: string
       enum:
-        - validation_error
-        - unauthorized
-        - device_locked
-        - forbidden
-        - not_found
-        - method_not_allowed
-        - version_conflict
-        - idempotency_key_reuse
-        - idempotency_in_progress
-        - rate_limited
-        - locked_out
-        - invalid_credentials
-        - setup_completed
-        - internal_error
-        - service_unavailable
+        - VALIDATION_ERROR
+        - UNSUPPORTED_MEDIA_TYPE
+        - UNAUTHORIZED
+        - DEVICE_LOCKED
+        - REAUTH_REQUIRED
+        - FORBIDDEN
+        - ORIGIN_NOT_ALLOWED
+        - INSUFFICIENT_SCOPE
+        - NOT_FOUND
+        - SETUP_REQUIRED
+        - SETUP_COMPLETED
+        - METHOD_NOT_ALLOWED
+        - VERSION_CONFLICT
+        - CONFLICT
+        - IDEMPOTENCY_KEY_REUSE
+        - IDEMPOTENCY_IN_PROGRESS
+        - RATE_LIMITED
+        - LOCKED_OUT
+        - INVALID_CREDENTIALS
+        - INTERNAL_ERROR
+        - SERVICE_UNAVAILABLE
     Health:
       type: object
       properties:
@@ -122,7 +197,7 @@ components:
       type: string
       minLength: 1
       maxLength: 200
-      description: Same key + same body → stored response replayed; different body → 422. Kept 48 h, scoped per actor.
+      description: Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.
       example: 019a0a6e-1c00-7000-8000-000000000001
     PasskeyInfo:
       type: object
@@ -163,49 +238,6 @@ components:
       required:
         - pin
       additionalProperties: false
-    Problem:
-      type: object
-      properties:
-        type:
-          type: string
-          example: https://agenda.lemydev.com/problems/version_conflict
-        title:
-          type: string
-        status:
-          type: integer
-        detail:
-          type: string
-        code:
-          $ref: "#/components/schemas/ErrorCode"
-        errors:
-          type: array
-          items:
-            type: object
-            properties:
-              path:
-                type: string
-              message:
-                type: string
-            required:
-              - path
-              - message
-          description: Field-level validation errors (JSON-pointer-like paths).
-        requestId:
-          type: string
-        current:
-          description: "On `version_conflict`: the current server state of the resource."
-        retryAfterSeconds:
-          type: integer
-          description: On `rate_limited` / `locked_out`.
-        remainingAttempts:
-          type: integer
-          description: On `invalid_credentials` (PIN / codes).
-      required:
-        - type
-        - title
-        - status
-        - requestId
-      description: RFC 9457 problem details (`application/problem+json`).
     PushSubscribeInput:
       type: object
       properties:
@@ -254,6 +286,16 @@ components:
           format: uri
       required:
         - endpoint
+      additionalProperties: false
+    ReauthResult:
+      type: object
+      properties:
+        validUntil:
+          allOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - description: Sensitive actions (API tokens) are allowed until then.
+      required:
+        - validUntil
       additionalProperties: false
     RecoverInput:
       type: object
@@ -338,12 +380,76 @@ components:
             - string
             - "null"
           description: Web Push application server key; null when push is not configured.
+        timezone:
+          type: string
+          description: The user's IANA timezone (every local date/time uses it).
+          example: America/Buenos_Aires
       required:
         - state
         - passkeyEnabled
         - lockedUntil
         - device
         - vapidPublicKey
+        - timezone
+      additionalProperties: false
+    Settings:
+      type: object
+      properties:
+        timezone:
+          type: string
+          description: IANA timezone.
+          example: America/Buenos_Aires
+        locale:
+          type: string
+        quietStart:
+          type:
+            - string
+            - "null"
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+          example: 23:30
+          description: Quiet hours start (local). Non-urgent reminders wait until quietEnd.
+        quietEnd:
+          type:
+            - string
+            - "null"
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+          example: 23:30
+        defaultSnoozeMinutes:
+          type: integer
+      required:
+        - timezone
+        - locale
+        - quietStart
+        - quietEnd
+        - defaultSnoozeMinutes
+      additionalProperties: false
+    SettingsPatch:
+      type: object
+      properties:
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        locale:
+          type: string
+          minLength: 2
+          maxLength: 16
+        quietStart:
+          type:
+            - string
+            - "null"
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+          example: 23:30
+        quietEnd:
+          type:
+            - string
+            - "null"
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+          example: 23:30
+        defaultSnoozeMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
       additionalProperties: false
     SetupInput:
       type: object
@@ -381,6 +487,75 @@ components:
       format: date-time
       description: ISO 8601 timestamp with offset .
       example: 2026-10-19T07:00:12.345-03:00
+    TokenCreated:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        prefix:
+          type: string
+          description: First 8 characters, for recognising the token.
+          example: agd_x7Kp
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenScope"
+        lastUsedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        lastUsedIp:
+          type:
+            - string
+            - "null"
+        expiresAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        token:
+          type: string
+          description: The secret (`agd_…`). Shown only in this response.
+          example: agd_x7Kp…
+      required:
+        - id
+        - name
+        - prefix
+        - scopes
+        - lastUsedAt
+        - lastUsedIp
+        - expiresAt
+        - createdAt
+        - token
+      additionalProperties: false
+    TokenCreateInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenScope"
+          minItems: 1
+        expiresAt:
+          $ref: "#/components/schemas/Timestamp"
+      required:
+        - name
+        - scopes
+      additionalProperties: false
+    TokenScope:
+      type: string
+      enum:
+        - read
+        - write
+        - notify
+      description: "`read`: query the agenda. `write`: create/change items. `notify`: send pushes."
     UnlockInput:
       type: object
       properties:
@@ -413,7 +588,7 @@ components:
       schema:
         $ref: "#/components/schemas/IdempotencyKey"
       required: false
-      description: Same key + same body → stored response replayed; different body → 422. Kept 48 h, scoped per actor.
+      description: Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.
       name: Idempotency-Key
       in: header
 paths:
@@ -495,11 +670,11 @@ paths:
                 type: object
                 additionalProperties: {}
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/session:
     get:
       operationId: getSession
@@ -529,6 +704,7 @@ paths:
                       id: 019a0a6e-1c00-7000-8000-000000000320
                       name: Galaxy S26 Ultra · Chrome
                     vapidPublicKey: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
+                    timezone: America/Buenos_Aires
                 setup:
                   summary: Fresh install
                   value:
@@ -537,6 +713,7 @@ paths:
                     lockedUntil: null
                     device: null
                     vapidPublicKey: null
+                    timezone: America/Buenos_Aires
               schema:
                 $ref: "#/components/schemas/SessionState"
   /api/auth/setup:
@@ -546,7 +723,7 @@ paths:
         - Auth
       summary: First-run setup
       description: |-
-        Only while no user exists; afterwards 404 forever. Returns the 10 recovery codes once and trusts this device.
+        Only while no user exists; afterwards 409 `SETUP_COMPLETED`. Returns the 10 recovery codes once and trusts this device.
 
         **Actors:** anyone (device-key cookie).
       security: []
@@ -604,35 +781,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/SetupResult"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials`: wrong SETUP_CODE (counts toward lockout)."
+          description: "`INVALID_CREDENTIALS`: wrong SETUP_CODE (counts toward lockout)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: "`setup_completed`."
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`SETUP_COMPLETED`. `IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/unlock:
     post:
       operationId: unlock
@@ -693,62 +870,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnlockResult"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials` with `remainingAttempts`."
+          description: "`INVALID_CREDENTIALS` with `remainingAttempts`."
           content:
-            application/problem+json:
+            application/json:
               examples:
                 wrong:
                   summary: Wrong PIN
                   value:
-                    type: https://agenda.lemydev.com/problems/invalid_credentials
-                    title: Invalid credentials
-                    status: 401
-                    detail: Wrong PIN.
-                    code: invalid_credentials
-                    requestId: req_01JA9X7Q2M8K
-                    remainingAttempts: 3
+                    error:
+                      code: INVALID_CREDENTIALS
+                      message: PIN incorrecto. Te quedan 3 intentos.
+                      details:
+                        remainingAttempts: 3
+                      requestId: req_01JA9X7Q2M8K
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "429":
-          description: "`locked_out` with `retryAfterSeconds`."
+          description: "`LOCKED_OUT` with `retryAfterSeconds`."
           headers:
             Retry-After:
               description: Seconds to wait.
               schema:
                 type: integer
           content:
-            application/problem+json:
+            application/json:
               examples:
                 lockedOut:
                   summary: 5th failure
                   value:
-                    type: https://agenda.lemydev.com/problems/locked_out
-                    title: Too many failed attempts
-                    status: 429
-                    detail: Try again in 15 minutes.
-                    code: locked_out
-                    requestId: req_01JA9X7Q2M8K
-                    retryAfterSeconds: 900
+                    error:
+                      code: LOCKED_OUT
+                      message: Demasiados intentos fallidos. Probá de nuevo en 15 min, o usá un código de recuperación desde otro dispositivo.
+                      details:
+                        retryAfterSeconds: 900
+                      requestId: req_01JA9X7Q2M8K
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/recover:
     post:
       operationId: recover
@@ -820,40 +1001,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecoverResult"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials`."
+          description: "`INVALID_CREDENTIALS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "429":
-          description: "`locked_out`."
+          description: "`LOCKED_OUT`."
           headers:
             Retry-After:
               description: Seconds to wait.
               schema:
                 type: integer
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/pin:
     post:
       operationId: changePin
@@ -883,40 +1070,52 @@ paths:
         "204":
           description: Changed.
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials`. `unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`INVALID_CREDENTIALS`. `UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "429":
-          description: "`locked_out`."
+          description: "`LOCKED_OUT`."
           headers:
             Retry-After:
               description: Seconds to wait.
               schema:
                 type: integer
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/recovery-codes:
     post:
       operationId: regenerateRecoveryCodes
@@ -964,29 +1163,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecoveryCodes"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials`. `unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`INVALID_CREDENTIALS`. `UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/passkey/register/options:
     post:
       operationId: passkeyRegisterOptions
@@ -1034,23 +1245,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/WebAuthnJson"
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/passkey/register/verify:
     post:
       operationId: passkeyRegisterVerify
@@ -1099,29 +1316,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/PasskeyInfo"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials`: verification failed. `unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`INVALID_CREDENTIALS`: verification failed. `UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/passkey/auth/options:
     post:
       operationId: passkeyAuthOptions
@@ -1158,23 +1387,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/WebAuthnJson"
         "404":
-          description: "`not_found`: no passkey on this device."
+          description: "`NOT_FOUND`: no passkey on this device."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/passkey/auth/verify:
     post:
       operationId: passkeyAuthVerify
@@ -1231,40 +1460,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnlockResult"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`invalid_credentials` (counts toward lockout)."
+          description: "`INVALID_CREDENTIALS` (counts toward lockout)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "429":
-          description: "`locked_out`."
+          description: "`LOCKED_OUT`."
           headers:
             Retry-After:
               description: Seconds to wait.
               schema:
                 type: integer
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/passkey:
     delete:
       operationId: deletePasskey
@@ -1280,11 +1515,17 @@ paths:
         "204":
           description: Removed.
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/auth/devices:
     get:
       operationId: listDevices
@@ -1333,11 +1574,17 @@ paths:
                   - devices
                 additionalProperties: false
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/auth/devices/{id}:
     patch:
       operationId: renameDevice
@@ -1387,35 +1634,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/Device"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          description: "`not_found`."
+          description: "`NOT_FOUND`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: revokeDevice
       tags:
@@ -1439,23 +1698,29 @@ paths:
         "204":
           description: Revoked.
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          description: "`not_found`."
+          description: "`NOT_FOUND`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
   /api/auth/logout:
     post:
       operationId: logout
@@ -1481,23 +1746,455 @@ paths:
               schema:
                 type: string
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+  /api/auth/reauth:
+    post:
+      operationId: reauth
+      tags:
+        - Auth
+      summary: Confirm the PIN for a sensitive action
+      description: |-
+        Opens a 5-minute window for creating or revoking API tokens. A fingerprint unlock opens it too.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              ok:
+                summary: PIN confirmed
+                value:
+                  pin: "482913"
+            schema:
+              $ref: "#/components/schemas/PinConfirmInput"
+      responses:
+        "200":
+          description: Confirmed.
+          content:
+            application/json:
+              examples:
+                ok:
+                  summary: PIN confirmed
+                  value:
+                    validUntil: 2026-11-13T09:07:00.000-03:00
+              schema:
+                $ref: "#/components/schemas/ReauthResult"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`INVALID_CREDENTIALS` with `remainingAttempts`. `UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`LOCKED_OUT`."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/settings:
+    get:
+      operationId: getSettings
+      tags:
+        - Settings
+      summary: User settings (timezone, quiet hours, snooze)
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      responses:
+        "200":
+          description: Settings.
+          content:
+            application/json:
+              examples:
+                settings:
+                  summary: Defaults
+                  value:
+                    timezone: America/Buenos_Aires
+                    locale: es-AR
+                    quietStart: 23:30
+                    quietEnd: 07:00
+                    defaultSnoozeMinutes: 10
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateSettings
+      tags:
+        - Settings
+      summary: Change settings
+      description: |-
+        Timezone must be an IANA name. Quiet hours: both or neither (null turns them off).
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              travel:
+                summary: Traveling to Madrid
+                value:
+                  timezone: Europe/Madrid
+              bad:
+                summary: Unknown zone
+                value:
+                  timezone: Mars/Olympus
+            schema:
+              $ref: "#/components/schemas/SettingsPatch"
+      responses:
+        "200":
+          description: Updated settings.
+          content:
+            application/json:
+              examples:
+                travel:
+                  summary: Traveling to Madrid
+                  value:
+                    timezone: Europe/Madrid
+                    locale: es-AR
+                    quietStart: 23:30
+                    quietEnd: 07:00
+                    defaultSnoozeMinutes: 10
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              examples:
+                bad:
+                  summary: Unknown zone
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: '"Mars/Olympus" no es una zona horaria IANA válida (por ejemplo America/Buenos_Aires).'
+                      details:
+                        fields:
+                          - path: /timezone
+                            message: Unknown IANA timezone
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tokens:
+    get:
+      operationId: listTokens
+      tags:
+        - Tokens
+      summary: Active API tokens
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      responses:
+        "200":
+          description: Tokens (never the secrets).
+          content:
+            application/json:
+              examples:
+                list:
+                  summary: Sunday's token
+                  value:
+                    tokens:
+                      - id: 019a0a6e-1c00-7000-8000-000000000384
+                        name: sunday
+                        prefix: agd_x7Kp
+                        scopes:
+                          - read
+                          - write
+                          - notify
+                        lastUsedAt: 2026-11-13T09:02:11.000-03:00
+                        lastUsedIp: 203.0.113.7
+                        expiresAt: null
+                        createdAt: 2026-11-01T18:30:00.000-03:00
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiToken"
+                required:
+                  - tokens
+                additionalProperties: false
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createToken
+      tags:
+        - Tokens
+      summary: Create an API token (shown once)
+      description: |-
+        Needs PIN or fingerprint confirmed in the last 5 minutes (`POST /api/auth/reauth`). Names are unique among active tokens.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              sunday:
+                summary: Token for Sunday
+                value:
+                  name: sunday
+                  scopes:
+                    - read
+                    - write
+                    - notify
+              reauth:
+                summary: PIN not confirmed recently
+                value:
+                  name: sunday
+                  scopes:
+                    - read
+            schema:
+              $ref: "#/components/schemas/TokenCreateInput"
+      responses:
+        "201":
+          description: Created; `token` is the secret, shown only now.
+          content:
+            application/json:
+              examples:
+                sunday:
+                  summary: Token for Sunday
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000384
+                    name: sunday
+                    prefix: agd_x7Kp
+                    scopes:
+                      - read
+                      - write
+                      - notify
+                    lastUsedAt: null
+                    lastUsedIp: null
+                    expiresAt: null
+                    createdAt: 2026-11-01T18:30:00.000-03:00
+                    token: agd_x7KpQ2mN8vR4tW6yZ1bC3dE5fG7hJ9kL0nP2qS4uV6w
+              schema:
+                $ref: "#/components/schemas/TokenCreated"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`REAUTH_REQUIRED`. `FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              examples:
+                reauth:
+                  summary: PIN not confirmed recently
+                  value:
+                    error:
+                      code: REAUTH_REQUIRED
+                      message: Confirmá tu PIN o tu huella para seguir (vale 5 minutos).
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: an active token has that name. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tokens/{id}:
+    delete:
+      operationId: revokeToken
+      tags:
+        - Tokens
+      summary: Revoke an API token
+      description: |-
+        Stops working immediately. Needs a recent PIN or fingerprint confirmation.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Revoked.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`REAUTH_REQUIRED`. `FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/push/subscribe:
     post:
       operationId: pushSubscribe
@@ -1544,29 +2241,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/PushSubscription"
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`idempotency_in_progress`."
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: "`idempotency_key_reuse`: same `Idempotency-Key`, different body."
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: pushUnsubscribe
       tags:
@@ -1592,15 +2301,27 @@ paths:
         "204":
           description: Removed.
         "400":
-          description: "`validation_error`."
+          description: "`VALIDATION_ERROR` (details.fields)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
         "401":
-          description: "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN)."
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 webhooks: {}
