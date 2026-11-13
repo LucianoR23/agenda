@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import webpush from "web-push";
+import { sendNotification } from "web-push";
 import type { DbLike } from "./db/client";
 import { pushSubscription } from "./db/schema";
 import { env } from "./env";
@@ -19,7 +19,7 @@ const webPushSender: PushSender = async (sub, msg) => {
   const e = env();
   if (!e.VAPID_PUBLIC_KEY || !e.VAPID_PRIVATE_KEY || !e.VAPID_SUBJECT) return { gone: false };
   try {
-    await webpush.sendNotification(
+    await sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(msg),
       { vapidDetails: { subject: e.VAPID_SUBJECT, publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY }, TTL: 3600 },

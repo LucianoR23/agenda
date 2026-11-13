@@ -22,7 +22,7 @@ Removed: `AGENT_TOKEN_HASH`, `AGENT_WEBHOOK_*`, Agenbot-related vars, `SLEEP_REM
 Validate env at boot with Zod; fail fast with a clear message (without printing values).
 
 ## Deploy (Coolify)
-- Project `agenda`, application from this GitHub repo, branch `v2` until cutover then `main`. Dockerfile build (multi-stage, node:24-alpine, arm64), standalone output.
+- Project `agenda`, application from this GitHub repo, branch `v2` until cutover then `main`. Dockerfile build (multi-stage, node:26-alpine, arm64), standalone output.
 - **Single replica** (in-process worker + in-memory rate limits). Document it in the Coolify resource description.
 - `docker/entrypoint.sh`: run migrations (unless `SKIP_MIGRATIONS`), then start. Healthcheck `GET /api/health` (DB ping + worker heartbeat age).
 - Domain `https://agenda.lemydev.com`, Cloudflare DNS. Postgres via the internal hostname of `postgres-core` (shared instance from the sunday repo), DB `agenda`.

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Agenda — production image for linux/arm64 (Oracle Cloud Ampere). Also builds on amd64.
 #   docker buildx build --platform linux/arm64 -t agenda .
-ARG NODE_VERSION=24-alpine
+ARG NODE_VERSION=26-alpine
 
 # ---------- deps ----------
 FROM node:${NODE_VERSION} AS deps

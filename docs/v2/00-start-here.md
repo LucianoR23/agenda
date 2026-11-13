@@ -25,7 +25,7 @@ Same repo, history preserved: tag the current state as `v1`, rewrite on branch `
 - Offline client (Dexie + outbox sync), TanStack Query setup, hand-written service worker (new cache naming, see `07`).
 - Design system "Calma": dark-first palette, mint-teal accent `oklch(.82 .08 160)`, Instrument Sans + Geist Mono, components, gestures (motion, dnd-kit), Material Symbols SVG sprite.
 - Habits + streaks, sleep log.
-- Dockerfile (multi-stage node:24-alpine, arm64-first), `docker/entrypoint.sh` (migrate then start), healthcheck.
+- Dockerfile (multi-stage node:26-alpine, arm64-first), `docker/entrypoint.sh` (migrate then start), healthcheck.
 
 ## New
 - Tasks with lists (Inbox), priorities, due date/time, recurrence (RRULE).

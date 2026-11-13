@@ -27,7 +27,7 @@ tests/            unit, api (integration + contract), e2e (Playwright)
 
 ## Local development
 
-Requirements: Node 24, pnpm 11 (`corepack enable`), Docker.
+Requirements: Node 26, pnpm 11 (`corepack enable`), Docker.
 
 ```bash
 pnpm install
