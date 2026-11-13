@@ -28,7 +28,8 @@ docker/                   entrypoint
 - **Biome** replaces ESLint (lint + format). `biome.json` with recommended rules, organize imports, 2-space, double quotes, trailing commas. Scripts: `pnpm check` (biome check), `pnpm fix`.
 - **React Compiler** enabled (`reactCompiler: true` in `next.config.ts`; `babel-plugin-react-compiler`). Remove manual `useMemo`/`useCallback` only where safe; don't mass-refactor.
 - TypeScript `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` (if the cost is reasonable; ask).
-- Scripts: `dev`, `build`, `start`, `typecheck`, `check`, `test`, `test:e2e`, `db:generate`, `db:migrate`, `openapi:gen`, `openapi:lint`.
+- Scripts: `dev`, `build`, `start`, `typecheck`, `check`, `fix`, `test`, `test:e2e`, `db:up`, `db:generate`, `db:migrate`, `openapi:gen`, `openapi:check`, `openapi:lint`.
+- Runtime: Node 26 (LTS) with native Temporal; TypeScript 7.
 - Update dependencies to current stable at the start of v2 (Next 16.x, React 19.x, drizzle, zod 4, simplewebauthn, etc.) and record versions in the phase summary.
 
 ## Time rules

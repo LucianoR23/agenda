@@ -14,22 +14,26 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 > **Decision (Phase 0):** v1 habits, sleep and tasks were entangled with the day/block domain (sleep derived from the planned sleep block, tasks linked to blocks, `HH:mm` text times), so they were removed together with it instead of being stubbed. They come back rewritten against the new schema: **tasks in Phase 4**, **habits/streaks and sleep in Phase 7**. Port from tag `v1` and `docs/agenda-audit.md`. `streaks.ts` (pure logic) is kept. Hoy, Tareas, Historial and Métricas are placeholders until then. Agenbot bearer, internal token, webhook outbox and export endpoint are gone. API tests (`tests/api`) are kept but excluded from `pnpm test` until phase 2 (no migrations yet); e2e specs were v1-only and were deleted.
 
 ## Phase 1 — Tooling and foundations
-- [ ] Dependencies updated; Biome configured; React Compiler on; TS strict flags
-- [ ] Env validation with Zod; logger with redaction
-- [ ] Local Docker Postgres 18 (`agenda_dev`, `agenda_test`) + test DB guard
-- [ ] Time module (Temporal, IANA tz, injectable clock) with tests
+- [x] Dependencies updated; Biome configured; React Compiler on; TS strict flags
+- [x] Env validation with Zod; logger with redaction
+- [x] Local Docker Postgres 18 (`agenda_dev`, `agenda_test`) + test DB guard
+- [x] Time module (Temporal, IANA tz, injectable clock) with tests
+
+> **Decisions (Phase 1, 2026-11-13):** Node 26 everywhere (LTS, native Temporal; Docker installs pnpm with npm because Node 25+ has no corepack). TypeScript 7 (native compiler), postgres 4 (verified with drizzle against `agenda_test`), web-push 4. `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` on. Client loads `temporal-polyfill` only when Temporal is missing. **Error format:** adopt `03`'s `{ "error": { "code", "message", "details"? } }` in place of v1's RFC 9457 problem+json (implement in phase 3). With drizzle, never put a raw `Date` or array inside `sql```: use typed operators (`gte`, `arrayContains`) or ISO strings with a cast.
 
 ## Phase 2 — Schema 0000
 - [ ] Drizzle schema per `02`, triggers, indexes, seeds (Inbox)
+- [ ] Re-enable API tests (`tests/api`) in `pnpm test`; wire `app_user.timezone` into `formatInstant` / `userTimeZone()` (Phase 1 uses `DEFAULT_TIMEZONE`)
 - [ ] Migration applies cleanly on empty DB; `uuidv7()` defaults work
 
 ## Phase 3 — Auth and security
 - [ ] Setup flow, PIN, sessions, devices, WebAuthn, recovery/reset codes ported
 - [ ] Origin check, headers/CSP, IP handling, new lockout, pruning
+- [ ] Error envelope per `03`; auth/session/lockout/idempotency time math moved from `Date` to Temporal (`ctx.now` is still a `Date`)
 - [ ] API tokens (create/revoke/list, scopes, re-auth) + Ajustes UI
 
 ## Phase 4 — Tasks
-- [ ] Contract + endpoints + domain (lists, recurrence, search)
+- [ ] Contract + endpoints + domain (lists, recurrence, search); pick `rrule` vs `rrule-temporal` and add RRULE helpers to `domain/time.ts`
 - [ ] Screens: Hoy (tasks part), Inbox, Tareas; quick add parser; gestures; offline outbox
 - [ ] **First deploy** to Coolify on `agenda.lemydev.com` (branch v2) ⟶ sunday: `DATABASE_URL` for DB `agenda` ready
 
