@@ -6,6 +6,7 @@ import { DEVICE_KEY_COOKIE, parseCookies, SESSION_COOKIE, setCookie } from "../a
 import { randomToken } from "../auth/crypto";
 import { resolveSession, touchDevice } from "../auth/session";
 import { getDb } from "../db/client";
+import { log } from "../log";
 import { now as clockNow } from "../time";
 import type { Actor, Ctx, Handler, HandlerResult } from "./context";
 import { ApiError, validation } from "./errors";
@@ -83,7 +84,7 @@ function toApiError(err: unknown): ApiError {
   const constraint = pg.constraint_name ?? pg.cause?.constraint_name;
   if (code === "23505") return validation([{ path: "/", message: `Already exists (${constraint})` }]);
   if (code === "23514" || code === "23503") return validation([{ path: "/", message: `Violates ${constraint}` }]);
-  console.error(err);
+  log.error("unhandled error", { err });
   return new ApiError(500, "internal_error", "Unexpected error.");
 }
 
@@ -175,7 +176,7 @@ export async function handle(req: Request): Promise<Response> {
     });
 
     if (idem) await complete(db, idem.actor, idem.key, result.status, result.body ?? null);
-    for (const fn of afterCommit) await fn().catch((e) => console.error("afterCommit failed", e));
+    for (const fn of afterCommit) await fn().catch((err) => log.error("afterCommit failed", { err, requestId }));
     return respond(result.status, result.body, requestId, result.headers, setCookies);
   } catch (err) {
     const e = toApiError(err);

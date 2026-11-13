@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { env } from "../env";
 import * as schema from "./schema";
 
 function create(url: string) {
@@ -14,9 +15,7 @@ const globalForDb = globalThis as unknown as { agendaDb?: Conn | undefined };
 
 function conn(): Conn {
   if (!globalForDb.agendaDb) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set");
-    globalForDb.agendaDb = create(url);
+    globalForDb.agendaDb = create(env().DATABASE_URL);
   }
   return globalForDb.agendaDb;
 }
