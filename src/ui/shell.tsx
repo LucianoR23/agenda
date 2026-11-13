@@ -100,7 +100,7 @@ function Frame({ children }: { children: ReactNode }) {
 function SyncBanners() {
   const sync = useSync();
   const toast = useToast();
-  useEffect(() => onRejected((item, reason) => toast({ icon: "sync_problem", message: `No se pudo guardar: ${reason}` })), [toast]);
+  useEffect(() => onRejected((_item, reason) => toast({ icon: "sync_problem", message: `No se pudo guardar: ${reason}` })), [toast]);
   if (sync.online) return null;
   return (
     <Banner kind="offline">

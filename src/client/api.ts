@@ -45,7 +45,7 @@ export async function api<T = unknown>(
       !path.startsWith("/api/auth/recover") &&
       !path.startsWith("/api/auth/passkey/auth")
     )
-      authListeners.forEach((l) => l(problem));
+      for (const l of authListeners) l(problem);
     throw new ApiProblem(problem);
   }
   return { status: res.status, data: data as T, headers: res.headers };

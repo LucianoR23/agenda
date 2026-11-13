@@ -4,7 +4,7 @@ import * as auth from "../auth/auth";
 import { getDb } from "../db/client";
 import { pushSubscription } from "../db/schema";
 import { env } from "../env";
-import { type Handler, json } from "../http/context";
+import { type Handler, json, requireDevice } from "../http/context";
 import { isoLocal } from "../time";
 
 let openApiFull: unknown = null;
@@ -35,7 +35,7 @@ export const handlers: Record<string, Handler> = {
   // ---------- push ----------
   pushSubscribe: async (ctx, { body }) => {
     const values = {
-      deviceId: ctx.sessionDevice!.id,
+      deviceId: requireDevice(ctx).id,
       endpoint: body.endpoint,
       p256dh: body.keys.p256dh,
       auth: body.keys.auth,
@@ -86,7 +86,7 @@ export const handlers: Record<string, Handler> = {
     return { status: 204 };
   },
   logout: async (ctx) => {
-    await auth.revokeDevice(ctx, ctx.sessionDevice!.id);
+    await auth.revokeDevice(ctx, requireDevice(ctx).id);
     return { status: 204 };
   },
 };

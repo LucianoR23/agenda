@@ -50,7 +50,10 @@ export function SettingsScreen() {
       <SectionLabel>Apariencia</SectionLabel>
       <Segmented
         value={theme}
-        onChange={(t) => (setTheme(t), applyTheme(t))}
+        onChange={(t) => {
+          setTheme(t);
+          applyTheme(t);
+        }}
         options={[
           { value: "system", label: "Sistema" },
           { value: "dark", label: "Oscuro" },

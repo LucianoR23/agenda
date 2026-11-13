@@ -256,6 +256,7 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* biome-ignore-start lint/complexity/noImportantStyles: reduced motion must beat every utility class */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -264,3 +265,4 @@ body {
     animation-duration: 0ms !important;
   }
 }
+/* biome-ignore-end lint/complexity/noImportantStyles: reduced motion */

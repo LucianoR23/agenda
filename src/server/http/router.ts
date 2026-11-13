@@ -127,7 +127,7 @@ export async function handle(req: Request): Promise<Response> {
     const parsedParams = parse(route.params, params, "params", errors);
     const parsedQuery = parse(route.query, Object.fromEntries(url.searchParams), "query", errors);
     let rawBody = "";
-    let parsedBody: unknown = undefined;
+    let parsedBody: unknown;
     if (route.body) {
       rawBody = await req.text();
       let json: unknown;

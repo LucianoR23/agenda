@@ -54,7 +54,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferred = e as InstallEvent;
-    installListeners.forEach((l) => l());
+    for (const l of installListeners) l();
   });
 }
 export const canInstall = () => deferred !== null;

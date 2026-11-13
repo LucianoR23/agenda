@@ -43,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es-AR" className={`${instrumentSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
       <head>
         {/* saved theme before first paint (no flash) */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: constant inline script, no user input; CSP nonce comes in phase 3 */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>

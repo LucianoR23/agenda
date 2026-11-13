@@ -1,5 +1,6 @@
 import type { DbLike } from "../db/client";
 import type { DeviceRow } from "../domain/rows";
+import { ApiError } from "./errors";
 
 export type Actor = "user";
 
@@ -34,7 +35,20 @@ export interface HandlerResult {
   headers?: Record<string, string>;
 }
 
-export type Handler = (ctx: Ctx, input: { params: any; query: any; body: any }) => Promise<HandlerResult>; // eslint-disable-line @typescript-eslint/no-explicit-any
+/**
+ * Input already validated by the router against the route's Zod schemas. Typed per operation once handlers are
+ * generated from the contract (phase 4); until then the shapes are trusted from the schemas.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: values are Zod-validated by the router before reaching a handler
+type Validated = any;
+
+export type Handler = (ctx: Ctx, input: { params: Validated; query: Validated; body: Validated }) => Promise<HandlerResult>;
+
+/** Device of the authenticated session. The router guarantees it on `user` routes; anything else is a 401. */
+export function requireDevice(ctx: Pick<Ctx, "sessionDevice">): DeviceRow {
+  if (!ctx.sessionDevice) throw new ApiError(401, "unauthorized", "Authentication required.");
+  return ctx.sessionDevice;
+}
 
 export const json = (status: number, body: unknown, headers?: Record<string, string>): HandlerResult => ({ status, body, headers });
 

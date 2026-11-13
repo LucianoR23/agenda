@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { createContext, type ReactNode, type RefObject, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, type ReactNode, type RefObject, useContext, useEffect, useRef, useState } from "react";
 import type { IconName } from "../icons";
 import { Toast } from "./feedback";
 
@@ -34,7 +34,10 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
       el.style.setProperty("translate", y ? `0 ${y}px` : "");
     };
     const start = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return void (mode = "scroll");
+      if (e.touches.length !== 1) {
+        mode = "scroll";
+        return;
+      }
       x0 = e.touches[0].clientX;
       y0 = lastY = e.touches[0].clientY;
       lastT = e.timeStamp;
@@ -59,7 +62,10 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
       move(dy);
     };
     const end = () => {
-      if (mode !== "drag") return void (mode = "scroll");
+      if (mode !== "drag") {
+        mode = "scroll";
+        return;
+      }
       mode = "scroll";
       if (dy > 120 || speed > 0.6) onClose();
       else move(0, true);
@@ -169,11 +175,11 @@ export const useToast = () => useContext(ToastCtx);
 export function ToastHost({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
-  const show = useCallback((t: Omit<ToastItem, "id">) => {
+  const show = (t: Omit<ToastItem, "id">) => {
     const id = ++seq.current;
     setItems([{ ...t, id }]); // one at a time, as in the design
     setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4500);
-  }, []);
+  };
   return (
     <ToastCtx.Provider value={show}>
       {children}

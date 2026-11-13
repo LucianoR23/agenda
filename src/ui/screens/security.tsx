@@ -103,7 +103,12 @@ export function SecurityScreen() {
 
       <BottomSheet open={sheet?.kind === "pin"} onClose={() => setSheet(null)} label="Cambiar PIN">
         {sheet?.kind === "pin" && (
-          <ChangePin onDone={() => (setSheet(null), toast({ icon: "check_circle", message: "PIN actualizado" }))} />
+          <ChangePin
+            onDone={() => {
+              setSheet(null);
+              toast({ icon: "check_circle", message: "PIN actualizado" });
+            }}
+          />
         )}
       </BottomSheet>
       <BottomSheet open={sheet?.kind === "codes"} onClose={() => setSheet(null)} label="Códigos de recuperación">

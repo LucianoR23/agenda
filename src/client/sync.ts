@@ -20,7 +20,7 @@ let state: SyncState = { online: true, syncing: false, pending: 0, conflicts: []
 const listeners = new Set<() => void>();
 const set = (patch: Partial<SyncState>) => {
   state = { ...state, ...patch };
-  listeners.forEach((l) => l());
+  for (const l of listeners) l();
 };
 const SERVER_STATE: SyncState = { online: true, syncing: false, pending: 0, conflicts: [], lastSync: null };
 
@@ -146,7 +146,9 @@ export const onRejected = (l: RejectListener) => {
   rejectListeners.add(l);
   return () => void rejectListeners.delete(l);
 };
-const notifyRejected = (item: OutboxItem, reason: string) => rejectListeners.forEach((l) => l(item, reason));
+const notifyRejected = (item: OutboxItem, reason: string) => {
+  for (const l of rejectListeners) l(item, reason);
+};
 
 /** Wires connectivity events and a periodic retry. Call once on the client. */
 export function startSync(qc: QueryClient) {

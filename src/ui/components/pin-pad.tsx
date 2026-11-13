@@ -37,6 +37,7 @@ export function PinPad({
       <div className="flex gap-3.5" role="img" aria-label={`${filled} de ${length} dígitos`}>
         {Array.from({ length }, (_, i) => (
           <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: one dot per PIN position
             key={i}
             className={cx("size-3.5 rounded-full", i < filled ? "bg-text" : "border-[1.5px] border-border2", error && "border-danger")}
           />

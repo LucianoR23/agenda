@@ -9,7 +9,6 @@ import { validateResponse } from "./contract";
 import { SETUP_CODE } from "./env";
 
 export interface Res<T = any> {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
   status: number;
   body: T;
   headers: Headers;
@@ -23,17 +22,17 @@ export interface Client {
     method: string,
     path: string,
     opts?: { body?: unknown; headers?: Record<string, string>; raw?: string },
-  ): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  get<T = any>(path: string, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  post<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  put<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  patch<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  del<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  ): Promise<Res<T>>;
+  get<T = any>(path: string, headers?: Record<string, string>): Promise<Res<T>>;
+  post<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
+  put<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
+  patch<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
+  del<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
   cookieJar: Map<string, string>;
 }
 
 /** HTTP-level client: builds a Request, runs it through the real router and checks the response against openapi.yaml. */
-export function client(as: As, jar = new Map<string, string>()): Client {
+export function client(_as: As, jar = new Map<string, string>()): Client {
   async function request(method: string, path: string, opts: { body?: unknown; headers?: Record<string, string>; raw?: string } = {}) {
     const headers: Record<string, string> = {
       "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile",

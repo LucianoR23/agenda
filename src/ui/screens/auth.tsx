@@ -3,7 +3,7 @@
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { ApiProblem, api } from "@/client/api";
 import type { SessionState } from "@/client/types";
 import { Button, Segmented } from "../components/controls";
@@ -20,34 +20,31 @@ function usePin(onComplete: (pin: string, reset: () => void) => void, active = t
   useEffect(() => {
     done.current = onComplete;
   });
-  const reset = useCallback(() => {
+  const reset = () => {
     value.current = "";
     setDigits("");
-  }, []);
-  const push = useCallback(
-    (d: string) => {
-      if (value.current.length >= length) return;
-      value.current += d;
-      setDigits(value.current);
-      haptic(8);
-      if (value.current.length === length) done.current(value.current, reset);
-    },
-    [length, reset],
-  );
-  const back = useCallback(() => {
+  };
+  const push = (d: string) => {
+    if (value.current.length >= length) return;
+    value.current += d;
+    setDigits(value.current);
+    haptic(8);
+    if (value.current.length === length) done.current(value.current, reset);
+  };
+  const back = () => {
     value.current = value.current.slice(0, -1);
     setDigits(value.current);
-  }, []);
+  };
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (/^\d$/.test(e.key)) push(e.key);
+    if (e.key === "Backspace") back();
+  });
   useEffect(() => {
     if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (/^\d$/.test(e.key)) push(e.key);
-      if (e.key === "Backspace") back();
-    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [push, back, active]);
+  }, [active]);
   return { digits, push, back, reset };
 }
 
@@ -117,6 +114,7 @@ export function SetupScreen() {
           <h1 className="text-title text-text">Configurar Agenda</h1>
           <p className="text-body-sm text-text2">Ingresá el código de configuración del servidor (SETUP_CODE). Se usa una sola vez.</p>
           <input
+            // biome-ignore lint/a11y/noAutofocus: single-field auth step; focusing it opens the keyboard on mobile
             autoFocus
             value={code}
             onChange={(e) => setCode(e.target.value)}
@@ -204,7 +202,7 @@ export function UnlockScreen({ session }: { session: SessionState }) {
     }
   });
 
-  const fingerprint = useCallback(async () => {
+  const fingerprint = async () => {
     try {
       const { data: options } = await api<Parameters<typeof startAuthentication>[0]["optionsJSON"]>(
         "POST",
@@ -216,15 +214,16 @@ export function UnlockScreen({ session }: { session: SessionState }) {
     } catch (e) {
       if (e instanceof ApiProblem) setError(problemText(e));
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
   // fingerprint first on devices that enabled it, PIN as fallback
+  const autoFingerprint = useEffectEvent(() => void fingerprint());
   useEffect(() => {
     if (session.passkeyEnabled && session.state === "locked" && !tried.current) {
       tried.current = true;
-      void fingerprint();
+      autoFingerprint();
     }
-  }, [session, fingerprint]);
+  }, [session]);
 
   if (recover) return <RecoverScreen onBack={() => setRecover(false)} />;
   return (
@@ -319,6 +318,7 @@ function RecoverScreen({ onBack }: { onBack: () => void }) {
             : "El código de 8 dígitos que imprime `pnpm auth:reset-pin` en la terminal del contenedor (vale 15 min)."}
         </p>
         <input
+          // biome-ignore lint/a11y/noAutofocus: single-field auth step; focusing it opens the keyboard on mobile
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value)}
@@ -328,7 +328,14 @@ function RecoverScreen({ onBack }: { onBack: () => void }) {
           className="h-12 rounded-md border border-border2 bg-surface px-3.5 font-mono text-body text-text outline-none focus:border-accent"
         />
         {error && <p className="text-caption text-danger">{error}</p>}
-        <Button size="lg" disabled={code.trim().length < 4} onClick={() => (setError(null), setStep("pin"))}>
+        <Button
+          size="lg"
+          disabled={code.trim().length < 4}
+          onClick={() => {
+            setError(null);
+            setStep("pin");
+          }}
+        >
           Continuar
         </Button>
       </div>

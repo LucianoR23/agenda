@@ -27,7 +27,7 @@ if (check) {
     current = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
   } catch {}
   if (current !== yaml) {
-    console.error(`✗ Contract drift: ${file} out of date. Run \`pnpm openapi\` and commit.`);
+    console.error(`✗ Contract drift: ${file} out of date. Run \`pnpm openapi:gen\` and commit.`);
     process.exit(1);
   }
   console.log(`✓ ${routes.length} routes, examples valid, ${file} up to date`);

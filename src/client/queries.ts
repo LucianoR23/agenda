@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
 import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
@@ -55,7 +55,7 @@ async function cached<T>(key: unknown[], path: string): Promise<T> {
 }
 
 function useCached<T>(key: unknown[], path: string | null, opts: { refetchInterval?: number } = {}) {
-  return useQuery<T, ApiProblem>({ queryKey: key, queryFn: () => cached<T>(key, path!), enabled: path !== null, ...opts });
+  return useQuery<T, ApiProblem>({ queryKey: key, queryFn: path === null ? skipToken : () => cached<T>(key, path), ...opts });
 }
 
 export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/api/auth/devices");

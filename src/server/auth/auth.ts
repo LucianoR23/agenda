@@ -11,7 +11,7 @@ import type { DbLike } from "../db/client";
 import { appUser, device, passkey, pinResetCode, pushSubscription, recoveryCode } from "../db/schema";
 import type { DeviceRow } from "../domain/rows";
 import { env } from "../env";
-import type { Ctx } from "../http/context";
+import { type Ctx, requireDevice } from "../http/context";
 import { ApiError, notFound } from "../http/errors";
 import { isoLocal } from "../time";
 import { CHALLENGE_COOKIE, clearCookie, parseCookies, SESSION_COOKIE, setCookie } from "./cookies";
@@ -198,7 +198,7 @@ export async function passkeyRegisterOptions(ctx: Ctx) {
 }
 
 export async function passkeyRegisterVerify(ctx: Ctx, response: Record<string, unknown>) {
-  const d = ctx.sessionDevice!;
+  const d = requireDevice(ctx);
   const expectedChallenge = takeChallenge(ctx, "register");
   const result = await verifyRegistrationResponse({
     response: response as unknown as RegistrationResponseJSON,
@@ -258,7 +258,7 @@ export async function passkeyAuthVerify(ctx: Ctx, response: Record<string, unkno
 }
 
 export async function deletePasskey(ctx: Ctx) {
-  await ctx.db.delete(passkey).where(eq(passkey.deviceId, ctx.sessionDevice!.id));
+  await ctx.db.delete(passkey).where(eq(passkey.deviceId, requireDevice(ctx).id));
 }
 
 // ---------- devices ----------

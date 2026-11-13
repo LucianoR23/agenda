@@ -32,8 +32,8 @@ const masters = {
   favicon: svg(small(), BG, 120),
   badge: svg(small({ done: "rgba(255,255,255,.45)", call: white, now: white })), // notification status-bar badge
 };
-writeFileSync("public/icons/icon-any.svg", masters.any + "\n");
-writeFileSync("public/icons/favicon.svg", masters.favicon + "\n");
+writeFileSync("public/icons/icon-any.svg", `${masters.any}\n`);
+writeFileSync("public/icons/favicon.svg", `${masters.favicon}\n`);
 
 const pngs = [
   ["icon-192.png", 192, "any"],
