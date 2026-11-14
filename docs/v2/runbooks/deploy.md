@@ -51,7 +51,7 @@ Mark every secret as **secret** in Coolify. Never paste them anywhere else.
 | `TZ` | `America/Buenos_Aires` | process zone (the user's zone is a setting in the app) |
 | `SESSION_SECRET` | 32+ random bytes | `openssl rand -base64 32` |
 | `SETUP_CODE` | 8+ chars, typed once on the first-run screen | `openssl rand -hex 8` |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | phase 5 (all three or none) | `npx web-push generate-vapid-keys`; subject `mailto:…` |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | required for reminders (all three or none) | `npx web-push generate-vapid-keys`; subject `mailto:…`. New keys = every device subscribes again (Ajustes → Notificaciones) |
 | `ENCRYPTION_KEY` | phase 6 | `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | phase 6 | Google Cloud console (see `06`) |
 | `CORS_ALLOWED_ORIGINS` | `https://sunday.lemydev.com` | phase 8 |
@@ -75,7 +75,9 @@ curl -sI https://agenda.lemydev.com/ | grep -i -E "content-security-policy|stric
 ```
 
 Then on the phone: open `https://agenda.lemydev.com` → Configurar Agenda (the `SETUP_CODE`) → PIN → **save the 10
-recovery codes** → Ajustes → Seguridad → huella. Do the same on the laptop with the PIN (new device).
+recovery codes** → Ajustes → Seguridad → huella → Ajustes → Notificaciones → activar → **Probar notificación**. Install
+the PWA (Chrome menu → Instalar app) so notifications and their Listo / Posponer buttons work in the background. Do
+the same on the laptop with the PIN (new device).
 
 ## 6. Rollback
 

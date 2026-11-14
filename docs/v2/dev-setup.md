@@ -48,7 +48,9 @@ Fill at least these (never commit `.env`; never paste secrets into chats or logs
 | `SESSION_SECRET` | `openssl rand -base64 32` (32+ chars) |
 | `SETUP_CODE` | any string of 8+ chars; you type it once on the first-run screen |
 
-Everything else can stay empty locally (VAPID, Google, ENCRYPTION_KEY are for later phases). The server validates the
+For push locally, add VAPID keys (`npx web-push generate-vapid-keys`, all three `VAPID_*`); the service worker only
+registers in a production build (`pnpm build` + the standalone server, see Troubleshooting). Google and
+`ENCRYPTION_KEY` are for phase 6. The server validates the
 environment at boot and exits naming the variable that is wrong (never its value).
 
 ## 4. Database
@@ -88,12 +90,12 @@ pnpm typecheck && pnpm check && pnpm test && pnpm build
 ## 6. Where the work is
 
 - **Branch:** `v2` (v1 is the tag `v1`; never push to `main`, never force-push).
-- **Status:** phases 0–4 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
-  tasks API + Hoy/Inbox/Tareas screens). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
+- **Status:** phases 0–5 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
+  tasks, reminders + push + service worker). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
   and the decisions recorded per phase.
 - **Blocked:** the first deploy waits for the `agenda` database on postgres-core; follow
   [`runbooks/deploy.md`](runbooks/deploy.md) when it exists.
-- **Next:** phase 5 (reminders and push) — starts with a plan for approval.
+- **Next:** phase 6 (events and Google Calendar) — starts with a plan for approval.
 - **Working agreement:** read [`CLAUDE.md`](../../CLAUDE.md) first (plan → approval → implement → gate → tick → summary).
 
 ## Troubleshooting
