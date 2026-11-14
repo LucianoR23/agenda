@@ -14,6 +14,7 @@ import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
 import { EmptyState, TimelineSkeleton } from "../components/surfaces";
 import { SwipeRow, TaskRow } from "../components/task-row";
+import { useDeepLink } from "../deep-link";
 import { dayLabel, todayLocal, userTimeZone } from "../time";
 import { useEventUi } from "./calendar-screens";
 import { HabitsSection, SleepCard } from "./habit-screens";
@@ -91,7 +92,7 @@ function useTaskUi(addMode: "task" | "reminder" | "event" = "task") {
     </div>
   );
 
-  return { lists, row, sheets, fab, openAdd: () => setSheet({ kind: "add" }) };
+  return { lists, row, sheets, fab, openAdd: () => setSheet({ kind: "add" }), edit: (task: Task) => setSheet({ kind: "edit", task }) };
 }
 
 function Loading() {
@@ -271,6 +272,7 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
 /** Tareas: filters, lists, tags and search over everything. */
 export function TasksScreen() {
   const ui = useTaskUi();
+  useDeepLink<Task>("task", (id) => `/api/tasks/${id}`, ui.edit);
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [listId, setListId] = useState<string | null>(null);
   const [search, setSearch] = useState("");

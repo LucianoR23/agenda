@@ -15,6 +15,7 @@ import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
 import { EmptyState, RowGroup, SheetRow, TimelineSkeleton } from "../components/surfaces";
 import { cx } from "../cx";
+import { useDeepLink } from "../deep-link";
 import { addDays, dayLabel, todayLocal, userTimeZone } from "../time";
 import { repeatLabel } from "./task-sheets";
 
@@ -442,10 +443,42 @@ function useSyncOnOpen() {
   }, [qc]);
 }
 
+/** A local event as the editor's occurrence (deep links fetch the event itself). */
+function asAgendaEvent(e: Event): AgendaEvent {
+  return {
+    id: e.id,
+    eventId: e.id,
+    externalEventId: null,
+    source: "local",
+    readOnly: false,
+    title: e.title,
+    notes: e.notes,
+    location: e.location,
+    allDay: e.allDay,
+    startsAt: e.startsAt,
+    endsAt: e.endsAt,
+    startDate: e.startDate,
+    endDate: e.endDate,
+    whenText: e.whenText,
+    recurring: e.rrule !== null,
+    rrule: e.rrule,
+    reminderOffsets: e.reminderOffsets,
+    tentative: false,
+    htmlLink: null,
+    calendar: null,
+    url: e.url,
+  };
+}
+
 export function CalendarScreen() {
   const [view, setView] = useState<"agenda" | "week">("agenda");
   const ui = useEventUi();
   useSyncOnOpen();
+  useDeepLink<Event>(
+    "event",
+    (id) => `/api/events/${id}`,
+    (e) => ui.open(asAgendaEvent(e)),
+  );
   return (
     <div className="flex flex-col gap-4">
       <PageTitle title="Calendario" />

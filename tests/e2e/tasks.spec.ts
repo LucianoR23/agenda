@@ -56,6 +56,12 @@ test("setup → PIN → quick add → complete → undo", async ({ page }) => {
   await page.getByText("comprar regalo para Ana").click();
   await expect(page.getByLabel("Título")).toHaveValue("comprar regalo para Ana");
   await shot(page, "06-editor");
+
+  // the `url` the API gives Sunday opens the task's editor
+  const inbox = await (await page.request.get("/api/tasks?view=inbox")).json();
+  await page.goto(inbox.tasks[0].url.replace(/^https?:\/\/[^/]+/, ""));
+  await expect(page.getByLabel("Título")).toHaveValue("comprar regalo para Ana");
+  await expect(page).toHaveURL(/\/tareas$/);
 });
 
 test("reminders: quick add in reminder mode, Recordatorios, Hoy, Más", async ({ page }) => {

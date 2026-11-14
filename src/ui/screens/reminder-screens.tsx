@@ -11,6 +11,7 @@ import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle } from "../components/page";
 import { EmptyState, RowGroup, SheetRow, TimelineSkeleton } from "../components/surfaces";
 import { SwipeRow } from "../components/task-row";
+import { useDeepLink } from "../deep-link";
 import { dayLabel, todayLocal, userTimeZone, whenLabel } from "../time";
 import { repeatLabel } from "./task-sheets";
 
@@ -91,7 +92,7 @@ export function useReminderUi() {
       </BottomSheet>
     </>
   );
-  return { row, sheets };
+  return { row, sheets, edit: (reminder: Reminder) => setSheet({ kind: "edit", reminder }) };
 }
 
 /** Posponer: 10 min, 1 h, mañana 9:00 or a date + time. */
@@ -255,6 +256,7 @@ export function RemindersScreen({ fab, quickAdd }: { fab: ReactNode; quickAdd: R
   const [view, setView] = useState<"upcoming" | "recent">("upcoming");
   const q = useReminders({ view });
   const ui = useReminderUi();
+  useDeepLink<Reminder>("reminder", (id) => `/api/reminders/${id}`, ui.edit);
   const items = q.data?.reminders ?? [];
   return (
     <div className="flex flex-col gap-4">
