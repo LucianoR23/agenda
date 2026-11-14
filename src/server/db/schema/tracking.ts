@@ -19,10 +19,14 @@ export const habit = pgTable(
     targetPeriod: habitPeriodEnum().notNull(),
     active: boolean().notNull().default(true),
     sortOrder: integer().notNull().default(0),
+    /** Completing a task tagged with this (`+gym`) checks the habit that day. Yes/no habits only. */
+    taskTag: text(),
     ...syncable(),
   },
   (t) => [
     uniqueIndex("habit_active_slug_uq").on(t.slug).where(sql`${t.deletedAt} IS NULL`),
+    uniqueIndex("habit_task_tag_uq").on(t.taskTag).where(sql`${t.deletedAt} IS NULL AND ${t.taskTag} IS NOT NULL`),
+    check("habit_task_tag_boolean", sql`${t.taskTag} IS NULL OR ${t.kind} = 'boolean'`),
     check("habit_slug_format", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
     check("habit_target_positive", sql`${t.targetCount} > 0`),
     check("habit_unit_only_numeric", sql`${t.unit} IS NULL OR ${t.kind} = 'numeric'`),

@@ -8,10 +8,14 @@ import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
 import * as events from "../domain/events";
+import * as habits from "../domain/habits";
 import { overview } from "../domain/overview";
 import { applyPushAction } from "../domain/push-actions";
 import * as reminders from "../domain/reminders";
+import * as review from "../domain/review";
 import { getSettings, updateSettings } from "../domain/settings";
+import * as sleep from "../domain/sleep";
+import * as stats from "../domain/stats";
 import * as tasks from "../domain/tasks";
 import { formatInstant } from "../domain/time";
 import { env } from "../env";
@@ -160,6 +164,33 @@ export const handlers: Record<string, Handler> = {
     return { status: 204 };
   },
   remindExternalEvent: async (ctx, { params, body }) => json(201, await calendars.remindExternal(ctx, params.id, body)),
+
+  // ---------- habits ----------
+  listHabits: async (ctx, { query }) => json(200, { habits: await habits.listHabits(ctx, query) }),
+  createHabit: async (ctx, { body }) => json(201, await habits.createHabit(ctx, body)),
+  updateHabit: async (ctx, { params, body }) => json(200, await habits.updateHabit(ctx, params.habit, body)),
+  deleteHabit: async (ctx, { params }) => {
+    await habits.deleteHabit(ctx, params.habit);
+    return { status: 204 };
+  },
+  logHabit: async (ctx, { params, body }) => json(200, await habits.logHabit(ctx, params.habit, body)),
+  listHabitLogs: async (ctx, { params, query }) => json(200, { logs: await habits.listHabitLogs(ctx, params.habit, query) }),
+
+  // ---------- sleep ----------
+  listSleep: async (ctx, { query }) => json(200, { logs: await sleep.listSleep(ctx, query) }),
+  logSleepEvent: async (ctx, { body }) => sleep.sleepEvent(ctx, body),
+  upsertSleep: async (ctx, { params, body }) => sleep.upsertSleep(ctx, params.date, body),
+  deleteSleep: async (ctx, { params }) => {
+    await sleep.deleteSleep(ctx, params.date);
+    return { status: 204 };
+  },
+
+  // ---------- review, history, metrics ----------
+  getDayReview: async (ctx, { params }) => json(200, { review: await review.getReview(ctx, params.date) }),
+  saveDayReview: async (ctx, { params, body }) => review.saveReview(ctx, params.date, body),
+  getDaySummary: async (ctx, { query }) => json(200, await stats.daySummary(ctx, query)),
+  getHistory: async (ctx, { query }) => json(200, await stats.history(ctx, query)),
+  getMetrics: async (ctx, { query }) => json(200, await stats.metrics(ctx, query)),
 
   // ---------- calendars ----------
   getCalendars: async (ctx) => json(200, await calendars.calendarStatus(ctx)),

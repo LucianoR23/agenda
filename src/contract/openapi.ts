@@ -6,11 +6,22 @@ import { calendarRoutes, eventRoutes } from "./routes/events";
 import { pushRoutes, reminderRoutes } from "./routes/reminders";
 import { systemRoutes } from "./routes/system";
 import { taskRoutesAll } from "./routes/tasks";
+import { habitRoutes, reviewRoutes, sleepRoutes } from "./routes/tracking";
 import { z } from "./zod";
 
 export const API_VERSION = "2.0.0-alpha";
 
-export const routes: RouteDef[] = [...systemRoutes, ...pushRoutes, ...taskRoutesAll, ...reminderRoutes, ...eventRoutes, ...calendarRoutes];
+export const routes: RouteDef[] = [
+  ...systemRoutes,
+  ...pushRoutes,
+  ...taskRoutesAll,
+  ...reminderRoutes,
+  ...eventRoutes,
+  ...calendarRoutes,
+  ...habitRoutes,
+  ...sleepRoutes,
+  ...reviewRoutes,
+];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
@@ -192,6 +203,9 @@ export function generateOpenApiDocument() {
       { name: "Reminders" },
       { name: "Events" },
       { name: "Calendars" },
+      { name: "Habits" },
+      { name: "Sleep" },
+      { name: "Review" },
       { name: "Auth" },
       { name: "Settings" },
       { name: "Tokens" },

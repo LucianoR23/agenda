@@ -4,6 +4,7 @@ import { changeLog, task, taskList } from "../db/schema";
 import { type Ctx, sourceOf } from "../http/context";
 import { ApiError, notFound, versionConflict } from "../http/errors";
 import { diffFields, recordChange } from "./changes";
+import { onTaskCompleted, onTaskReopened } from "./habits";
 import { nextOccurrence, normalizeTaskRrule } from "./recurrence";
 import { formatInstant, type IsoDate, type LocalTime, toDate, today, toInstant } from "./time";
 
@@ -380,36 +381,53 @@ export async function completeTask(ctx: Ctx, id: string, version?: number) {
     "task complete",
   );
   await recordChange(ctx, "task", id, "update", { fields: { status: { from: t.status, to: "done" } } });
+  await onTaskCompleted(ctx, t);
 
-  let next: TaskOut | null = null;
-  if (t.rrule && t.dueDate) {
-    const occ = nextOccurrence(t.rrule, t.dueDate, hhmm(t.dueTime), ctx.tz, userToday(ctx));
-    if (occ) {
-      const row = one(
-        await ctx.db
-          .insert(task)
-          .values({
-            listId: t.listId,
-            title: t.title,
-            notes: t.notes,
-            priority: t.priority,
-            dueDate: occ.dueDate,
-            dueTime: t.dueTime,
-            rrule: occ.rrule,
-            seriesId,
-            tags: t.tags,
-            sortOrder: t.sortOrder,
-            source,
-            updatedBy: source,
-          })
-          .returning(),
-        "next occurrence",
-      );
-      await recordChange(ctx, "task", row.id, "create", { after: { seriesId, from: t.id } });
-      next = taskOut(row, ctx);
-    }
-  }
+  const next = await spawnNext(ctx, t, seriesId);
   return { task: taskOut(done, ctx), next };
+}
+
+/** A recurring task's next occurrence (after completing or dropping this one), or null when the series ended. */
+async function spawnNext(ctx: Ctx, t: TaskRow, seriesId: string | null): Promise<TaskOut | null> {
+  if (!t.rrule || !t.dueDate) return null;
+  const occ = nextOccurrence(t.rrule, t.dueDate, hhmm(t.dueTime), ctx.tz, userToday(ctx));
+  if (!occ) return null;
+  const source = sourceOf(ctx.caller);
+  const row = one(
+    await ctx.db
+      .insert(task)
+      .values({
+        listId: t.listId,
+        title: t.title,
+        notes: t.notes,
+        priority: t.priority,
+        dueDate: occ.dueDate,
+        dueTime: t.dueTime,
+        rrule: occ.rrule,
+        seriesId,
+        tags: t.tags,
+        sortOrder: t.sortOrder,
+        source,
+        updatedBy: source,
+      })
+      .returning(),
+    "next occurrence",
+  );
+  await recordChange(ctx, "task", row.id, "create", { after: { seriesId, from: t.id } });
+  return taskOut(row, ctx);
+}
+
+/** "Soltar" in the day review: cancelled; a recurring task moves on to its next occurrence. */
+export async function dropTask(ctx: Ctx, id: string) {
+  const t = await findTask(ctx, id, true);
+  if (t.status !== "open") return;
+  const seriesId = t.rrule ? (t.seriesId ?? t.id) : t.seriesId;
+  await ctx.db
+    .update(task)
+    .set({ status: "cancelled", seriesId, updatedBy: sourceOf(ctx.caller) })
+    .where(eq(task.id, id));
+  await recordChange(ctx, "task", id, "update", { fields: { status: { from: "open", to: "cancelled" } } });
+  await spawnNext(ctx, t, seriesId);
 }
 
 /** The occurrence that completing `id` spawned (recorded in change_log), if it's still open and untouched. */
@@ -443,6 +461,7 @@ export async function reopenTask(ctx: Ctx, id: string, nextId?: string) {
       .set({ status: "open", completedAt: null, updatedBy: sourceOf(ctx.caller) })
       .where(eq(task.id, id));
     await recordChange(ctx, "task", id, "update", { fields: { status: { from: t.status, to: "open" } } });
+    if (t.status === "done") await onTaskReopened(ctx, t);
   }
   const spawned = t.seriesId ? (nextId ?? (await spawnedBy(ctx, id, t.seriesId))) : null;
   if (spawned && t.seriesId) {

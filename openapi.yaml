@@ -18,6 +18,9 @@ tags:
   - name: Reminders
   - name: Events
   - name: Calendars
+  - name: Habits
+  - name: Sleep
+  - name: Review
   - name: Auth
   - name: Settings
   - name: Tokens
@@ -306,6 +309,128 @@ components:
       required:
         - task
         - next
+      additionalProperties: false
+    DayReview:
+      type: object
+      properties:
+        date:
+          $ref: "#/components/schemas/LocalDate"
+        mood:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 5
+        note:
+          type:
+            - string
+            - "null"
+        highlights:
+          type: array
+          items:
+            type: string
+        movedTaskIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Uuid"
+        version:
+          type: integer
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - date
+        - mood
+        - note
+        - highlights
+        - movedTaskIds
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    DayReviewInput:
+      type: object
+      properties:
+        mood:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 5
+        note:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        highlights:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          maxItems: 3
+        moves:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewMove"
+          maxItems: 200
+          description: Pending tasks to sort out; applied once, recorded in movedTaskIds.
+        version:
+          type: integer
+          minimum: 1
+          description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.
+      additionalProperties: false
+    DaySummary:
+      type: object
+      properties:
+        date:
+          $ref: "#/components/schemas/LocalDate"
+        tasks:
+          type: object
+          properties:
+            done:
+              type: array
+              items:
+                $ref: "#/components/schemas/Task"
+              description: Completed that day.
+            pending:
+              type: array
+              items:
+                $ref: "#/components/schemas/Task"
+              description: Open and due that day.
+            overdue:
+              type: array
+              items:
+                $ref: "#/components/schemas/Task"
+              description: Open and due before that day.
+          required:
+            - done
+            - pending
+            - overdue
+          additionalProperties: false
+        habits:
+          type: array
+          items:
+            $ref: "#/components/schemas/HabitProgress"
+        sleep:
+          anyOf:
+            - $ref: "#/components/schemas/SleepLog"
+            - type: "null"
+          description: The night that ended that morning.
+        review:
+          anyOf:
+            - $ref: "#/components/schemas/DayReview"
+            - type: "null"
+      required:
+        - date
+        - tasks
+        - habits
+        - sleep
+        - review
       additionalProperties: false
     Device:
       type: object
@@ -613,6 +738,258 @@ components:
             - $ref: "#/components/schemas/Timestamp"
             - description: "Any moment (all-day events: e.g. that day 09:00)."
       additionalProperties: false
+    HabitCreate:
+      type: object
+      properties:
+        slug:
+          type: string
+          maxLength: 40
+          pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+          description: "Default: from the name."
+          example: gym
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        kind:
+          allOf:
+            - $ref: "#/components/schemas/HabitKind"
+            - description: Default `boolean`.
+        unit:
+          type:
+            - string
+            - "null"
+          maxLength: 20
+        targetCount:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          description: Default 1.
+        targetPeriod:
+          allOf:
+            - $ref: "#/components/schemas/HabitPeriod"
+            - description: Default `day`.
+        taskTag:
+          type:
+            - string
+            - "null"
+          minLength: 1
+          maxLength: 40
+          pattern: ^[^\s#+]+$
+          description: Completing a task tagged with this (`+gym`) checks the habit that day. Yes/no habits only.
+          example: gym
+      required:
+        - name
+      additionalProperties: false
+    HabitKind:
+      type: string
+      enum:
+        - boolean
+        - numeric
+      description: "`boolean`: done or not. `numeric`: a value counts towards the target (pages, km)."
+    HabitLog:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        habitId:
+          $ref: "#/components/schemas/Uuid"
+        date:
+          $ref: "#/components/schemas/LocalDate"
+        done:
+          type: boolean
+        value:
+          type:
+            - number
+            - "null"
+        source:
+          allOf:
+            - $ref: "#/components/schemas/ItemSource"
+            - description: "`system` when a tagged task checked it."
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - id
+        - habitId
+        - date
+        - done
+        - value
+        - source
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    HabitLogInput:
+      type: object
+      properties:
+        date:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Default today (user's timezone).
+        done:
+          type: boolean
+          description: "Yes/no habits: check (true) or uncheck (false). Default true."
+        value:
+          type:
+            - number
+            - "null"
+          minimum: 0
+          maximum: 1000000
+          description: "Numeric habits: the day's value (0 or null clears it)."
+      additionalProperties: false
+    HabitPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        unit:
+          type:
+            - string
+            - "null"
+          maxLength: 20
+        targetCount:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        targetPeriod:
+          $ref: "#/components/schemas/HabitPeriod"
+        taskTag:
+          type:
+            - string
+            - "null"
+          minLength: 1
+          maxLength: 40
+          pattern: ^[^\s#+]+$
+          description: Completing a task tagged with this (`+gym`) checks the habit that day. Yes/no habits only.
+          example: gym
+        active:
+          type: boolean
+        sortOrder:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          minimum: 1
+          description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.
+      additionalProperties: false
+      description: "`slug` and `kind` don't change."
+    HabitPeriod:
+      type: string
+      enum:
+        - day
+        - week
+      description: Weeks are Monday–Sunday.
+    HabitProgress:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          type: string
+          maxLength: 40
+          pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+          description: Stable key, usable instead of the id in paths (`/api/habits/gym/log`).
+          example: gym
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/HabitKind"
+        unit:
+          type:
+            - string
+            - "null"
+        targetCount:
+          type: integer
+        targetPeriod:
+          $ref: "#/components/schemas/HabitPeriod"
+        taskTag:
+          type:
+            - string
+            - "null"
+        active:
+          type: boolean
+          description: Archived habits keep their history but leave Hoy.
+        sortOrder:
+          type: integer
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+        streak:
+          type: object
+          properties:
+            current:
+              type: integer
+            best:
+              type: integer
+            unit:
+              $ref: "#/components/schemas/HabitPeriod"
+          required:
+            - current
+            - best
+            - unit
+          additionalProperties: false
+          description: Consecutive days (daily) or weeks (weekly) meeting the target. The running period doesn't break it until it ends.
+        period:
+          type: object
+          properties:
+            start:
+              $ref: "#/components/schemas/LocalDate"
+            end:
+              $ref: "#/components/schemas/LocalDate"
+            count:
+              type: number
+              description: Days done (yes/no) or sum of values (numeric) in the period.
+            target:
+              type: integer
+            met:
+              type: boolean
+          required:
+            - start
+            - end
+            - count
+            - target
+            - met
+          additionalProperties: false
+        log:
+          anyOf:
+            - $ref: "#/components/schemas/HabitLog"
+            - type: "null"
+          description: The log of the requested date (default today).
+      required:
+        - id
+        - slug
+        - name
+        - kind
+        - unit
+        - targetCount
+        - targetPeriod
+        - taskTag
+        - active
+        - sortOrder
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+        - streak
+        - period
+        - log
+      additionalProperties: false
     Health:
       type: object
       properties:
@@ -635,6 +1012,51 @@ components:
         - db
         - version
         - time
+      additionalProperties: false
+    History:
+      type: object
+      properties:
+        month:
+          type: string
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryDay"
+      required:
+        - month
+        - days
+      additionalProperties: false
+      description: Every day of the month up to today.
+    HistoryDay:
+      type: object
+      properties:
+        date:
+          $ref: "#/components/schemas/LocalDate"
+        tasksDone:
+          type: integer
+        habitsMet:
+          type: integer
+        habitsTotal:
+          type: integer
+          description: Active daily habits that day.
+        sleepMinutes:
+          type:
+            - integer
+            - "null"
+        mood:
+          type:
+            - integer
+            - "null"
+        reviewed:
+          type: boolean
+      required:
+        - date
+        - tasksDone
+        - habitsMet
+        - habitsTotal
+        - sleepMinutes
+        - mood
+        - reviewed
       additionalProperties: false
     IcalCreate:
       type: object
@@ -678,6 +1100,156 @@ components:
       pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
       description: Local time in the user's timezone, `HH:mm`, 24 h.
       example: 09:30
+    Metrics:
+      type: object
+      properties:
+        range:
+          type: string
+          enum:
+            - week
+            - month
+            - year
+        from:
+          $ref: "#/components/schemas/LocalDate"
+        to:
+          $ref: "#/components/schemas/LocalDate"
+        tasks:
+          type: object
+          properties:
+            done:
+              type: integer
+            created:
+              type: integer
+            onTime:
+              type: integer
+              description: Done on or before their due date.
+            withDue:
+              type: integer
+              description: Done tasks that had a due date.
+            onTimeRate:
+              type:
+                - number
+                - "null"
+              minimum: 0
+              maximum: 1
+            buckets:
+              type: array
+              items:
+                type: object
+                properties:
+                  start:
+                    $ref: "#/components/schemas/LocalDate"
+                  label:
+                    type: string
+                  done:
+                    type: integer
+                required:
+                  - start
+                  - label
+                  - done
+                additionalProperties: false
+              description: Per day (week, month) or per month (year).
+          required:
+            - done
+            - created
+            - onTime
+            - withDue
+            - onTimeRate
+            - buckets
+          additionalProperties: false
+        habits:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                $ref: "#/components/schemas/Uuid"
+              name:
+                type: string
+              targetPeriod:
+                $ref: "#/components/schemas/HabitPeriod"
+              met:
+                type: integer
+              total:
+                type: integer
+              rate:
+                type:
+                  - number
+                  - "null"
+                minimum: 0
+                maximum: 1
+            required:
+              - id
+              - name
+              - targetPeriod
+              - met
+              - total
+              - rate
+            additionalProperties: false
+        sleep:
+          type: object
+          properties:
+            nights:
+              type: integer
+            avgMinutes:
+              type:
+                - integer
+                - "null"
+            avgBedTime:
+              type:
+                - string
+                - "null"
+              description: "`HH:mm`."
+            avgWakeTime:
+              type:
+                - string
+                - "null"
+            avgQuality:
+              type:
+                - number
+                - "null"
+          required:
+            - nights
+            - avgMinutes
+            - avgBedTime
+            - avgWakeTime
+            - avgQuality
+          additionalProperties: false
+        mood:
+          type: object
+          properties:
+            days:
+              type: integer
+            avg:
+              type:
+                - number
+                - "null"
+          required:
+            - days
+            - avg
+          additionalProperties: false
+        sources:
+          type: object
+          properties:
+            user:
+              type: integer
+            sunday:
+              type: integer
+          required:
+            - user
+            - sunday
+          additionalProperties: false
+          description: Tasks, reminders and events created in the range, by who created them.
+      required:
+        - range
+        - from
+        - to
+        - tasks
+        - habits
+        - sleep
+        - mood
+        - sources
+      additionalProperties: false
     Overview:
       type: object
       properties:
@@ -1048,6 +1620,22 @@ components:
       required:
         - ids
       additionalProperties: false
+    ReviewMove:
+      type: object
+      properties:
+        taskId:
+          $ref: "#/components/schemas/Uuid"
+        to:
+          type: string
+          enum:
+            - tomorrow
+            - inbox
+            - drop
+          description: "`tomorrow`: due the next day (keeps the time). `inbox`: no date, to the Inbox. `drop`: cancelled (a recurring one moves on to its next occurrence)."
+      required:
+        - taskId
+        - to
+      additionalProperties: false
     SearchResult:
       type: object
       properties:
@@ -1241,6 +1829,107 @@ components:
         - device
         - recoveryCodes
       additionalProperties: false
+    SleepEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - bed
+            - wake
+          description: '`bed` = "Me voy a dormir", `wake` = "Me levanté".'
+        at:
+          allOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - description: 'Default now. Back-date: "me dormí a las 00:20".'
+      required:
+        - type
+      additionalProperties: false
+      description: "The night is resolved from the time: going to bed from noon on counts for the next day's row; waking up, for that day's."
+    SleepLog:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        date:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: "The **wake-up** date: bed Wed 23:30 → up Thu 07:10 is Thursday."
+        bedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        wakeAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        durationMinutes:
+          type:
+            - integer
+            - "null"
+        quality:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 5
+        notes:
+          type:
+            - string
+            - "null"
+        source:
+          $ref: "#/components/schemas/ItemSource"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - id
+        - date
+        - bedAt
+        - wakeAt
+        - durationMinutes
+        - quality
+        - notes
+        - source
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    SleepUpsert:
+      type: object
+      properties:
+        bedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        wakeAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        quality:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 5
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 1000
+        version:
+          type: integer
+          minimum: 1
+          description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.
+      additionalProperties: false
+      description: Load or correct a night by hand. Not in the future; wake after bed; under 20 h.
     SnoozeInput:
       type: object
       properties:
@@ -6803,6 +7492,1480 @@ paths:
                 $ref: "#/components/schemas/Error"
         "403":
           description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/habits:
+    get:
+      operationId: listHabits
+      tags:
+        - Habits
+      summary: Habits with today's status and streaks
+      description: |-
+        Active habits (archived ones with `includeArchived=true`), each with its streak, the period's progress and the day's log.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: The day to report (default today).
+          required: false
+          description: The day to report (default today).
+          name: date
+          in: query
+        - schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+          required: false
+          name: includeArchived
+          in: query
+      responses:
+        "200":
+          description: Habits.
+          content:
+            application/json:
+              examples:
+                today:
+                  summary: Gym 2/3 this week, reading pending
+                  value:
+                    habits:
+                      - id: 019a0a6e-1c00-7000-8000-00000000005a
+                        slug: gym
+                        name: Gym
+                        kind: boolean
+                        unit: null
+                        targetCount: 3
+                        targetPeriod: week
+                        taskTag: gym
+                        active: true
+                        sortOrder: 1
+                        version: 1
+                        createdAt: 2026-11-18T21:40:00.000-03:00
+                        updatedAt: 2026-11-18T21:40:00.000-03:00
+                        updatedBy: user
+                        streak:
+                          current: 2
+                          best: 5
+                          unit: week
+                        period:
+                          start: 2026-11-16
+                          end: 2026-11-22
+                          count: 2
+                          target: 3
+                          met: false
+                        log:
+                          id: 019a0a6e-1c00-7000-8000-00000000005b
+                          habitId: 019a0a6e-1c00-7000-8000-00000000005a
+                          date: 2026-11-18
+                          done: true
+                          value: null
+                          source: user
+                          version: 1
+                          createdAt: 2026-11-18T21:40:00.000-03:00
+                          updatedAt: 2026-11-18T21:40:00.000-03:00
+                          updatedBy: user
+                      - id: 019a0a6e-1c00-7000-8000-00000000005c
+                        slug: lectura
+                        name: Lectura
+                        kind: numeric
+                        unit: páginas
+                        targetCount: 20
+                        targetPeriod: day
+                        taskTag: null
+                        active: true
+                        sortOrder: 2
+                        version: 1
+                        createdAt: 2026-11-18T21:40:00.000-03:00
+                        updatedAt: 2026-11-18T21:40:00.000-03:00
+                        updatedBy: user
+                        streak:
+                          current: 0
+                          best: 12
+                          unit: day
+                        period:
+                          start: 2026-11-18
+                          end: 2026-11-18
+                          count: 0
+                          target: 20
+                          met: false
+                        log: null
+              schema:
+                type: object
+                properties:
+                  habits:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HabitProgress"
+                required:
+                  - habits
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createHabit
+      tags:
+        - Habits
+      summary: Create a habit
+      description: |-
+        Yes/no or numeric, per day or per week. `taskTag`: completing a task with that tag checks the habit.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              gym:
+                summary: Gym 3 times a week, checked by +gym tasks
+                value:
+                  name: Gym
+                  targetCount: 3
+                  targetPeriod: week
+                  taskTag: gym
+            schema:
+              $ref: "#/components/schemas/HabitCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                gym:
+                  summary: Gym 3 times a week, checked by +gym tasks
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005a
+                    slug: gym
+                    name: Gym
+                    kind: boolean
+                    unit: null
+                    targetCount: 3
+                    targetPeriod: week
+                    taskTag: gym
+                    active: true
+                    sortOrder: 1
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+                    streak:
+                      current: 0
+                      best: 0
+                      unit: week
+                    period:
+                      start: 2026-11-16
+                      end: 2026-11-22
+                      count: 0
+                      target: 3
+                      met: false
+                    log: null
+              schema:
+                $ref: "#/components/schemas/HabitProgress"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: slug or tag in use. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/habits/{habit}:
+    patch:
+      operationId: updateHabit
+      tags:
+        - Habits
+      summary: Change, archive or reorder a habit
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 60
+            description: Habit id or slug (`gym`).
+          required: true
+          description: Habit id or slug (`gym`).
+          name: habit
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              target:
+                summary: Gym 3 → 4
+                value:
+                  targetCount: 4
+            schema:
+              $ref: "#/components/schemas/HabitPatch"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                target:
+                  summary: Gym 3 → 4
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005a
+                    slug: gym
+                    name: Gym
+                    kind: boolean
+                    unit: null
+                    targetCount: 4
+                    targetPeriod: week
+                    taskTag: gym
+                    active: true
+                    sortOrder: 1
+                    version: 2
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+                    streak:
+                      current: 2
+                      best: 5
+                      unit: week
+                    period:
+                      start: 2026-11-16
+                      end: 2026-11-22
+                      count: 2
+                      target: 4
+                      met: false
+                    log:
+                      id: 019a0a6e-1c00-7000-8000-00000000005b
+                      habitId: 019a0a6e-1c00-7000-8000-00000000005a
+                      date: 2026-11-18
+                      done: true
+                      value: null
+                      source: user
+                      version: 1
+                      createdAt: 2026-11-18T21:40:00.000-03:00
+                      updatedAt: 2026-11-18T21:40:00.000-03:00
+                      updatedBy: user
+              schema:
+                $ref: "#/components/schemas/HabitProgress"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT` or `CONFLICT`. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteHabit
+      tags:
+        - Habits
+      summary: Delete a habit and its history
+      description: |-
+        To keep the history, archive it instead (`active: false`).
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 60
+            description: Habit id or slug (`gym`).
+          required: true
+          description: Habit id or slug (`gym`).
+          name: habit
+          in: path
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/habits/{habit}/log:
+    post:
+      operationId: logHabit
+      tags:
+        - Habits
+      summary: Check (or uncheck) a habit for a date
+      description: |-
+        Yes/no: `done` (default true). Numeric: `value` (0 clears). Date defaults to today; never in the future.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 60
+            description: Habit id or slug (`gym`).
+          required: true
+          description: Habit id or slug (`gym`).
+          name: habit
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              check:
+                summary: Fui al gym
+                value: {}
+              pages:
+                summary: 25 pages
+                value:
+                  value: 25
+              future:
+                summary: Tomorrow
+                value:
+                  date: 2026-11-19
+            schema:
+              $ref: "#/components/schemas/HabitLogInput"
+      responses:
+        "200":
+          description: The habit as of that date.
+          content:
+            application/json:
+              examples:
+                check:
+                  summary: Fui al gym
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005a
+                    slug: gym
+                    name: Gym
+                    kind: boolean
+                    unit: null
+                    targetCount: 3
+                    targetPeriod: week
+                    taskTag: gym
+                    active: true
+                    sortOrder: 1
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+                    streak:
+                      current: 2
+                      best: 5
+                      unit: week
+                    period:
+                      start: 2026-11-16
+                      end: 2026-11-22
+                      count: 2
+                      target: 3
+                      met: false
+                    log:
+                      id: 019a0a6e-1c00-7000-8000-00000000005b
+                      habitId: 019a0a6e-1c00-7000-8000-00000000005a
+                      date: 2026-11-18
+                      done: true
+                      value: null
+                      source: user
+                      version: 1
+                      createdAt: 2026-11-18T21:40:00.000-03:00
+                      updatedAt: 2026-11-18T21:40:00.000-03:00
+                      updatedBy: user
+                pages:
+                  summary: 25 pages
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005c
+                    slug: lectura
+                    name: Lectura
+                    kind: numeric
+                    unit: páginas
+                    targetCount: 20
+                    targetPeriod: day
+                    taskTag: null
+                    active: true
+                    sortOrder: 2
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+                    streak:
+                      current: 1
+                      best: 12
+                      unit: day
+                    period:
+                      start: 2026-11-18
+                      end: 2026-11-18
+                      count: 25
+                      target: 20
+                      met: true
+                    log:
+                      id: 019a0a6e-1c00-7000-8000-00000000005e
+                      habitId: 019a0a6e-1c00-7000-8000-00000000005c
+                      date: 2026-11-18
+                      done: true
+                      value: 25
+                      source: user
+                      version: 1
+                      createdAt: 2026-11-18T21:40:00.000-03:00
+                      updatedAt: 2026-11-18T21:40:00.000-03:00
+                      updatedBy: user
+              schema:
+                $ref: "#/components/schemas/HabitProgress"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              examples:
+                future:
+                  summary: Tomorrow
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: No se puede marcar un día que todavía no llegó.
+                      details:
+                        fields:
+                          - path: /date
+                            message: Must not be in the future
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/habits/{habit}/logs:
+    get:
+      operationId: listHabitLogs
+      tags:
+        - Habits
+      summary: A habit's check-ins in a date range
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 60
+            description: Habit id or slug (`gym`).
+          required: true
+          description: Habit id or slug (`gym`).
+          name: habit
+          in: path
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: from
+          in: query
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: to
+          in: query
+      responses:
+        "200":
+          description: Logs.
+          content:
+            application/json:
+              examples:
+                week:
+                  summary: This week
+                  value:
+                    logs:
+                      - id: 019a0a6e-1c00-7000-8000-00000000005b
+                        habitId: 019a0a6e-1c00-7000-8000-00000000005a
+                        date: 2026-11-18
+                        done: true
+                        value: null
+                        source: user
+                        version: 1
+                        createdAt: 2026-11-18T21:40:00.000-03:00
+                        updatedAt: 2026-11-18T21:40:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HabitLog"
+                required:
+                  - logs
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/sleep:
+    get:
+      operationId: listSleep
+      tags:
+        - Sleep
+      summary: Nights in a date range (by wake-up date)
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: from
+          in: query
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: to
+          in: query
+      responses:
+        "200":
+          description: Nights.
+          content:
+            application/json:
+              examples:
+                week:
+                  summary: This week
+                  value:
+                    logs:
+                      - id: 019a0a6e-1c00-7000-8000-00000000005d
+                        date: 2026-11-18
+                        bedAt: 2026-11-17T23:40:00.000-03:00
+                        wakeAt: 2026-11-18T07:10:00.000-03:00
+                        durationMinutes: 450
+                        quality: 4
+                        notes: null
+                        source: user
+                        version: 1
+                        createdAt: 2026-11-18T21:40:00.000-03:00
+                        updatedAt: 2026-11-18T21:40:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SleepLog"
+                required:
+                  - logs
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/sleep/events:
+    post:
+      operationId: logSleepEvent
+      tags:
+        - Sleep
+      summary: '"Me voy a dormir" / "Me levanté"'
+      description: "**Actors:** user, API token with `write`."
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              bed:
+                summary: 23:40 — Me voy a dormir
+                value:
+                  type: bed
+              wake:
+                summary: 07:10 — Me levanté
+                value:
+                  type: wake
+            schema:
+              $ref: "#/components/schemas/SleepEvent"
+      responses:
+        "200":
+          description: The night, updated.
+          content:
+            application/json:
+              examples:
+                wake:
+                  summary: 07:10 — Me levanté
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005d
+                    date: 2026-11-18
+                    bedAt: 2026-11-17T23:40:00.000-03:00
+                    wakeAt: 2026-11-18T07:10:00.000-03:00
+                    durationMinutes: 450
+                    quality: null
+                    notes: null
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "201":
+          description: The night, started.
+          content:
+            application/json:
+              examples:
+                bed:
+                  summary: 23:40 — Me voy a dormir
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005d
+                    date: 2026-11-18
+                    bedAt: 2026-11-17T23:40:00.000-03:00
+                    wakeAt: null
+                    durationMinutes: null
+                    quality: null
+                    notes: null
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/sleep/{date}:
+    put:
+      operationId: upsertSleep
+      tags:
+        - Sleep
+      summary: Load or correct a night by hand
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: date
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              quality:
+                summary: Slept well
+                value:
+                  quality: 4
+            schema:
+              $ref: "#/components/schemas/SleepUpsert"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                quality:
+                  summary: Slept well
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000005d
+                    date: 2026-11-18
+                    bedAt: 2026-11-17T23:40:00.000-03:00
+                    wakeAt: 2026-11-18T07:10:00.000-03:00
+                    durationMinutes: 450
+                    quality: 4
+                    notes: null
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SleepLog"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT`. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteSleep
+      tags:
+        - Sleep
+      summary: Delete a night
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: date
+          in: path
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/reviews/{date}:
+    get:
+      operationId: getDayReview
+      tags:
+        - Review
+      summary: The day's review (Cierre del día)
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: date
+          in: path
+      responses:
+        "200":
+          description: "`review: null` when the day wasn't closed."
+          content:
+            application/json:
+              examples:
+                get:
+                  summary: Closed
+                  value:
+                    review:
+                      date: 2026-11-18
+                      mood: 4
+                      note: Buen día, salió la propuesta.
+                      highlights:
+                        - Gym
+                        - Propuesta enviada
+                      movedTaskIds:
+                        - 019a0a6e-1c00-7000-8000-00000000000a
+                      version: 1
+                      createdAt: 2026-11-18T21:40:00.000-03:00
+                      updatedAt: 2026-11-18T21:40:00.000-03:00
+                      updatedBy: user
+              schema:
+                type: object
+                properties:
+                  review:
+                    anyOf:
+                      - $ref: "#/components/schemas/DayReview"
+                      - type: "null"
+                required:
+                  - review
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: saveDayReview
+      tags:
+        - Review
+      summary: "Close the day: mood, note, highlights, pending tasks sorted out"
+      description: |-
+        `moves`: each pending task to tomorrow, the Inbox or dropped (cancelled). Saving again edits the review.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: true
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: date
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              close:
+                summary: Mood 4, one task to tomorrow
+                value:
+                  mood: 4
+                  note: Buen día, salió la propuesta.
+                  highlights:
+                    - Gym
+                    - Propuesta enviada
+                  moves:
+                    - taskId: 019a0a6e-1c00-7000-8000-00000000000a
+                      to: tomorrow
+            schema:
+              $ref: "#/components/schemas/DayReviewInput"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DayReview"
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                close:
+                  summary: Mood 4, one task to tomorrow
+                  value:
+                    date: 2026-11-18
+                    mood: 4
+                    note: Buen día, salió la propuesta.
+                    highlights:
+                      - Gym
+                      - Propuesta enviada
+                    movedTaskIds:
+                      - 019a0a6e-1c00-7000-8000-00000000000a
+                    version: 1
+                    createdAt: 2026-11-18T21:40:00.000-03:00
+                    updatedAt: 2026-11-18T21:40:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/DayReview"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT`. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/summary/day:
+    get:
+      operationId: getDaySummary
+      tags:
+        - Review
+      summary: Done and pending tasks, habits, sleep and review for a day
+      description: |-
+        For the evening review automation. Default today.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: false
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: date
+          in: query
+      responses:
+        "200":
+          description: The day.
+          content:
+            application/json:
+              examples:
+                today:
+                  summary: Wednesday
+                  value:
+                    date: 2026-11-18
+                    tasks:
+                      done: []
+                      pending: []
+                      overdue: []
+                    habits:
+                      - id: 019a0a6e-1c00-7000-8000-00000000005a
+                        slug: gym
+                        name: Gym
+                        kind: boolean
+                        unit: null
+                        targetCount: 3
+                        targetPeriod: week
+                        taskTag: gym
+                        active: true
+                        sortOrder: 1
+                        version: 1
+                        createdAt: 2026-11-18T21:40:00.000-03:00
+                        updatedAt: 2026-11-18T21:40:00.000-03:00
+                        updatedBy: user
+                        streak:
+                          current: 2
+                          best: 5
+                          unit: week
+                        period:
+                          start: 2026-11-16
+                          end: 2026-11-22
+                          count: 2
+                          target: 3
+                          met: false
+                        log:
+                          id: 019a0a6e-1c00-7000-8000-00000000005b
+                          habitId: 019a0a6e-1c00-7000-8000-00000000005a
+                          date: 2026-11-18
+                          done: true
+                          value: null
+                          source: user
+                          version: 1
+                          createdAt: 2026-11-18T21:40:00.000-03:00
+                          updatedAt: 2026-11-18T21:40:00.000-03:00
+                          updatedBy: user
+                    sleep:
+                      id: 019a0a6e-1c00-7000-8000-00000000005d
+                      date: 2026-11-18
+                      bedAt: 2026-11-17T23:40:00.000-03:00
+                      wakeAt: 2026-11-18T07:10:00.000-03:00
+                      durationMinutes: 450
+                      quality: 4
+                      notes: null
+                      source: user
+                      version: 1
+                      createdAt: 2026-11-18T21:40:00.000-03:00
+                      updatedAt: 2026-11-18T21:40:00.000-03:00
+                      updatedBy: user
+                    review:
+                      date: 2026-11-18
+                      mood: 4
+                      note: Buen día, salió la propuesta.
+                      highlights:
+                        - Gym
+                        - Propuesta enviada
+                      movedTaskIds:
+                        - 019a0a6e-1c00-7000-8000-00000000000a
+                      version: 1
+                      createdAt: 2026-11-18T21:40:00.000-03:00
+                      updatedAt: 2026-11-18T21:40:00.000-03:00
+                      updatedBy: user
+              schema:
+                $ref: "#/components/schemas/DaySummary"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/history:
+    get:
+      operationId: getHistory
+      tags:
+        - Review
+      summary: "Historial: each day of a month"
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-(0[1-9]|1[0-2])$
+            description: "`YYYY-MM`, default this month."
+          required: false
+          description: "`YYYY-MM`, default this month."
+          name: month
+          in: query
+      responses:
+        "200":
+          description: Days up to today.
+          content:
+            application/json:
+              examples:
+                month:
+                  summary: November
+                  value:
+                    month: 2026-11
+                    days:
+                      - date: 2026-11-01
+                        tasksDone: 3
+                        habitsMet: 1
+                        habitsTotal: 1
+                        sleepMinutes: 450
+                        mood: 4
+                        reviewed: true
+              schema:
+                $ref: "#/components/schemas/History"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/metrics:
+    get:
+      operationId: getMetrics
+      tags:
+        - Review
+      summary: Métricas for a week, month or year
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - week
+              - month
+              - year
+            description: Default `week`.
+          required: false
+          description: Default `week`.
+          name: range
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Any day inside the period (default today).
+          required: false
+          description: Any day inside the period (default today).
+          name: date
+          in: query
+      responses:
+        "200":
+          description: Metrics.
+          content:
+            application/json:
+              examples:
+                week:
+                  summary: This week
+                  value:
+                    range: week
+                    from: 2026-11-16
+                    to: 2026-11-22
+                    tasks:
+                      done: 9
+                      created: 11
+                      onTime: 6
+                      withDue: 8
+                      onTimeRate: 0.75
+                      buckets:
+                        - start: 2026-11-16
+                          label: L
+                          done: 3
+                        - start: 2026-11-17
+                          label: M
+                          done: 4
+                        - start: 2026-11-18
+                          label: M
+                          done: 2
+                        - start: 2026-11-19
+                          label: J
+                          done: 0
+                        - start: 2026-11-20
+                          label: V
+                          done: 0
+                        - start: 2026-11-21
+                          label: S
+                          done: 0
+                        - start: 2026-11-22
+                          label: D
+                          done: 0
+                    habits:
+                      - id: 019a0a6e-1c00-7000-8000-00000000005a
+                        name: Gym
+                        targetPeriod: week
+                        met: 0
+                        total: 0
+                        rate: null
+                    sleep:
+                      nights: 3
+                      avgMinutes: 445
+                      avgBedTime: 23:50
+                      avgWakeTime: 07:15
+                      avgQuality: 3.7
+                    mood:
+                      days: 2
+                      avg: 4
+                    sources:
+                      user: 14
+                      sunday: 5
+              schema:
+                $ref: "#/components/schemas/Metrics"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
           content:
             application/json:
               schema:
