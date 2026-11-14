@@ -44,7 +44,7 @@ Descriptions below are the spirit; write full descriptions in the contract (they
 | `updateEvent` | PATCH `/api/events/{id}` | write | Local events only; Google events return a clear "read-only" error. |
 | `deleteEvent` | DELETE `/api/events/{id}` | write | Local events only. |
 | `listHabits` | GET `/api/habits?date` | read | Habits with today's status and streaks. |
-| `logHabit` | POST `/api/habits/{id}/log` | write | Check (or uncheck) a habit for a date. |
+| `logHabit` | POST `/api/habits/{habit}/log` | write | Check (or uncheck) a habit for a date; `{habit}` is the id or the slug (`gym`). Numeric habits take `value`. |
 | `getDaySummary` | GET `/api/summary/day?date` | read | Done/pending tasks, habits, sleep, review for a day (for the evening review automation). |
 | `sendPushNotification` | POST `/api/notify` | notify | Push to Lemy's devices: title (≤ 60), body (≤ 240), url (optional, must be https on `sunday.lemydev.com` or `agenda.lemydev.com`), tag. Rate-limited to 20/day. |
 

@@ -34,7 +34,7 @@ This is the target shape; refine names/types in the plan and ask before deviatin
 - `external_event`: `id`, `source_id → calendar_source`, `external_id`, `etag`, `title`, `location`, `all_day`, `starts_at`, `ends_at`, `start_date`, `end_date`, `status` (confirmed/tentative/cancelled), `html_link`, `updated_remote_at`, `synced_at`. `UNIQUE (source_id, external_id)`. Read-only from the API.
 
 ## Habits, sleep, review (port and adapt from v1)
-- `habit`, `habit_log` (date-based, unique per habit/date), streak calculation in domain code (Temporal, user timezone).
+- `habit`, `habit_log` (date-based, unique per habit/date), streak calculation in domain code (Temporal, user timezone). `habit.task_tag` (phase 7, migration `0004`): completing a task with that tag checks the (yes/no) habit that day; undoing the task unchecks it unless it was checked by hand or another tagged task is still done.
 - `sleep_log`: `date` (wake date), `bed_at`, `wake_at`, `quality smallint`, `notes`.
 - `day_review`: `date` PK, `mood smallint 1..5 null`, `note text`, `highlights text[]`, `moved_task_ids uuid[]`, `created_at`, `updated_at`.
 

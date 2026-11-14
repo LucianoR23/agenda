@@ -91,12 +91,13 @@ pnpm typecheck && pnpm check && pnpm test && pnpm build
 ## 6. Where the work is
 
 - **Branch:** `v2` (v1 is the tag `v1`; never push to `main`, never force-push).
-- **Status:** phases 0–6 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
-  tasks, reminders + push + service worker, events + Google Calendar/iCal). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
+- **Status:** phases 0–7 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
+  tasks, reminders + push + service worker, events + Google Calendar/iCal, habits, sleep, day review, history and
+  metrics). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
   and the decisions recorded per phase.
 - **Deploy:** Lemy does it before phase 9 or as part of it (the `agenda` database on postgres-core doesn't exist yet);
   [`runbooks/deploy.md`](runbooks/deploy.md), then [`runbooks/google-oauth.md`](runbooks/google-oauth.md).
-- **Next:** phase 7 (habits, sleep, review, metrics) — starts with a plan for approval.
+- **Next:** phase 8 (Sunday API) — starts with a plan for approval.
 - **Working agreement:** read [`CLAUDE.md`](../../CLAUDE.md) first (plan → approval → implement → gate → tick → summary).
 
 ## Troubleshooting
