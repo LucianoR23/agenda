@@ -7,7 +7,7 @@ import { resetSettingsCache } from "@/server/domain/settings";
 import { fixedClock, setClock } from "@/server/domain/time";
 import { resetEnv } from "@/server/env";
 import { resetRateLimits } from "@/server/http/ratelimit";
-import { type PushMessage, setPushSender } from "@/server/push";
+import { type PushPayload, type SendResult, setPushSender } from "@/server/push";
 import { validateResponse } from "./contract";
 import { SETUP_CODE } from "./env";
 
@@ -90,7 +90,10 @@ export async function setupUser(pin = PIN) {
   return { user: c, recoveryCodes: r.body.recoveryCodes as string[], device: r.body.device };
 }
 
-export const pushes: PushMessage[] = [];
+/** Pushes "sent" during a test, with the endpoint and the send options. */
+export const pushes: Array<PushPayload & { endpoint: string; ttl: number; urgency: string }> = [];
+/** What the fake push service answers (tests override it to simulate failures). */
+export const pushService: { reply: (endpoint: string) => SendResult } = { reply: () => ({ ok: true }) };
 
 /** Clean slate between tests: empty tables, real clock at a fixed instant, captured pushes. */
 export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
@@ -101,9 +104,11 @@ export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
   lockoutTuning.globalDelayMs = 0;
   resetRateLimits();
   pushes.length = 0;
-  setPushSender(async (_sub, msg) => {
-    pushes.push(msg);
-    return { ok: true };
+  pushService.reply = () => ({ ok: true });
+  setPushSender(async (sub, payload, opts) => {
+    const r = pushService.reply(sub.endpoint);
+    if (r.ok) pushes.push({ ...payload, endpoint: sub.endpoint, ...opts });
+    return r;
   });
   await resetDb();
 }

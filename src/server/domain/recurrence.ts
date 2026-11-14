@@ -93,3 +93,52 @@ export function nextOccurrence(
   }
   return { dueDate: next.toPlainDate().toString(), rrule: join(p) };
 }
+
+/** Frequencies a reminder may use (an hourly reminder is fine; minutely is not). */
+const REMINDER_FREQS = new Set(["HOURLY", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]);
+
+const ruleAt = (rrule: string, dtstart: Temporal.ZonedDateTime) =>
+  new RRuleTemporal({ rruleString: rrule, dtstart, maxIterations: 10_000 });
+
+/** Validates and normalizes a reminder RRULE (anchored at its fire time, in the user's timezone). */
+export function normalizeReminderRrule(input: string, fireAt: Temporal.Instant, tz: string): string {
+  const body = input.trim().replace(/^RRULE:/i, "");
+  if (/DTSTART/i.test(body)) throw invalid("La regla de repetición no lleva DTSTART: la hora del recordatorio es el inicio.");
+  const p = parts(body);
+  const freq = p.get("FREQ");
+  if (!freq || !REMINDER_FREQS.has(freq))
+    throw invalid("La repetición tiene que ser por hora, día, semana, mes o año (FREQ=HOURLY|DAILY|WEEKLY|MONTHLY|YEARLY).");
+  const normalized = join(p);
+  try {
+    ruleAt(normalized, fireAt.toZonedDateTimeISO(tz)).next();
+  } catch {
+    throw invalid(`No entendí la regla de repetición "${input}".`);
+  }
+  return normalized;
+}
+
+/**
+ * The fire time after `after` for a recurring reminder whose current occurrence is `anchor` (its original time, even
+ * if this occurrence was snoozed). Missed occurrences are skipped and consume COUNT. Null when the series ended.
+ */
+export function nextReminderFire(
+  rrule: string,
+  anchor: Temporal.Instant,
+  tz: string,
+  after: Temporal.Instant,
+): { fireAt: Temporal.Instant; rrule: string } | null {
+  const p = parts(rrule);
+  const count = p.has("COUNT") ? Number(p.get("COUNT")) : null;
+  if (count !== null && count <= 1) return null;
+  const dtstart = anchor.toZonedDateTimeISO(tz);
+  const r = ruleAt(rrule, dtstart);
+  const next = r.next(after.toZonedDateTimeISO(tz), false);
+  if (!next) return null;
+  if (count !== null) {
+    const missed = r.between(dtstart, next, false).length;
+    const left = count - 1 - missed;
+    if (left < 1) return null;
+    p.set("COUNT", String(left));
+  }
+  return { fireAt: next.toInstant(), rrule: join(p) };
+}

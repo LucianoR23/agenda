@@ -39,7 +39,7 @@ export class Scheduler {
       this.lastRuns.set(job.name, now);
       try {
         const result = await job.run(now);
-        log.info("job done", { job: job.name, result });
+        log.debug("job done", { job: job.name, result });
         ran.push(job.name);
       } catch (err) {
         log.error("job failed", { job: job.name, err });

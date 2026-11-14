@@ -39,6 +39,8 @@ export const appUser = pgTable(
     quietStart: time().default("23:30"),
     quietEnd: time().default("07:00"),
     defaultSnoozeMinutes: smallint().notNull().default(10),
+    /** A reminder more than this late (e.g. the server was down) is marked missed instead of pushed. */
+    missedAfterHours: smallint().notNull().default(12),
     settings: jsonb().$type<Record<string, unknown>>().notNull().default({}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -46,6 +48,7 @@ export const appUser = pgTable(
   (t) => [
     check("app_user_singleton", sql`${t.singleton}`),
     check("app_user_snooze_range", sql`${t.defaultSnoozeMinutes} BETWEEN 1 AND 1440`),
+    check("app_user_missed_range", sql`${t.missedAfterHours} BETWEEN 1 AND 168`),
     check("app_user_quiet_both", sql`(${t.quietStart} IS NULL) = (${t.quietEnd} IS NULL)`),
   ],
 );

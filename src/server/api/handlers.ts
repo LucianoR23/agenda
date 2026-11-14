@@ -6,11 +6,14 @@ import * as tokens from "../auth/tokens";
 import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
+import { applyPushAction } from "../domain/push-actions";
+import * as reminders from "../domain/reminders";
 import { getSettings, updateSettings } from "../domain/settings";
 import * as tasks from "../domain/tasks";
 import { formatInstant } from "../domain/time";
 import { env } from "../env";
 import { type Handler, json, requireDevice } from "../http/context";
+import { sendNotice } from "../push";
 
 let openApiFull: unknown = null;
 let openApiCompact: unknown = null;
@@ -118,9 +121,40 @@ export const handlers: Record<string, Handler> = {
   },
   reorderTasks: async (ctx, { body }) => json(200, { tasks: await tasks.reorderTasks(ctx, body.ids) }),
   searchAgenda: async (ctx, { query }) => {
-    const found = await tasks.searchTasks(ctx, query.q, query.includeDone === "true", query.limit);
-    return json(200, { results: found.map((task) => ({ type: "task", task })) });
+    const includeDone = query.includeDone === "true";
+    const foundTasks = await tasks.searchTasks(ctx, query.q, includeDone, query.limit);
+    const foundReminders = await reminders.searchReminders(ctx, query.q, includeDone, query.limit);
+    return json(200, {
+      results: [
+        ...foundTasks.map((task) => ({ type: "task", task })),
+        ...foundReminders.map((reminder) => ({ type: "reminder", reminder })),
+      ].slice(0, query.limit ?? 20),
+    });
   },
+
+  // ---------- reminders ----------
+  listReminders: async (ctx, { query }) => json(200, { reminders: await reminders.listReminders(ctx, query) }),
+  getReminder: async (ctx, { params }) => json(200, await reminders.getReminder(ctx, params.id)),
+  createReminder: async (ctx, { body }) => json(201, await reminders.createReminder(ctx, body)),
+  updateReminder: async (ctx, { params, body }) => json(200, await reminders.updateReminder(ctx, params.id, body)),
+  snoozeReminder: async (ctx, { params, body }) => json(200, await reminders.snoozeReminder(ctx, params.id, body)),
+  doneReminder: async (ctx, { params }) => json(200, await reminders.doneReminder(ctx, params.id)),
+  deleteReminder: async (ctx, { params }) => {
+    await reminders.deleteReminder(ctx, params.id);
+    return { status: 204 };
+  },
+
+  // ---------- push ----------
+  getVapidKey: async () => json(200, { publicKey: env().VAPID_PUBLIC_KEY ?? null }),
+  pushTest: async (ctx) => {
+    const r = await sendNotice(
+      ctx.db,
+      { title: "Notificación de prueba", body: "Si ves esto, las notificaciones andan. 🎉", url: "/ajustes" },
+      { kind: "test", source: "user" },
+    );
+    return json(200, { ok: r.ok, failed: r.failed });
+  },
+  pushAction: async (ctx, { body }) => json(200, await applyPushAction(ctx, body)),
 
   // ---------- API tokens ----------
   listTokens: async (ctx) => json(200, { tokens: await tokens.listTokens(ctx) }),

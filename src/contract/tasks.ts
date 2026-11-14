@@ -1,4 +1,5 @@
 import { ExpectedVersion, ItemSource, LocalDate, LocalTime, Mutable, orNull, Timestamp, Uuid } from "./common";
+import { Reminder } from "./reminders";
 import { z } from "./zod";
 
 // ---------- lists ----------
@@ -137,6 +138,11 @@ export const ReorderInput = z.strictObject({ ids: z.array(Uuid).min(1).max(500) 
 
 export const SearchResult = z
   .strictObject({
-    results: z.array(z.strictObject({ type: z.literal("task"), task: Task })),
+    results: z.array(
+      z.discriminatedUnion("type", [
+        z.strictObject({ type: z.literal("task"), task: Task }),
+        z.strictObject({ type: z.literal("reminder"), reminder: Reminder }),
+      ]),
+    ),
   })
   .openapi("SearchResult");

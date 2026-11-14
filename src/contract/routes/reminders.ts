@@ -1,0 +1,257 @@
+import { Uuid } from "../common";
+import { errorBody } from "../errors";
+import * as ex from "../examples";
+import { PushAction, Reminder, ReminderCreate, ReminderPatch, ReminderQuery, SnoozeInput } from "../reminders";
+import type { RouteDef } from "../route-def";
+import { z } from "../zod";
+
+const at = "2026-11-16T08:12:00.000-03:00";
+const contador = {
+  id: ex.uid(40),
+  title: "Llamar al contador",
+  body: null,
+  fireAt: "2026-11-17T09:00:00.000-03:00",
+  rrule: null,
+  status: "scheduled" as const,
+  urgent: false,
+  taskId: null,
+  eventId: null,
+  snoozedFrom: null,
+  lastFiredAt: null,
+  source: "user" as const,
+  version: 1,
+  createdAt: at,
+  updatedAt: at,
+  updatedBy: "user" as const,
+};
+const pastilla = { ...contador, id: ex.uid(41), title: "Tomar la pastilla", fireAt: "2026-11-17T08:00:00.000-03:00", rrule: "FREQ=DAILY" };
+
+const idParam = z.strictObject({ id: Uuid });
+
+export const reminderRoutes: RouteDef[] = [
+  {
+    operationId: "listReminders",
+    method: "get",
+    path: "/api/reminders",
+    tag: "Reminders",
+    summary: "Upcoming or recent reminders",
+    description: "`upcoming`: scheduled, soonest first. `recent`: sent, done, missed or cancelled, newest first.",
+    access: "user",
+    token: "read",
+    query: ReminderQuery,
+    responses: { 200: { description: "Reminders.", schema: z.strictObject({ reminders: z.array(Reminder) }) } },
+    exchanges: [
+      {
+        name: "upcoming",
+        summary: "Upcoming",
+        actor: "user",
+        query: { view: "upcoming" },
+        status: 200,
+        response: { reminders: [pastilla, contador] },
+      },
+    ],
+  },
+  {
+    operationId: "getReminder",
+    method: "get",
+    path: "/api/reminders/{id}",
+    tag: "Reminders",
+    summary: "One reminder",
+    access: "user",
+    token: "read",
+    params: idParam,
+    responses: { 200: { description: "Reminder.", schema: Reminder }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [{ name: "get", summary: "The reminder", actor: "user", params: { id: contador.id }, status: 200, response: contador }],
+  },
+  {
+    operationId: "createReminder",
+    method: "post",
+    path: "/api/reminders",
+    tag: "Reminders",
+    summary: "Push notification at a moment",
+    description:
+      "`fireAt` with its offset. Optional RRULE (hourly to yearly), `urgent` (ignores quiet hours) and `taskId` (Listo also completes the task).",
+    access: "user",
+    token: "write",
+    body: ReminderCreate,
+    responses: { 201: { description: "Created.", schema: Reminder } },
+    exchanges: [
+      {
+        name: "create",
+        summary: "Tomorrow 9: call the accountant",
+        actor: "user",
+        body: { title: "Llamar al contador", fireAt: "2026-11-17T09:00:00.000-03:00" },
+        status: 201,
+        response: contador,
+      },
+      {
+        name: "past",
+        summary: "A time that already passed",
+        actor: "user",
+        body: { title: "Algo", fireAt: "2026-11-01T09:00:00.000-03:00" },
+        status: 400,
+        response: errorBody("VALIDATION_ERROR", "Esa hora ya pasó. Elegí un momento futuro.", {
+          fields: [{ path: "/fireAt", message: "Must be in the future" }],
+        }),
+      },
+    ],
+  },
+  {
+    operationId: "updateReminder",
+    method: "patch",
+    path: "/api/reminders/{id}",
+    tag: "Reminders",
+    summary: "Change a reminder's time or text",
+    access: "user",
+    token: "write",
+    ifMatch: true,
+    params: idParam,
+    body: ReminderPatch,
+    responses: {
+      200: { description: "Updated.", schema: Reminder },
+      404: { description: "`NOT_FOUND`." },
+      409: { description: "`VERSION_CONFLICT`." },
+    },
+    exchanges: [
+      {
+        name: "move",
+        summary: "Move to 10:00",
+        actor: "user",
+        params: { id: contador.id },
+        body: { fireAt: "2026-11-17T10:00:00.000-03:00", version: 1 },
+        status: 200,
+        response: { ...contador, fireAt: "2026-11-17T10:00:00.000-03:00", version: 2 },
+      },
+    ],
+  },
+  {
+    operationId: "snoozeReminder",
+    method: "post",
+    path: "/api/reminders/{id}/snooze",
+    tag: "Reminders",
+    summary: "Postpone by minutes or until a time",
+    description: "Without a body: the user's default snooze (10 min). A recurring series keeps its schedule.",
+    access: "user",
+    token: "write",
+    params: idParam,
+    body: SnoozeInput,
+    responses: { 200: { description: "Postponed.", schema: Reminder }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [
+      {
+        name: "snooze",
+        summary: "10 more minutes",
+        actor: "user",
+        params: { id: contador.id },
+        body: { minutes: 10 },
+        status: 200,
+        response: { ...contador, fireAt: "2026-11-17T09:10:00.000-03:00", snoozedFrom: "2026-11-17T09:00:00.000-03:00", version: 2 },
+      },
+    ],
+  },
+  {
+    operationId: "doneReminder",
+    method: "post",
+    path: "/api/reminders/{id}/done",
+    tag: "Reminders",
+    summary: "Listo (and complete the linked task)",
+    description: "A one-off reminder becomes `done`; a recurring one keeps its next time.",
+    access: "user",
+    token: "write",
+    params: idParam,
+    body: z.strictObject({}).openapi("EmptyBody"),
+    responses: { 200: { description: "Done.", schema: Reminder }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [
+      {
+        name: "done",
+        summary: "Listo",
+        actor: "user",
+        params: { id: contador.id },
+        body: {},
+        status: 200,
+        response: { ...contador, status: "done", version: 2 },
+      },
+    ],
+  },
+  {
+    operationId: "deleteReminder",
+    method: "delete",
+    path: "/api/reminders/{id}",
+    tag: "Reminders",
+    summary: "Cancel a reminder",
+    access: "user",
+    token: "write",
+    params: idParam,
+    responses: { 204: { description: "Cancelled." }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [{ name: "cancel", summary: "Cancel", actor: "user", params: { id: contador.id }, status: 204 }],
+  },
+];
+
+export const pushRoutes: RouteDef[] = [
+  {
+    operationId: "getVapidKey",
+    method: "get",
+    path: "/api/push/vapid",
+    tag: "Push",
+    summary: "Web Push application server key",
+    access: "public",
+    responses: {
+      200: { description: "Key (null when push isn't configured).", schema: z.strictObject({ publicKey: z.string().nullable() }) },
+    },
+    exchanges: [
+      {
+        name: "key",
+        summary: "Configured",
+        actor: "anonymous",
+        status: 200,
+        response: { publicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" },
+      },
+    ],
+  },
+  {
+    operationId: "pushTest",
+    method: "post",
+    path: "/api/push/test",
+    tag: "Push",
+    summary: "Send a test notification to every subscribed device",
+    access: "user",
+    body: z.strictObject({}),
+    responses: { 200: { description: "Result per device count.", schema: z.strictObject({ ok: z.int(), failed: z.int() }) } },
+    exchanges: [{ name: "test", summary: "Probar notificación", actor: "user", body: {}, status: 200, response: { ok: 2, failed: 0 } }],
+  },
+  {
+    operationId: "pushAction",
+    method: "post",
+    path: "/api/push/action",
+    tag: "Push",
+    summary: "Listo / Posponer from a notification (service worker)",
+    description:
+      "No session needed: the signed `actionToken` from the push payload (7 days) authorizes one action on that occurrence, once. Rate-limited per IP.",
+    access: "public",
+    body: PushAction,
+    responses: {
+      200: { description: "Applied.", schema: z.strictObject({ ok: z.literal(true), action: z.enum(["done", "snooze"]) }) },
+      401: { description: "`UNAUTHORIZED`: invalid or expired token." },
+      404: { description: "`NOT_FOUND`: no delivery for that occurrence." },
+      409: { description: "`CONFLICT`: this notification's action was already used." },
+      429: { description: "`RATE_LIMITED`.", headers: ["Retry-After"] },
+    },
+    exchanges: [
+      {
+        name: "done",
+        summary: "Listo",
+        actor: "anonymous",
+        body: { token: "eyJyIjoiMDE5YTBhNmUifQ.c2lnbmF0dXJl", action: "done" },
+        status: 200,
+        response: { ok: true, action: "done" },
+      },
+      {
+        name: "reused",
+        summary: "Second tap",
+        actor: "anonymous",
+        body: { token: "eyJyIjoiMDE5YTBhNmUifQ.c2lnbmF0dXJl", action: "done" },
+        status: 409,
+        response: errorBody("CONFLICT", "Esta notificación ya se usó."),
+      },
+    ],
+  },
+];

@@ -15,6 +15,7 @@ servers:
   - url: http://localhost:3000
 tags:
   - name: Tasks
+  - name: Reminders
   - name: Auth
   - name: Settings
   - name: Tokens
@@ -143,6 +144,10 @@ components:
           maxLength: 80
       required:
         - name
+      additionalProperties: false
+    EmptyBody:
+      type: object
+      properties: {}
       additionalProperties: false
     Error:
       type: object
@@ -285,6 +290,23 @@ components:
       minimum: 0
       maximum: 3
       description: 0 none · 1 low · 2 medium · 3 high.
+    PushAction:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 10
+          maxLength: 500
+          description: "`actionToken` from the push payload."
+        action:
+          type: string
+          enum:
+            - done
+            - snooze
+      required:
+        - token
+        - action
+      additionalProperties: false
     PushSubscribeInput:
       type: object
       properties:
@@ -390,6 +412,150 @@ components:
       required:
         - recoveryCodes
       additionalProperties: false
+    Reminder:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        body:
+          type:
+            - string
+            - "null"
+        fireAt:
+          allOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - description: Next (or last) moment it fires, in the user's timezone.
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the fire time is the start).
+          example: FREQ=DAILY
+        status:
+          $ref: "#/components/schemas/ReminderStatus"
+        urgent:
+          type: boolean
+          description: Ignores quiet hours and goes out with high urgency.
+        taskId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        eventId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        snoozedFrom:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: Original time of a postponed occurrence.
+        lastFiredAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        source:
+          $ref: "#/components/schemas/ItemSource"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - id
+        - title
+        - body
+        - fireAt
+        - rrule
+        - status
+        - urgent
+        - taskId
+        - eventId
+        - snoozedFrom
+        - lastFiredAt
+        - source
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    ReminderCreate:
+      type: object
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/Uuid"
+            - description: Client-generated id (offline creates).
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        body:
+          type: string
+          maxLength: 2000
+        fireAt:
+          $ref: "#/components/schemas/Timestamp"
+        rrule:
+          type: string
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the fire time is the start).
+          example: FREQ=DAILY
+        urgent:
+          type: boolean
+        taskId:
+          $ref: "#/components/schemas/Uuid"
+      required:
+        - title
+        - fireAt
+      additionalProperties: false
+    ReminderPatch:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        body:
+          type:
+            - string
+            - "null"
+          maxLength: 2000
+        fireAt:
+          allOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - description: A new time re-arms a reminder that already fired.
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the fire time is the start).
+          example: FREQ=DAILY
+        urgent:
+          type: boolean
+        taskId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        version:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    ReminderStatus:
+      type: string
+      enum:
+        - scheduled
+        - sent
+        - done
+        - cancelled
+        - missed
+      description: "`scheduled`: waiting. `sent`: pushed (one-off). `done`: confirmed with Listo. `cancelled`: deleted. `missed`: the server was down longer than the user's `missedAfterHours` (no push)."
     ReopenInput:
       type: object
       properties:
@@ -414,18 +580,31 @@ components:
         results:
           type: array
           items:
-            type: object
-            properties:
-              type:
-                type: string
-                enum:
+            oneOf:
+              - type: object
+                properties:
+                  type:
+                    type: string
+                    enum:
+                      - task
+                  task:
+                    $ref: "#/components/schemas/Task"
+                required:
+                  - type
                   - task
-              task:
-                $ref: "#/components/schemas/Task"
-            required:
-              - type
-              - task
-            additionalProperties: false
+                additionalProperties: false
+              - type: object
+                properties:
+                  type:
+                    type: string
+                    enum:
+                      - reminder
+                  reminder:
+                    $ref: "#/components/schemas/Reminder"
+                required:
+                  - type
+                  - reminder
+                additionalProperties: false
       required:
         - results
       additionalProperties: false
@@ -502,12 +681,16 @@ components:
           example: 23:30
         defaultSnoozeMinutes:
           type: integer
+        missedAfterHours:
+          type: integer
+          description: A reminder later than this (server down) is marked missed instead of pushed.
       required:
         - timezone
         - locale
         - quietStart
         - quietEnd
         - defaultSnoozeMinutes
+        - missedAfterHours
       additionalProperties: false
     SettingsPatch:
       type: object
@@ -536,6 +719,10 @@ components:
           type: integer
           minimum: 1
           maximum: 1440
+        missedAfterHours:
+          type: integer
+          minimum: 1
+          maximum: 168
       additionalProperties: false
     SetupInput:
       type: object
@@ -567,6 +754,17 @@ components:
       required:
         - device
         - recoveryCodes
+      additionalProperties: false
+    SnoozeInput:
+      type: object
+      properties:
+        minutes:
+          type: integer
+          minimum: 1
+          maximum: 10080
+          description: "Default: the user's snooze setting."
+        until:
+          $ref: "#/components/schemas/Timestamp"
       additionalProperties: false
     Task:
       type: object
@@ -2263,6 +2461,7 @@ paths:
                     quietStart: 23:30
                     quietEnd: 07:00
                     defaultSnoozeMinutes: 10
+                    missedAfterHours: 12
               schema:
                 $ref: "#/components/schemas/Settings"
         "401":
@@ -2321,6 +2520,7 @@ paths:
                     quietStart: 23:30
                     quietEnd: 07:00
                     defaultSnoozeMinutes: 10
+                    missedAfterHours: 12
               schema:
                 $ref: "#/components/schemas/Settings"
         "400":
@@ -2700,6 +2900,233 @@ paths:
                 $ref: "#/components/schemas/Error"
         "415":
           description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/push/vapid:
+    get:
+      operationId: getVapidKey
+      tags:
+        - Push
+      summary: Web Push application server key
+      description: "**Actors:** anyone."
+      security: []
+      x-actors:
+        - anyone
+      responses:
+        "200":
+          description: Key (null when push isn't configured).
+          content:
+            application/json:
+              examples:
+                key:
+                  summary: Configured
+                  value:
+                    publicKey: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
+              schema:
+                type: object
+                properties:
+                  publicKey:
+                    type:
+                      - string
+                      - "null"
+                required:
+                  - publicKey
+                additionalProperties: false
+  /api/push/test:
+    post:
+      operationId: pushTest
+      tags:
+        - Push
+      summary: Send a test notification to every subscribed device
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              test:
+                summary: Probar notificación
+                value: {}
+            schema:
+              type: object
+              properties: {}
+              additionalProperties: false
+      responses:
+        "200":
+          description: Result per device count.
+          content:
+            application/json:
+              examples:
+                test:
+                  summary: Probar notificación
+                  value:
+                    ok: 2
+                    failed: 0
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: integer
+                  failed:
+                    type: integer
+                required:
+                  - ok
+                  - failed
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/push/action:
+    post:
+      operationId: pushAction
+      tags:
+        - Push
+      summary: Listo / Posponer from a notification (service worker)
+      description: |-
+        No session needed: the signed `actionToken` from the push payload (7 days) authorizes one action on that occurrence, once. Rate-limited per IP.
+
+        **Actors:** anyone.
+      security: []
+      x-actors:
+        - anyone
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              done:
+                summary: Listo
+                value:
+                  token: eyJyIjoiMDE5YTBhNmUifQ.c2lnbmF0dXJl
+                  action: done
+              reused:
+                summary: Second tap
+                value:
+                  token: eyJyIjoiMDE5YTBhNmUifQ.c2lnbmF0dXJl
+                  action: done
+            schema:
+              $ref: "#/components/schemas/PushAction"
+      responses:
+        "200":
+          description: Applied.
+          content:
+            application/json:
+              examples:
+                done:
+                  summary: Listo
+                  value:
+                    ok: true
+                    action: done
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                  action:
+                    type: string
+                    enum:
+                      - done
+                      - snooze
+                required:
+                  - ok
+                  - action
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED`: invalid or expired token."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`: no delivery for that occurrence."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: this notification's action was already used. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              examples:
+                reused:
+                  summary: Second tap
+                  value:
+                    error:
+                      code: CONFLICT
+                      message: Esta notificación ya se usó.
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -3864,7 +4291,7 @@ paths:
         - Tasks
       summary: Find items by text (accent-insensitive)
       description: |-
-        Use it to get an id before updating or deleting. Tasks for now; reminders and events join later.
+        Use it to get an id before updating or deleting. Tasks first, then reminders (events join in phase 6).
 
         **Actors:** user, API token with `read`.
       security:
@@ -3945,6 +4372,664 @@ paths:
                 $ref: "#/components/schemas/Error"
         "403":
           description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/reminders:
+    get:
+      operationId: listReminders
+      tags:
+        - Reminders
+      summary: Upcoming or recent reminders
+      description: |-
+        `upcoming`: scheduled, soonest first. `recent`: sent, done, missed or cancelled, newest first.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - upcoming
+              - recent
+              - all
+          required: false
+          name: view
+          in: query
+        - schema:
+            $ref: "#/components/schemas/ReminderStatus"
+          required: false
+          description: "`scheduled`: waiting. `sent`: pushed (one-off). `done`: confirmed with Listo. `cancelled`: deleted. `missed`: the server was down longer than the user's `missedAfterHours` (no push)."
+          name: status
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Timestamp"
+          required: false
+          description: ISO 8601 timestamp with offset .
+          name: from
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Timestamp"
+          required: false
+          description: ISO 8601 timestamp with offset .
+          name: to
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Reminders.
+          content:
+            application/json:
+              examples:
+                upcoming:
+                  summary: Upcoming
+                  value:
+                    reminders:
+                      - id: 019a0a6e-1c00-7000-8000-000000000029
+                        title: Tomar la pastilla
+                        body: null
+                        fireAt: 2026-11-17T08:00:00.000-03:00
+                        rrule: FREQ=DAILY
+                        status: scheduled
+                        urgent: false
+                        taskId: null
+                        eventId: null
+                        snoozedFrom: null
+                        lastFiredAt: null
+                        source: user
+                        version: 1
+                        createdAt: 2026-11-16T08:12:00.000-03:00
+                        updatedAt: 2026-11-16T08:12:00.000-03:00
+                        updatedBy: user
+                      - id: 019a0a6e-1c00-7000-8000-000000000028
+                        title: Llamar al contador
+                        body: null
+                        fireAt: 2026-11-17T09:00:00.000-03:00
+                        rrule: null
+                        status: scheduled
+                        urgent: false
+                        taskId: null
+                        eventId: null
+                        snoozedFrom: null
+                        lastFiredAt: null
+                        source: user
+                        version: 1
+                        createdAt: 2026-11-16T08:12:00.000-03:00
+                        updatedAt: 2026-11-16T08:12:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  reminders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Reminder"
+                required:
+                  - reminders
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createReminder
+      tags:
+        - Reminders
+      summary: Push notification at a moment
+      description: |-
+        `fireAt` with its offset. Optional RRULE (hourly to yearly), `urgent` (ignores quiet hours) and `taskId` (Listo also completes the task).
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              create:
+                summary: "Tomorrow 9: call the accountant"
+                value:
+                  title: Llamar al contador
+                  fireAt: 2026-11-17T09:00:00.000-03:00
+              past:
+                summary: A time that already passed
+                value:
+                  title: Algo
+                  fireAt: 2026-11-01T09:00:00.000-03:00
+            schema:
+              $ref: "#/components/schemas/ReminderCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                create:
+                  summary: "Tomorrow 9: call the accountant"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000028
+                    title: Llamar al contador
+                    body: null
+                    fireAt: 2026-11-17T09:00:00.000-03:00
+                    rrule: null
+                    status: scheduled
+                    urgent: false
+                    taskId: null
+                    eventId: null
+                    snoozedFrom: null
+                    lastFiredAt: null
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Reminder"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              examples:
+                past:
+                  summary: A time that already passed
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Esa hora ya pasó. Elegí un momento futuro.
+                      details:
+                        fields:
+                          - path: /fireAt
+                            message: Must be in the future
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/reminders/{id}:
+    get:
+      operationId: getReminder
+      tags:
+        - Reminders
+      summary: One reminder
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Reminder.
+          content:
+            application/json:
+              examples:
+                get:
+                  summary: The reminder
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000028
+                    title: Llamar al contador
+                    body: null
+                    fireAt: 2026-11-17T09:00:00.000-03:00
+                    rrule: null
+                    status: scheduled
+                    urgent: false
+                    taskId: null
+                    eventId: null
+                    snoozedFrom: null
+                    lastFiredAt: null
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Reminder"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateReminder
+      tags:
+        - Reminders
+      summary: Change a reminder's time or text
+      description: "**Actors:** user, API token with `write`."
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              move:
+                summary: Move to 10:00
+                value:
+                  fireAt: 2026-11-17T10:00:00.000-03:00
+                  version: 1
+            schema:
+              $ref: "#/components/schemas/ReminderPatch"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                move:
+                  summary: Move to 10:00
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000028
+                    title: Llamar al contador
+                    body: null
+                    fireAt: 2026-11-17T10:00:00.000-03:00
+                    rrule: null
+                    status: scheduled
+                    urgent: false
+                    taskId: null
+                    eventId: null
+                    snoozedFrom: null
+                    lastFiredAt: null
+                    source: user
+                    version: 2
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Reminder"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT`. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteReminder
+      tags:
+        - Reminders
+      summary: Cancel a reminder
+      description: "**Actors:** user, API token with `write`."
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Cancelled.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/reminders/{id}/snooze:
+    post:
+      operationId: snoozeReminder
+      tags:
+        - Reminders
+      summary: Postpone by minutes or until a time
+      description: |-
+        Without a body: the user's default snooze (10 min). A recurring series keeps its schedule.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              snooze:
+                summary: 10 more minutes
+                value:
+                  minutes: 10
+            schema:
+              $ref: "#/components/schemas/SnoozeInput"
+      responses:
+        "200":
+          description: Postponed.
+          content:
+            application/json:
+              examples:
+                snooze:
+                  summary: 10 more minutes
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000028
+                    title: Llamar al contador
+                    body: null
+                    fireAt: 2026-11-17T09:10:00.000-03:00
+                    rrule: null
+                    status: scheduled
+                    urgent: false
+                    taskId: null
+                    eventId: null
+                    snoozedFrom: 2026-11-17T09:00:00.000-03:00
+                    lastFiredAt: null
+                    source: user
+                    version: 2
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Reminder"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/reminders/{id}/done:
+    post:
+      operationId: doneReminder
+      tags:
+        - Reminders
+      summary: Listo (and complete the linked task)
+      description: |-
+        A one-off reminder becomes `done`; a recurring one keeps its next time.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              done:
+                summary: Listo
+                value: {}
+            schema:
+              $ref: "#/components/schemas/EmptyBody"
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              examples:
+                done:
+                  summary: Listo
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000028
+                    title: Llamar al contador
+                    body: null
+                    fireAt: 2026-11-17T09:00:00.000-03:00
+                    rrule: null
+                    status: done
+                    urgent: false
+                    taskId: null
+                    eventId: null
+                    snoozedFrom: null
+                    lastFiredAt: null
+                    source: user
+                    version: 2
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Reminder"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
           content:
             application/json:
               schema:

@@ -135,6 +135,7 @@ export const Settings = z
     quietStart: HHmm.nullable().openapi({ description: "Quiet hours start (local). Non-urgent reminders wait until quietEnd." }),
     quietEnd: HHmm.nullable(),
     defaultSnoozeMinutes: z.int(),
+    missedAfterHours: z.int().openapi({ description: "A reminder later than this (server down) is marked missed instead of pushed." }),
   })
   .openapi("Settings");
 
@@ -145,6 +146,7 @@ export const SettingsPatch = z
     quietStart: HHmm.nullable().optional(),
     quietEnd: HHmm.nullable().optional(),
     defaultSnoozeMinutes: z.int().min(1).max(1440).optional(),
+    missedAfterHours: z.int().min(1).max(168).optional(),
   })
   .openapi("SettingsPatch");
 

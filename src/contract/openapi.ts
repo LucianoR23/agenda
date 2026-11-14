@@ -2,13 +2,14 @@ import { OpenAPIRegistry, OpenApiGeneratorV31, type RouteConfig } from "@asteaso
 import type { ZodType } from "zod";
 import { ErrorBody } from "./common";
 import type { Exchange, ResponseDef, RouteDef } from "./route-def";
+import { pushRoutes, reminderRoutes } from "./routes/reminders";
 import { systemRoutes } from "./routes/system";
 import { taskRoutesAll } from "./routes/tasks";
 import { z } from "./zod";
 
 export const API_VERSION = "2.0.0-alpha";
 
-export const routes: RouteDef[] = [...systemRoutes, ...taskRoutesAll];
+export const routes: RouteDef[] = [...systemRoutes, ...pushRoutes, ...taskRoutesAll, ...reminderRoutes];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
@@ -184,7 +185,15 @@ export function generateOpenApiDocument() {
       ].join("\n"),
     },
     servers: [{ url: "https://agenda.lemydev.com" }, { url: "http://localhost:3000" }],
-    tags: [{ name: "Tasks" }, { name: "Auth" }, { name: "Settings" }, { name: "Tokens" }, { name: "Push" }, { name: "Ops" }],
+    tags: [
+      { name: "Tasks" },
+      { name: "Reminders" },
+      { name: "Auth" },
+      { name: "Settings" },
+      { name: "Tokens" },
+      { name: "Push" },
+      { name: "Ops" },
+    ],
   });
 }
 

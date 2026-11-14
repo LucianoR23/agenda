@@ -11,6 +11,8 @@ export interface Settings {
   quietStart: string | null;
   quietEnd: string | null;
   defaultSnoozeMinutes: number;
+  /** Reminders later than this are marked missed instead of pushed. */
+  missedAfterHours: number;
 }
 
 const DEFAULTS: Settings = {
@@ -19,6 +21,7 @@ const DEFAULTS: Settings = {
   quietStart: "23:30",
   quietEnd: "07:00",
   defaultSnoozeMinutes: 10,
+  missedAfterHours: 12,
 };
 
 /** Single replica, single user: the settings row is cached in memory and invalidated on every update. */
@@ -37,6 +40,7 @@ export async function getSettings(db: DbLike): Promise<Settings> {
     quietStart: hhmm(u.quietStart),
     quietEnd: hhmm(u.quietEnd),
     defaultSnoozeMinutes: u.defaultSnoozeMinutes,
+    missedAfterHours: u.missedAfterHours,
   };
   return cached;
 }
@@ -70,6 +74,7 @@ export async function updateSettings(db: DbLike, patch: Partial<Settings>): Prom
       quietStart: next.quietStart,
       quietEnd: next.quietEnd,
       defaultSnoozeMinutes: next.defaultSnoozeMinutes,
+      missedAfterHours: next.missedAfterHours,
     })
     .where(eq(appUser.id, u.id));
   // invalidate rather than store: the request transaction may still roll back
