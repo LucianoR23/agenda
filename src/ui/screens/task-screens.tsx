@@ -4,7 +4,7 @@ import { closestCenter, DndContext, type DragEndEvent, PointerSensor, TouchSenso
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useState } from "react";
-import { useDirect, useReminders, useTaskLists, useTasks } from "@/client/queries";
+import { useDirect, useEvents, useReminders, useTaskLists, useTasks } from "@/client/queries";
 import { isoInZone } from "@/client/reminder-actions";
 import { useTaskActions } from "@/client/task-actions";
 import type { Task, TaskList, TaskQuery } from "@/client/types";
@@ -15,13 +15,14 @@ import { PageTitle, SectionLabel } from "../components/page";
 import { EmptyState, TimelineSkeleton } from "../components/surfaces";
 import { SwipeRow, TaskRow } from "../components/task-row";
 import { dayLabel, todayLocal, userTimeZone } from "../time";
+import { useEventUi } from "./calendar-screens";
 import { RemindersScreen, useReminderUi } from "./reminder-screens";
 import { QuickAddSheet, RescheduleSheet, TaskEditor } from "./task-sheets";
 
 type Sheet = { kind: "add" } | { kind: "edit"; task: Task } | { kind: "move"; task: Task } | null;
 
 /** Sheets (quick add, editor, reschedule) and the swipe/check actions shared by every task screen. */
-function useTaskUi(addMode: "task" | "reminder" = "task") {
+function useTaskUi(addMode: "task" | "reminder" | "event" = "task") {
   const lists = useTaskLists().data?.lists ?? [];
   const actions = useTaskActions();
   const toast = useToast();
@@ -81,7 +82,10 @@ function useTaskUi(addMode: "task" | "reminder" = "task") {
 
   const fab = (
     <div className="fixed right-4 bottom-[calc(88px+env(safe-area-inset-bottom))] z-20 md:bottom-8">
-      <Fab label={addMode === "reminder" ? "Nuevo recordatorio" : "Nueva tarea"} onClick={() => setSheet({ kind: "add" })} />
+      <Fab
+        label={addMode === "reminder" ? "Nuevo recordatorio" : addMode === "event" ? "Nuevo evento" : "Nueva tarea"}
+        onClick={() => setSheet({ kind: "add" })}
+      />
     </div>
   );
 
@@ -99,6 +103,8 @@ export function TodayScreen() {
   const today = todayLocal();
   const ui = useTaskUi();
   const reminderUi = useReminderUi();
+  const eventUi = useEventUi();
+  const events = useEvents(today, today).data?.events ?? [];
   const dayStart = Temporal.PlainDate.from(today).toZonedDateTime({ timeZone: userTimeZone() });
   const reminders = (
     useReminders({
@@ -120,7 +126,7 @@ export function TodayScreen() {
       <PageTitle title="Hoy" subtitle={dayLabel(today, today).replace("Hoy · ", "")} />
       {loading ? (
         <Loading />
-      ) : late.length + all.length + reminders.length === 0 ? (
+      ) : late.length + all.length + reminders.length + events.length === 0 ? (
         <EmptyState
           icon="check_circle"
           title="Nada para hoy"
@@ -129,6 +135,12 @@ export function TodayScreen() {
         />
       ) : (
         <>
+          {events.length > 0 && (
+            <section className="flex flex-col gap-2" aria-label="Agenda de hoy">
+              <SectionLabel>Agenda</SectionLabel>
+              {events.map(eventUi.row)}
+            </section>
+          )}
           {late.length > 0 && (
             <section className="flex flex-col gap-2" aria-label="Vencidas">
               <SectionLabel>Vencidas · {late.length}</SectionLabel>
@@ -158,6 +170,7 @@ export function TodayScreen() {
       {ui.fab}
       {ui.sheets}
       {reminderUi.sheets}
+      {eventUi.sheets}
     </div>
   );
 }

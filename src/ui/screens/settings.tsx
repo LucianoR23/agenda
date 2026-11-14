@@ -65,6 +65,12 @@ export function SettingsScreen() {
       <SectionLabel>General</SectionLabel>
       <RowGroup>
         <SettingsRow icon="lock" title="Seguridad" subtitle="PIN, huella, dispositivos" href="/ajustes/seguridad" />
+        <SettingsRow
+          icon="calendar_month"
+          title="Google Calendar"
+          subtitle="Ver tus eventos de Google (solo lectura)"
+          href="/ajustes/calendario"
+        />
         <SettingsRow icon="key" title="Tokens de API" subtitle="Acceso de Sunday a tu agenda" href="/ajustes/tokens" />
         <SettingsRow icon="public" title="Zona horaria" subtitle={tz.replaceAll("_", " ")} onClick={() => setTzOpen(true)} />
       </RowGroup>

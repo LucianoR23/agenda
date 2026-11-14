@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Reminder, Task } from "./types";
+import type { AgendaEvent, Reminder, Task } from "./types";
 
 /** Last good server response per query key (offline reads). */
 export interface CacheEntry {
@@ -31,7 +31,10 @@ export type Optimistic =
   | { kind: "task-put"; task: Task }
   | { kind: "task-remove"; id: string }
   | { kind: "reminder-put"; reminder: Reminder }
-  | { kind: "reminder-remove"; id: string };
+  | { kind: "reminder-remove"; id: string }
+  /** A local event as one occurrence (a recurring one shows its first until the server expands it). */
+  | { kind: "event-put"; event: AgendaEvent }
+  | { kind: "event-remove"; eventId: string };
 
 class AgendaDb extends Dexie {
   cache!: EntityTable<CacheEntry, "key">;

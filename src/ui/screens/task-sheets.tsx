@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useEventActions } from "@/client/event-actions";
 import { localToIso, useReminderActions } from "@/client/reminder-actions";
 import { useTaskActions } from "@/client/task-actions";
 import type { Task, TaskList } from "@/client/types";
@@ -87,12 +88,13 @@ export function QuickAddSheet({
 }: {
   lists: TaskList[];
   onDone: () => void;
-  initialMode?: "task" | "reminder";
+  initialMode?: "task" | "reminder" | "event";
 }) {
   const actions = useTaskActions();
   const reminders = useReminderActions();
+  const events = useEventActions();
   const toast = useToast();
-  const [mode, setMode] = useState<"task" | "reminder">(initialMode);
+  const [mode, setMode] = useState<"task" | "reminder" | "event">(initialMode);
   const [text, setText] = useState("");
   const [dropped, setDropped] = useState<Set<string>>(new Set());
   const today = todayLocal();
@@ -105,25 +107,48 @@ export function QuickAddSheet({
   if (draft.dueTime) chips.push({ key: "time", icon: "schedule", label: draft.dueTime });
   if (draft.rrule) chips.push({ key: "repeat", icon: "repeat", label: repeatLabel(draft.rrule, draft.dueDate) ?? "Se repite" });
   const asReminder = mode === "reminder";
-  if (draft.listName && !asReminder)
+  const asEvent = mode === "event";
+  if (draft.listName && mode === "task")
     chips.push(
       list
         ? { key: "list", icon: "checklist", label: list.name }
         : { key: "list", icon: "info", label: `No hay lista "${draft.listName}"`, warn: true },
     );
-  if (draft.priority)
+  if (draft.priority && !asEvent)
     chips.push({
       key: "priority",
       icon: "flag",
       label: asReminder ? (draft.priority === 3 ? "Urgente" : "Normal") : (PRIORITIES[draft.priority]?.label ?? ""),
     });
-  if (!asReminder) for (const t of draft.tags) chips.push({ key: `tag:${t}`, icon: "label", label: `+${t}` });
+  if (mode === "task") for (const t of draft.tags) chips.push({ key: `tag:${t}`, icon: "label", label: `+${t}` });
   // a reminder needs a moment: a date (default today) and a time
   const reminderTime = keep("time") ? draft.dueTime : null;
   const missingTime = asReminder && !!draft.title && !reminderTime;
 
   const save = () => {
     if (!draft.title) return;
+    if (asEvent) {
+      // with a time: one hour from it; without: all day
+      const date = (keep("date") ? draft.dueDate : null) ?? today;
+      const time = keep("time") ? draft.dueTime : null;
+      const end = time ? Temporal.PlainTime.from(time).add({ hours: 1 }) : null;
+      events.create({
+        title: draft.title,
+        allDay: !time,
+        ...(time
+          ? {
+              startsAt: localToIso(date, time),
+              endsAt: end && end.toString() > time ? localToIso(date, end.toString({ smallestUnit: "minute" })) : null,
+            }
+          : { startDate: date }),
+        rrule: keep("repeat") ? draft.rrule : null,
+      });
+      toast({ icon: "event", message: `Evento para ${dayLabel(date, today).toLowerCase()}${time ? ` a las ${time}` : ""}` });
+      setText("");
+      setDropped(new Set());
+      onDone();
+      return;
+    }
     if (asReminder) {
       if (!reminderTime) return;
       const date = (keep("date") ? draft.dueDate : null) ?? today;
@@ -172,12 +197,13 @@ export function QuickAddSheet({
         options={[
           { value: "task", label: "Tarea" },
           { value: "reminder", label: "Recordatorio" },
+          { value: "event", label: "Evento" },
         ]}
       />
       <TextField
-        label="Tarea"
+        label={asEvent ? "Evento" : asReminder ? "Recordatorio" : "Tarea"}
         autoFocus
-        placeholder="mañana 9 llamar al contador #trabajo"
+        placeholder={asEvent ? "jueves 10 dentista" : "mañana 9 llamar al contador #trabajo"}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -204,9 +230,11 @@ export function QuickAddSheet({
         <p className="text-caption text-danger">Falta la hora: por ejemplo “a las 9” o “18:30”.</p>
       ) : (
         <p className="text-caption text-muted">
-          {asReminder
-            ? "Fecha y hora en palabras; !alta = urgente."
-            : "Fecha y hora en palabras, #lista, !alta / !media / !baja, +etiqueta."}
+          {asEvent
+            ? "Fecha y hora en palabras; sin hora es de todo el día."
+            : asReminder
+              ? "Fecha y hora en palabras; !alta = urgente."
+              : "Fecha y hora en palabras, #lista, !alta / !media / !baja, +etiqueta."}
         </p>
       )}
       <Button size="lg" type="submit" disabled={!draft.title || missingTime}>

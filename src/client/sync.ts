@@ -6,9 +6,10 @@ import { uuidv7 } from "uuidv7";
 import { todayLocal } from "@/ui/time";
 import { ApiProblem, api } from "./api";
 import { idb, type Optimistic, type OutboxItem } from "./db";
+import { putEvent } from "./event-cache";
 import { putReminder } from "./reminder-cache";
 import { putTask, removeTask } from "./task-cache";
-import type { Reminder, ReminderQuery, Task, TaskList, TaskQuery } from "./types";
+import type { AgendaEvent, EventQuery, Reminder, ReminderQuery, Task, TaskList, TaskQuery } from "./types";
 
 // ---------- status store ----------
 
@@ -73,19 +74,30 @@ function applyToReminders(data: ReminderListData, query: ReminderQuery, o: Optim
   return { reminders: putReminder(data.reminders, o.reminder, query) };
 }
 
+type EventListData = { events: AgendaEvent[] };
+
+function applyToEvents(data: EventListData, query: EventQuery, o: Optimistic): EventListData {
+  if (o.kind === "event-remove") return { events: data.events.filter((e) => e.eventId !== o.eventId) };
+  if (o.kind !== "event-put") return data;
+  return { events: putEvent(data.events, o.event, query) };
+}
+
+type Kind = "tasks" | "reminders" | "events";
+const kindOf = (o: Optimistic): Kind => (o.kind.startsWith("reminder") ? "reminders" : o.kind.startsWith("event") ? "events" : "tasks");
+
+function applyTo(qc: QueryClient, kind: Kind, data: unknown, query: unknown, o: Optimistic): unknown {
+  if (kind === "reminders") return applyToReminders(data as ReminderListData, query as ReminderQuery, o);
+  if (kind === "events") return applyToEvents(data as EventListData, query as EventQuery, o);
+  return applyToTasks(qc, data as TaskListData, query as TaskQuery, o);
+}
+
 /** Applies one optimistic change to every cached query of its kind. */
 function applyOne(qc: QueryClient, o: Optimistic) {
-  const isReminder = o.kind === "reminder-put" || o.kind === "reminder-remove";
-  for (const q of qc.getQueryCache().findAll({ queryKey: [isReminder ? "reminders" : "tasks"] })) {
+  const kind = kindOf(o);
+  for (const q of qc.getQueryCache().findAll({ queryKey: [kind] })) {
     const data = q.state.data;
     if (!data) continue;
-    const query = q.queryKey[1] ?? {};
-    qc.setQueryData(
-      q.queryKey,
-      isReminder
-        ? applyToReminders(data as ReminderListData, query as ReminderQuery, o)
-        : applyToTasks(qc, data as TaskListData, query as TaskQuery, o),
-    );
+    qc.setQueryData(q.queryKey, applyTo(qc, kind, data, q.queryKey[1] ?? {}, o));
   }
 }
 
@@ -93,15 +105,13 @@ let pendingQc: QueryClient | null = null;
 
 /** Queued (not yet sent) edits applied to freshly fetched data, so a refetch never "undoes" them. */
 export async function withPending<T>(key: unknown[], data: T): Promise<T> {
-  if ((key[0] !== "tasks" && key[0] !== "reminders") || !pendingQc) return data;
+  const kind = key[0];
+  if ((kind !== "tasks" && kind !== "reminders" && kind !== "events") || !pendingQc) return data;
   const items = (await idb().outbox.orderBy("createdAt").toArray()).filter((i) => i.state === "pending" && i.optimistic);
   let out: unknown = data;
   for (const i of items) {
-    if (!i.optimistic) continue;
-    out =
-      key[0] === "reminders"
-        ? applyToReminders(out as ReminderListData, (key[1] ?? {}) as ReminderQuery, i.optimistic)
-        : applyToTasks(pendingQc, out as TaskListData, (key[1] ?? {}) as TaskQuery, i.optimistic);
+    if (!i.optimistic || kindOf(i.optimistic) !== kind) continue;
+    out = applyTo(pendingQc, kind, out, key[1] ?? {}, i.optimistic);
   }
   return out as T;
 }

@@ -4,11 +4,23 @@ import { QueryClient, skipToken, useQuery, useQueryClient } from "@tanstack/reac
 import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
 import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
-import type { ApiToken, Device, Reminder, ReminderQuery, SessionState, Settings, Task, TaskList, TaskQuery } from "./types";
+import type {
+  AgendaEvent,
+  ApiToken,
+  CalendarStatus,
+  Device,
+  Reminder,
+  ReminderQuery,
+  SessionState,
+  Settings,
+  Task,
+  TaskList,
+  TaskQuery,
+} from "./types";
 
 const CACHE_DAYS = 14;
 /** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -68,6 +80,12 @@ export function useReminders(query: ReminderQuery) {
   const params = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "") as [string, string][]);
   return useCached<{ reminders: Reminder[] }>(["reminders", query], `/api/reminders?${params}`);
 }
+
+/** Local + Google/iCal events overlapping [from, to] (dates in the user's zone); the range is the cache key. */
+export const useEvents = (from: string, to: string) =>
+  useCached<{ events: AgendaEvent[] }>(["events", { from, to }], `/api/events?from=${from}&to=${to}`);
+
+export const useCalendars = () => useCached<CalendarStatus>(["calendars"], "/api/calendars");
 
 /** Tasks for a view/filter; the query object is part of the cache key (and drives optimistic updates). */
 export function useTasks(query: TaskQuery) {

@@ -1,4 +1,6 @@
 import type { z } from "zod";
+import type * as Ev from "@/contract/events";
+import type * as Ov from "@/contract/overview";
 import type * as Rm from "@/contract/reminders";
 import type * as Sy from "@/contract/system";
 import type * as Tk from "@/contract/tasks";
@@ -17,6 +19,12 @@ export type TaskPatch = z.infer<typeof Tk.TaskPatch>;
 export type CompleteResult = z.infer<typeof Tk.CompleteResult>;
 export type Reminder = z.infer<typeof Rm.Reminder>;
 export type ReminderQuery = z.infer<typeof Rm.ReminderQuery>;
+export type Event = z.infer<typeof Ev.Event>;
+export type AgendaEvent = z.infer<typeof Ev.AgendaEvent>;
+export type EventQuery = z.infer<typeof Ev.EventQuery>;
+export type CalendarStatus = z.infer<typeof Ev.CalendarStatus>;
+export type CalendarSource = z.infer<typeof Ev.CalendarSource>;
+export type Overview = z.infer<typeof Ov.Overview>;
 
 /** A failed API call: the server's `{ error: { code, message, details } }` plus the HTTP status. */
 export interface Problem {

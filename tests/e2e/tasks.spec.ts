@@ -65,13 +65,12 @@ test("reminders: quick add in reminder mode, Recordatorios, Hoy, Más", async ({
   await typePin(page, E2E.pin);
   await expect(page.getByRole("heading", { name: "Hoy" })).toBeVisible();
 
-  await page
-    .getByRole("link", { name: /Recordatorios/ })
-    .first()
-    .click();
-  await expect(page.getByRole("heading", { name: "Recordatorios" })).toBeVisible();
+  // Recordatorios lives under "Más" since Calendario took its tab
+  await page.getByRole("button", { name: "Más" }).click();
+  await page.getByRole("link", { name: /Recordatorios/ }).click();
+  await expect(page.getByRole("heading", { name: "Recordatorios", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Nuevo recordatorio" }).click();
-  const input = page.getByRole("textbox", { name: "Tarea", exact: true });
+  const input = page.getByRole("textbox", { name: "Recordatorio", exact: true });
   await input.fill("tomar agua");
   await expect(page.getByText(/Falta la hora/)).toBeVisible();
   // an hour from now, still today if possible (Buenos Aires time, like the browser context)
@@ -96,4 +95,70 @@ test("reminders: quick add in reminder mode, Recordatorios, Hoy, Más", async ({
   await expect(page.getByText("Horas de silencio")).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Más secciones" })).toBeHidden(); // the sheet closes on navigation
   await shot(page, "09-ajustes-notificaciones");
+});
+
+test("events: Calendario agenda and week, editor with a reminder, shown on Hoy", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Ingresá tu PIN" })).toBeVisible();
+  await typePin(page, E2E.pin);
+  await expect(page.getByRole("heading", { name: "Hoy" })).toBeVisible();
+
+  await page
+    .getByRole("link", { name: /Calendario/ })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Calendario" })).toBeVisible();
+  await expect(page.getByText("Sin eventos")).toBeVisible();
+  await shot(page, "10-calendario-empty");
+
+  // a timed event later today with a 30-minute notice (Buenos Aires time, like the browser context)
+  const now = Number(
+    new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: "America/Buenos_Aires" }).format(new Date()),
+  );
+  const at = Math.min(now + 2, 22);
+  const hh = String(at).padStart(2, "0");
+  await page.getByRole("button", { name: "Nuevo evento" }).click();
+  await page.getByRole("textbox", { name: "Título" }).fill("Cena con Ana");
+  await page.getByRole("button", { name: /^Empieza/ }).click();
+  await page.getByRole("button", { name: hh, exact: true }).click();
+  await page.getByRole("textbox", { name: "Lugar" }).fill("Palermo");
+  await page.getByRole("button", { name: "30 min", exact: true }).click();
+  await shot(page, "11-event-editor");
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByText("Cena con Ana")).toBeVisible();
+  await expect(page.getByText(`${hh}:00–${String(at + 1).padStart(2, "0")}:00`)).toBeVisible();
+  await shot(page, "12-calendario-agenda");
+
+  // an all-day event from quick add's Evento mode
+  await page.getByRole("link", { name: /Hoy/ }).first().click();
+  await page.getByRole("button", { name: "Nueva tarea" }).click();
+  await page.getByRole("radio", { name: "Evento" }).click();
+  await page.getByRole("textbox", { name: "Evento", exact: true }).fill("hoy feriado puente");
+  await page.getByRole("button", { name: "Agregar", exact: true }).click();
+  const agenda = page.getByRole("region", { name: "Agenda de hoy" });
+  await expect(agenda.getByText("feriado puente")).toBeVisible();
+  await expect(agenda.getByText("Cena con Ana")).toBeVisible();
+  await shot(page, "13-hoy-agenda");
+
+  // week view
+  await page
+    .getByRole("link", { name: /Calendario/ })
+    .first()
+    .click();
+  await page.getByRole("radio", { name: "Semana" }).click();
+  await expect(page.getByRole("button", { name: "Cena con Ana" })).toBeVisible();
+  await shot(page, "14-calendario-semana");
+
+  // the event's notice is a reminder (when its time is still ahead), and the change reached the server
+  await page.reload();
+  await page.getByRole("button", { name: "Más", exact: true }).click();
+  await page.getByRole("link", { name: /Recordatorios/ }).click();
+  if (at === now + 2) await expect(page.getByText("Cena con Ana")).toBeVisible();
+
+  // Ajustes → Google Calendar (not configured in E2E: the iCal plan B is offered)
+  await page.getByRole("button", { name: "Más", exact: true }).click();
+  await page.getByRole("link", { name: /Ajustes/ }).click();
+  await page.getByRole("link", { name: /Google Calendar/ }).click();
+  await expect(page.getByRole("heading", { name: "Google Calendar" })).toBeVisible();
+  await shot(page, "15-ajustes-google");
 });
