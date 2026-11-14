@@ -4,8 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { api } from "@/client/api";
-import { useDirect, useSession } from "@/client/queries";
+import { useDirect, useSession, useSettings } from "@/client/queries";
+import type { Settings } from "@/client/types";
 import { Button, Segmented, TextField, Toggle } from "../components/controls";
+import { TimePicker } from "../components/date-picker";
 import { Icon } from "../components/icon";
 import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
@@ -28,6 +30,20 @@ export function SettingsScreen() {
     void currentPushEndpoint().then((e) => setPush(!!e));
     return onInstallable(() => setInstallable(true));
   }, []);
+
+  const testPush = async () => {
+    try {
+      const r = await direct<{ ok: number; failed: number }>("POST", "/api/push/test", {});
+      toast({
+        icon: r.ok ? "check_circle" : "info",
+        message: r.ok
+          ? `Enviada a ${r.ok} ${r.ok === 1 ? "dispositivo" : "dispositivos"}`
+          : "No llegó a ningún dispositivo. Revisá el permiso.",
+      });
+    } catch (e) {
+      toast({ icon: "info", message: (e as Error).message });
+    }
+  };
 
   const togglePush = async (on: boolean) => {
     try {
@@ -77,10 +93,12 @@ export function SettingsScreen() {
           label="Notificaciones en este dispositivo"
           trailing={<Toggle checked={push} onChange={(v) => void togglePush(v)} label="Notificaciones" />}
         />
+        {push && <SheetRow icon="notifications" label="Probar notificación" onClick={() => void testPush()} />}
       </RowGroup>
       {!pushSupported() && (
         <p className="px-1 text-caption text-muted">Este navegador no soporta notificaciones push. Instalá la app desde Chrome.</p>
       )}
+      <NotificationSettings />
 
       <SectionLabel>Sesión</SectionLabel>
       <div className="flex flex-col gap-2">
@@ -121,10 +139,13 @@ function About() {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (!reg) return toast({ icon: "info", message: "Sin service worker en este navegador." });
     await reg.update().catch(() => {});
-    const incoming = reg.installing ?? reg.waiting;
-    if (!incoming) return toast({ icon: "check_circle", message: "Ya tenés la última versión." });
-    toast({ icon: "sync", message: "Actualizando…" });
-    navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+    if (reg.waiting) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+      reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      return toast({ icon: "sync", message: "Actualizando…" });
+    }
+    if (reg.installing) return toast({ icon: "sync", message: "Descargando la versión nueva…" });
+    toast({ icon: "check_circle", message: "Ya tenés la última versión." });
   };
 
   return (
@@ -180,5 +201,78 @@ function TimezonePicker({ current, onDone }: { current: string; onDone: () => vo
         {matches.length === 0 && <p className="px-3.5 py-3 text-body-sm text-muted">No encontré esa zona.</p>}
       </RowGroup>
     </div>
+  );
+}
+
+/** Quiet hours, snooze length and when a late reminder counts as missed (all settings, saved right away). */
+function NotificationSettings() {
+  const settings = useSettings().data;
+  const direct = useDirect();
+  const toast = useToast();
+  const [editing, setEditing] = useState<"start" | "end" | null>(null);
+  if (!settings) return null;
+  const save = (patch: Partial<Settings>) =>
+    direct("PATCH", "/api/settings", patch, [["settings"]]).catch((e) => toast({ icon: "info", message: (e as Error).message }));
+  const quietOn = settings.quietStart !== null;
+  return (
+    <>
+      <RowGroup>
+        <SheetRow
+          icon="dark_mode"
+          label="Horas de silencio"
+          trailing={
+            <Toggle
+              checked={quietOn}
+              onChange={(on) => void save(on ? { quietStart: "23:30", quietEnd: "07:00" } : { quietStart: null, quietEnd: null })}
+              label="Horas de silencio"
+            />
+          }
+        />
+        {quietOn && (
+          <>
+            <SheetRow icon="bedtime" label="Desde" value={settings.quietStart ?? ""} chevron onClick={() => setEditing("start")} />
+            <SheetRow icon="wb_twilight" label="Hasta" value={settings.quietEnd ?? ""} chevron onClick={() => setEditing("end")} />
+          </>
+        )}
+      </RowGroup>
+      <p className="px-1 text-caption text-muted">Los recordatorios no urgentes que caen en ese rato llegan cuando termina.</p>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="px-1 text-caption text-muted">Posponer</span>
+        <Segmented
+          value={String(settings.defaultSnoozeMinutes)}
+          onChange={(v) => void save({ defaultSnoozeMinutes: Number(v) })}
+          options={["5", "10", "15", "30"].map((m) => ({ value: m, label: `${m} min` }))}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <span className="px-1 text-caption text-muted">
+          Si el servidor estuvo caído, un recordatorio atrasado más de esto se marca como perdido
+        </span>
+        <Segmented
+          value={String(settings.missedAfterHours)}
+          onChange={(v) => void save({ missedAfterHours: Number(v) })}
+          options={["6", "12", "24", "48"].map((h) => ({ value: h, label: `${h} h` }))}
+        />
+      </div>
+
+      <BottomSheet open={editing !== null} onClose={() => setEditing(null)} label="Horas de silencio">
+        {editing && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-title text-text">{editing === "start" ? "Silencio desde" : "Silencio hasta"}</h2>
+            <TimePicker
+              value={editing === "start" ? settings.quietStart : settings.quietEnd}
+              onChange={(t) => {
+                if (!t) return;
+                void save(editing === "start" ? { quietStart: t } : { quietEnd: t });
+              }}
+            />
+            <Button size="lg" onClick={() => setEditing(null)}>
+              Listo
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
+    </>
   );
 }

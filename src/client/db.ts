@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Task } from "./types";
+import type { Reminder, Task } from "./types";
 
 /** Last good server response per query key (offline reads). */
 export interface CacheEntry {
@@ -27,7 +27,11 @@ export interface OutboxItem {
 }
 
 /** How to re-apply an optimistic change on top of fresh server data (until the write lands). */
-export type Optimistic = { kind: "task-put"; task: Task } | { kind: "task-remove"; id: string };
+export type Optimistic =
+  | { kind: "task-put"; task: Task }
+  | { kind: "task-remove"; id: string }
+  | { kind: "reminder-put"; reminder: Reminder }
+  | { kind: "reminder-remove"; id: string };
 
 class AgendaDb extends Dexie {
   cache!: EntityTable<CacheEntry, "key">;

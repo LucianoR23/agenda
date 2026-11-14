@@ -2,10 +2,42 @@
 
 import { api } from "@/client/api";
 
-/** Registers /sw.js (production builds only, so dev hot reload is never served from a cache). */
+type UpdateListener = (apply: () => void) => void;
+const updateListeners = new Set<UpdateListener>();
+/** The shell shows "Hay una versión nueva · Actualizar" when a new service worker is waiting. */
+export const onUpdateReady = (l: UpdateListener) => {
+  updateListeners.add(l);
+  return () => void updateListeners.delete(l);
+};
+
+/** Activates the waiting worker; the page reloads once it takes over. */
+function applyUpdate(worker: ServiceWorker) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+  worker.postMessage({ type: "SKIP_WAITING" });
+}
+
+/**
+ * Registers /sw.js (production builds only, so dev hot reload is never served from a cache). A new version waits
+ * until the user taps "Actualizar" instead of swapping code under an open screen.
+ */
 export function registerServiceWorker() {
   if (!("serviceWorker" in navigator) || process.env.NODE_ENV !== "production") return;
-  navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  navigator.serviceWorker
+    .register("/sw.js", { scope: "/", updateViaCache: "none" })
+    .then((reg) => {
+      const notify = (w: ServiceWorker) => {
+        for (const l of updateListeners) l(() => applyUpdate(w));
+      };
+      // a worker installed by a previous visit and still waiting
+      if (reg.waiting && navigator.serviceWorker.controller) notify(reg.waiting);
+      reg.addEventListener("updatefound", () => {
+        const w = reg.installing;
+        w?.addEventListener("statechange", () => {
+          if (w.state === "installed" && navigator.serviceWorker.controller) notify(w);
+        });
+      });
+    })
+    .catch(() => {});
 }
 
 const b64ToBytes = (b64: string) => {
@@ -18,7 +50,6 @@ export const pushSupported = () =>
   typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
 /** Asks permission, subscribes and registers the subscription with the server. */
-/** Per-device push preferences (v1 toggles) are dropped; phase 5 defines reminder delivery. */
 export async function enablePush(vapidPublicKey: string) {
   if (!pushSupported()) throw new Error("Este navegador no soporta notificaciones push.");
   if ((await Notification.requestPermission()) !== "granted") throw new Error("Permiso de notificaciones denegado.");

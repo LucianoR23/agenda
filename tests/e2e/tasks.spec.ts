@@ -57,3 +57,43 @@ test("setup → PIN → quick add → complete → undo", async ({ page }) => {
   await expect(page.getByLabel("Título")).toHaveValue("comprar regalo para Ana");
   await shot(page, "06-editor");
 });
+
+test("reminders: quick add in reminder mode, Recordatorios, Hoy, Más", async ({ page }) => {
+  await page.goto("/");
+  // a fresh browser context: the user exists (first test), so this is a new device that unlocks with the PIN
+  await expect(page.getByRole("heading", { name: "Ingresá tu PIN" })).toBeVisible();
+  await typePin(page, E2E.pin);
+  await expect(page.getByRole("heading", { name: "Hoy" })).toBeVisible();
+
+  await page
+    .getByRole("link", { name: /Recordatorios/ })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Recordatorios" })).toBeVisible();
+  await page.getByRole("button", { name: "Nuevo recordatorio" }).click();
+  const input = page.getByRole("textbox", { name: "Tarea", exact: true });
+  await input.fill("tomar agua");
+  await expect(page.getByText(/Falta la hora/)).toBeVisible();
+  // an hour from now, still today if possible (Buenos Aires time, like the browser context)
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: "America/Buenos_Aires" }).format(new Date()),
+  );
+  const today = hour < 23;
+  await input.fill(today ? `hoy ${hour + 1}:00 tomar agua` : "mañana 10 tomar agua");
+  await shot(page, "07-quick-add-reminder");
+  await page.getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(page.getByText("tomar agua")).toBeVisible();
+  await shot(page, "08-recordatorios");
+
+  if (today) {
+    await page.getByRole("link", { name: /Hoy/ }).first().click();
+    await expect(page.getByRole("region", { name: "Recordatorios de hoy" }).getByText("tomar agua")).toBeVisible();
+  }
+
+  await page.getByRole("button", { name: "Más" }).click();
+  await expect(page.getByRole("link", { name: /Ajustes/ })).toBeVisible();
+  await page.getByRole("link", { name: /Ajustes/ }).click();
+  await expect(page.getByText("Horas de silencio")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Más secciones" })).toBeHidden(); // the sheet closes on navigation
+  await shot(page, "09-ajustes-notificaciones");
+});

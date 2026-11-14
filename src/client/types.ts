@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type * as Rm from "@/contract/reminders";
 import type * as Sy from "@/contract/system";
 import type * as Tk from "@/contract/tasks";
 
@@ -14,6 +15,8 @@ export type TaskQuery = z.infer<typeof Tk.TaskQuery>;
 export type TaskCreate = z.infer<typeof Tk.TaskCreate>;
 export type TaskPatch = z.infer<typeof Tk.TaskPatch>;
 export type CompleteResult = z.infer<typeof Tk.CompleteResult>;
+export type Reminder = z.infer<typeof Rm.Reminder>;
+export type ReminderQuery = z.infer<typeof Rm.ReminderQuery>;
 
 /** A failed API call: the server's `{ error: { code, message, details } }` plus the HTTP status. */
 export interface Problem {

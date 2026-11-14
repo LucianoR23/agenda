@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { localToIso, useReminderActions } from "@/client/reminder-actions";
 import { useTaskActions } from "@/client/task-actions";
 import type { Task, TaskList } from "@/client/types";
 import { Button, FilterChip, Segmented, TextArea, TextField } from "../components/controls";
@@ -9,7 +10,7 @@ import { Icon } from "../components/icon";
 import { useToast } from "../components/overlay";
 import { RowGroup, SheetRow } from "../components/surfaces";
 import { parseQuickAdd } from "../quick-add";
-import { dayLabel, todayLocal } from "../time";
+import { dayLabel, todayLocal, whenLabel } from "../time";
 
 const BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 const DOW_NAME = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
@@ -79,9 +80,19 @@ const fold = (s: string) =>
 // ---------- quick add ----------
 
 /** "+": type naturally, see what was understood as chips, tap a chip to drop it, save. */
-export function QuickAddSheet({ lists, onDone }: { lists: TaskList[]; onDone: () => void }) {
+export function QuickAddSheet({
+  lists,
+  onDone,
+  initialMode = "task",
+}: {
+  lists: TaskList[];
+  onDone: () => void;
+  initialMode?: "task" | "reminder";
+}) {
   const actions = useTaskActions();
+  const reminders = useReminderActions();
   const toast = useToast();
+  const [mode, setMode] = useState<"task" | "reminder">(initialMode);
   const [text, setText] = useState("");
   const [dropped, setDropped] = useState<Set<string>>(new Set());
   const today = todayLocal();
@@ -93,17 +104,41 @@ export function QuickAddSheet({ lists, onDone }: { lists: TaskList[]; onDone: ()
   if (draft.dueDate) chips.push({ key: "date", icon: "event", label: dayLabel(draft.dueDate, today) });
   if (draft.dueTime) chips.push({ key: "time", icon: "schedule", label: draft.dueTime });
   if (draft.rrule) chips.push({ key: "repeat", icon: "repeat", label: repeatLabel(draft.rrule, draft.dueDate) ?? "Se repite" });
-  if (draft.listName)
+  const asReminder = mode === "reminder";
+  if (draft.listName && !asReminder)
     chips.push(
       list
         ? { key: "list", icon: "checklist", label: list.name }
         : { key: "list", icon: "info", label: `No hay lista "${draft.listName}"`, warn: true },
     );
-  if (draft.priority) chips.push({ key: "priority", icon: "flag", label: PRIORITIES[draft.priority]?.label ?? "" });
-  for (const t of draft.tags) chips.push({ key: `tag:${t}`, icon: "label", label: `+${t}` });
+  if (draft.priority)
+    chips.push({
+      key: "priority",
+      icon: "flag",
+      label: asReminder ? (draft.priority === 3 ? "Urgente" : "Normal") : (PRIORITIES[draft.priority]?.label ?? ""),
+    });
+  if (!asReminder) for (const t of draft.tags) chips.push({ key: `tag:${t}`, icon: "label", label: `+${t}` });
+  // a reminder needs a moment: a date (default today) and a time
+  const reminderTime = keep("time") ? draft.dueTime : null;
+  const missingTime = asReminder && !!draft.title && !reminderTime;
 
   const save = () => {
     if (!draft.title) return;
+    if (asReminder) {
+      if (!reminderTime) return;
+      const date = (keep("date") ? draft.dueDate : null) ?? today;
+      const created = reminders.create({
+        title: draft.title,
+        fireAt: localToIso(date, reminderTime),
+        rrule: keep("repeat") ? draft.rrule : null,
+        urgent: draft.priority === 3 && keep("priority"),
+      });
+      toast({ icon: "notifications", message: `Te aviso ${whenLabel(created.fireAt).toLowerCase()}` });
+      setText("");
+      setDropped(new Set());
+      onDone();
+      return;
+    }
     const dueDate = keep("date") ? draft.dueDate : null;
     const created = actions.create({
       title: draft.title,
@@ -131,7 +166,14 @@ export function QuickAddSheet({ lists, onDone }: { lists: TaskList[]; onDone: ()
         save();
       }}
     >
-      <h2 className="text-title text-text">Nueva tarea</h2>
+      <Segmented
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: "task", label: "Tarea" },
+          { value: "reminder", label: "Recordatorio" },
+        ]}
+      />
       <TextField
         label="Tarea"
         autoFocus
@@ -158,8 +200,16 @@ export function QuickAddSheet({ lists, onDone }: { lists: TaskList[]; onDone: ()
           ))}
         </fieldset>
       )}
-      <p className="text-caption text-muted">Fecha y hora en palabras, #lista, !alta / !media / !baja, +etiqueta.</p>
-      <Button size="lg" type="submit" disabled={!draft.title}>
+      {missingTime ? (
+        <p className="text-caption text-danger">Falta la hora: por ejemplo “a las 9” o “18:30”.</p>
+      ) : (
+        <p className="text-caption text-muted">
+          {asReminder
+            ? "Fecha y hora en palabras; !alta = urgente."
+            : "Fecha y hora en palabras, #lista, !alta / !media / !baja, +etiqueta."}
+        </p>
+      )}
+      <Button size="lg" type="submit" disabled={!draft.title || missingTime}>
         Agregar
       </Button>
     </form>

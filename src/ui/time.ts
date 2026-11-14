@@ -64,6 +64,13 @@ export function dayLabel(date: IsoDate, base: IsoDate = todayLocal()) {
   return label;
 }
 
+/** An instant as "Hoy 09:00", "Mañana 08:30", "Jueves 19 10:00" in the user's timezone. */
+export function whenLabel(iso: string, base: IsoDate = todayLocal()) {
+  const z = Temporal.Instant.from(iso).toZonedDateTimeISO(userTimeZone());
+  const day = dayLabel(z.toPlainDate().toString(), base).replace(/ · .*/, "");
+  return `${day} ${z.toPlainTime().toString({ smallestUnit: "minute" })}`;
+}
+
 /** "noviembre 2026". */
 export const monthLabel = (date: IsoDate) => {
   const d = Temporal.PlainDate.from(date);

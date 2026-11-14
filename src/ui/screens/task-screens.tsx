@@ -4,7 +4,8 @@ import { closestCenter, DndContext, type DragEndEvent, PointerSensor, TouchSenso
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useState } from "react";
-import { useDirect, useTaskLists, useTasks } from "@/client/queries";
+import { useDirect, useReminders, useTaskLists, useTasks } from "@/client/queries";
+import { isoInZone } from "@/client/reminder-actions";
 import { useTaskActions } from "@/client/task-actions";
 import type { Task, TaskList, TaskQuery } from "@/client/types";
 import { Button, Fab, FilterChip, Segmented, TextField } from "../components/controls";
@@ -13,13 +14,14 @@ import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
 import { EmptyState, TimelineSkeleton } from "../components/surfaces";
 import { SwipeRow, TaskRow } from "../components/task-row";
-import { dayLabel, todayLocal } from "../time";
+import { dayLabel, todayLocal, userTimeZone } from "../time";
+import { RemindersScreen, useReminderUi } from "./reminder-screens";
 import { QuickAddSheet, RescheduleSheet, TaskEditor } from "./task-sheets";
 
 type Sheet = { kind: "add" } | { kind: "edit"; task: Task } | { kind: "move"; task: Task } | null;
 
 /** Sheets (quick add, editor, reschedule) and the swipe/check actions shared by every task screen. */
-function useTaskUi() {
+function useTaskUi(addMode: "task" | "reminder" = "task") {
   const lists = useTaskLists().data?.lists ?? [];
   const actions = useTaskActions();
   const toast = useToast();
@@ -66,7 +68,7 @@ function useTaskUi() {
   const sheets = (
     <>
       <BottomSheet open={sheet?.kind === "add"} onClose={() => setSheet(null)} label="Nueva tarea">
-        {sheet?.kind === "add" && <QuickAddSheet lists={lists} onDone={() => setSheet(null)} />}
+        {sheet?.kind === "add" && <QuickAddSheet lists={lists} initialMode={addMode} onDone={() => setSheet(null)} />}
       </BottomSheet>
       <BottomSheet open={sheet?.kind === "edit"} onClose={() => setSheet(null)} label="Editar tarea">
         {sheet?.kind === "edit" && <TaskEditor task={sheet.task} lists={lists} onDone={() => setSheet(null)} />}
@@ -79,7 +81,7 @@ function useTaskUi() {
 
   const fab = (
     <div className="fixed right-4 bottom-[calc(88px+env(safe-area-inset-bottom))] z-20 md:bottom-8">
-      <Fab label="Nueva tarea" onClick={() => setSheet({ kind: "add" })} />
+      <Fab label={addMode === "reminder" ? "Nuevo recordatorio" : "Nueva tarea"} onClick={() => setSheet({ kind: "add" })} />
     </div>
   );
 
@@ -96,6 +98,15 @@ function Loading() {
 export function TodayScreen() {
   const today = todayLocal();
   const ui = useTaskUi();
+  const reminderUi = useReminderUi();
+  const dayStart = Temporal.PlainDate.from(today).toZonedDateTime({ timeZone: userTimeZone() });
+  const reminders = (
+    useReminders({
+      view: "all",
+      from: isoInZone(dayStart.toInstant()),
+      to: isoInZone(dayStart.add({ days: 1 }).toInstant().subtract({ milliseconds: 1 })),
+    }).data?.reminders ?? []
+  ).filter((r) => r.status !== "cancelled");
   const todays = useTasks({ view: "today" });
   const overdue = useTasks({ view: "overdue" });
   const all = todays.data?.tasks ?? [];
@@ -109,7 +120,7 @@ export function TodayScreen() {
       <PageTitle title="Hoy" subtitle={dayLabel(today, today).replace("Hoy · ", "")} />
       {loading ? (
         <Loading />
-      ) : late.length + all.length === 0 ? (
+      ) : late.length + all.length + reminders.length === 0 ? (
         <EmptyState
           icon="check_circle"
           title="Nada para hoy"
@@ -136,10 +147,17 @@ export function TodayScreen() {
               {untimed.map((t) => ui.row(t, { showDate: false }))}
             </section>
           )}
+          {reminders.length > 0 && (
+            <section className="flex flex-col gap-2" aria-label="Recordatorios de hoy">
+              <SectionLabel>Recordatorios</SectionLabel>
+              {reminders.map((r) => reminderUi.row(r, { showStatus: r.status !== "scheduled" }))}
+            </section>
+          )}
         </>
       )}
       {ui.fab}
       {ui.sheets}
+      {reminderUi.sheets}
     </div>
   );
 }
@@ -354,4 +372,12 @@ function ListSheet({ list, onDone }: { list: TaskList | null; onDone: (deleted?:
       )}
     </div>
   );
+}
+
+// ---------- Recordatorios ----------
+
+/** Recordatorios, with the "+" opening in reminder mode. */
+export function RemindersTab() {
+  const ui = useTaskUi("reminder");
+  return <RemindersScreen fab={ui.fab} quickAdd={ui.sheets} />;
 }

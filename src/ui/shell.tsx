@@ -12,7 +12,7 @@ import { Banner } from "./components/feedback";
 import { Sidebar, TabBar, tabFor } from "./components/navigation";
 import { BottomSheet, ToastHost, useToast } from "./components/overlay";
 import { TimelineSkeleton } from "./components/surfaces";
-import { registerServiceWorker } from "./pwa";
+import { onUpdateReady, registerServiceWorker } from "./pwa";
 import { SetupScreen, UnlockScreen } from "./screens/auth";
 import { applyTheme, readTheme } from "./theme";
 import { ensureTemporal, setUserTimeZone, userTimeZone } from "./time";
@@ -105,12 +105,22 @@ function Frame({ children }: { children: ReactNode }) {
 function SyncBanners() {
   const sync = useSync();
   const toast = useToast();
+  const [update, setUpdate] = useState<(() => void) | null>(null);
   useEffect(() => onRejected((_item, reason) => toast({ icon: "sync_problem", message: `No se pudo guardar: ${reason}` })), [toast]);
-  if (sync.online) return null;
+  useEffect(() => onUpdateReady((apply) => setUpdate(() => apply)), []);
   return (
-    <Banner kind="offline">
-      Sin conexión. Guardamos tus cambios{sync.pending ? ` (${sync.pending})` : ""} y los subimos cuando vuelvas.
-    </Banner>
+    <>
+      {update && (
+        <Banner kind="info" action="Actualizar" onAction={update}>
+          Hay una versión nueva de Agenda.
+        </Banner>
+      )}
+      {!sync.online && (
+        <Banner kind="offline">
+          Sin conexión. Guardamos tus cambios{sync.pending ? ` (${sync.pending})` : ""} y los subimos cuando vuelvas.
+        </Banner>
+      )}
+    </>
   );
 }
 

@@ -4,7 +4,7 @@ import { QueryClient, skipToken, useQuery, useQueryClient } from "@tanstack/reac
 import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
 import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
-import type { ApiToken, Device, SessionState, Settings, Task, TaskList, TaskQuery } from "./types";
+import type { ApiToken, Device, Reminder, ReminderQuery, SessionState, Settings, Task, TaskList, TaskQuery } from "./types";
 
 const CACHE_DAYS = 14;
 /** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
@@ -62,6 +62,12 @@ export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/
 export const useTokens = () => useCached<{ tokens: ApiToken[] }>(["tokens"], "/api/tokens");
 export const useSettings = () => useCached<Settings>(["settings"], "/api/settings");
 export const useTaskLists = () => useCached<{ lists: TaskList[] }>(["lists"], "/api/lists");
+
+/** Reminders for a view/range; like useTasks, the query object is the cache key. */
+export function useReminders(query: ReminderQuery) {
+  const params = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "") as [string, string][]);
+  return useCached<{ reminders: Reminder[] }>(["reminders", query], `/api/reminders?${params}`);
+}
 
 /** Tasks for a view/filter; the query object is part of the cache key (and drives optimistic updates). */
 export function useTasks(query: TaskQuery) {

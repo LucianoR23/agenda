@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "../cx";
 import type { IconName } from "../icons";
@@ -98,9 +99,9 @@ export function SettingsRow({
   );
   const cls = "flex min-h-16 items-center gap-3 px-3.5 text-left";
   return href ? (
-    <a href={href} className={cls}>
+    <Link href={href} {...(onClick ? { onClick } : {})} className={cls}>
       {inner}
-    </a>
+    </Link>
   ) : (
     <button type="button" onClick={onClick} className={cls}>
       {inner}
