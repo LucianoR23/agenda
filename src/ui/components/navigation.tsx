@@ -8,15 +8,16 @@ import { Icon } from "./icon";
 
 export const TABS: Array<{ key: string; label: string; icon: IconName; href: string }> = [
   { key: "today", label: "Hoy", icon: "today", href: "/" },
+  { key: "inbox", label: "Inbox", icon: "inbox", href: "/inbox" },
   { key: "tasks", label: "Tareas", icon: "checklist", href: "/tareas" },
-  { key: "history", label: "Historial", icon: "calendar_month", href: "/historial" },
-  { key: "metrics", label: "Métricas", icon: "insights", href: "/metricas" },
+  // Historial y métricas become one screen in phase 7 (/metricas stays reachable from there)
+  { key: "history", label: "Historial", icon: "insights", href: "/historial" },
   { key: "settings", label: "Ajustes", icon: "settings", href: "/ajustes" },
 ];
 
 export type Badges = Partial<Record<string, number>>;
 
-/** Small count on a tab icon (e.g. Hoy: proposals ready for my requests). */
+/** Small count on a tab icon (e.g. Inbox: tasks waiting to be sorted). */
 function Badge({ n }: { n?: number | undefined }) {
   if (!n) return null;
   return (
@@ -28,7 +29,7 @@ function Badge({ n }: { n?: number | undefined }) {
     </span>
   );
 }
-const withBadge = (label: string, n?: number) => (n ? `${label}, ${n} ${n === 1 ? "propuesta lista" : "propuestas listas"}` : undefined);
+const withBadge = (label: string, n?: number) => (n ? `${label}, ${n} ${n === 1 ? "pendiente" : "pendientes"}` : undefined);
 
 /** Active tab from the pathname. */
 export const tabFor = (pathname: string) =>

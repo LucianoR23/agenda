@@ -187,8 +187,8 @@ export function ToastHost({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      {/* below sheets (z-40), above the tab bar (z-30) */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(88px+env(safe-area-inset-bottom))] z-[35] mx-auto flex max-w-[560px] flex-col gap-2 px-4 md:bottom-6">
+      {/* below sheets (z-40), above the tab bar (z-30) and the + button */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(160px+env(safe-area-inset-bottom))] z-[35] mx-auto flex max-w-[560px] flex-col gap-2 px-4 md:bottom-6">
         <AnimatePresence>
           {items.map((t) => (
             <motion.div

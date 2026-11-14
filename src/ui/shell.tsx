@@ -4,7 +4,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { onAuthProblem } from "@/client/api";
-import { hydrateFromIdb, makeQueryClient, useSession } from "@/client/queries";
+import { hydrateFromIdb, makeQueryClient, useSession, useTasks } from "@/client/queries";
 import { onRejected, resolveConflict, startSync, useSync } from "@/client/sync";
 import type { SessionState } from "@/client/types";
 import { ConflictCompare } from "./components/extensions";
@@ -81,10 +81,11 @@ function Gate({ children }: { children: ReactNode }) {
 function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const active = tabFor(pathname);
+  const badges = { inbox: useTasks({ view: "inbox" }).data?.tasks.length };
   return (
     <div className="flex min-h-dvh">
       <div className="sticky top-0 hidden h-dvh md:flex">
-        <Sidebar active={active} />
+        <Sidebar active={active} badges={badges} />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-4 px-4 pt-[max(16px,env(safe-area-inset-top))] pb-[calc(96px+env(safe-area-inset-bottom))] md:max-w-[720px] md:pb-10">
@@ -92,7 +93,7 @@ function Frame({ children }: { children: ReactNode }) {
           {children}
         </main>
         <div className="fixed inset-x-0 bottom-0 z-30 md:hidden">
-          <TabBar active={active} />
+          <TabBar active={active} badges={badges} />
         </div>
       </div>
       <Conflicts />

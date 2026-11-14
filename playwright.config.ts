@@ -17,6 +17,8 @@ export const serverEnv = {
   SETUP_CODE: E2E.setupCode,
   APP_VERSION: "e2e",
   DISABLE_WORKER: "1",
+  PORT: String(E2E.port),
+  HOSTNAME: "127.0.0.1",
 };
 
 export default defineConfig({
@@ -37,7 +39,7 @@ export default defineConfig({
     userAgent: "Mozilla/5.0 (Linux; Android 16; SM-S948B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36",
   },
   webServer: {
-    command: `pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && pnpm start --port ${E2E.port}`,
+    command: "pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && node scripts/e2e-server.mjs",
     url: `http://localhost:${E2E.port}/api/health`,
     timeout: 300_000,
     reuseExistingServer: false,

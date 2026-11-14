@@ -281,7 +281,7 @@ const taskRoutes: RouteDef[] = [
     path: "/api/tasks/{id}/reopen",
     tag: "Tasks",
     summary: "Back to open (undo a completion)",
-    description: "Pass `nextId` (from completeTask) to remove the occurrence that completing created.",
+    description: "Also removes the occurrence that completing created (pass `nextId`, or the server finds it), unless it was edited since.",
     access: "user",
     token: "write",
     params: idParam,

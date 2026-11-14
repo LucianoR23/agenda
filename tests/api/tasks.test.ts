@@ -87,6 +87,12 @@ describe("tasks", () => {
     const undo = await user.post(`/api/tasks/${t.id}/reopen`, { nextId: done.body.next.id });
     expect(undo.body.status).toBe("open");
     expect((await user.get(`/api/tasks/${done.body.next.id}`)).status).toBe(404);
+
+    // offline undo: the client doesn't know the next id; the server finds it
+    const again = await user.post(`/api/tasks/${t.id}/complete`, {});
+    await user.post(`/api/tasks/${t.id}/reopen`, {});
+    expect((await user.get(`/api/tasks/${again.body.next.id}`)).status).toBe(404);
+    expect((await user.get("/api/tasks?view=all&status=open")).body.tasks).toHaveLength(1);
   });
 
   it("delete is soft and lists move their tasks to the Inbox; the Inbox can't be deleted", async () => {

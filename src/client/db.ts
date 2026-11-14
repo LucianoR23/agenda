@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { Task } from "./types";
 
 /** Last good server response per query key (offline reads). */
 export interface CacheEntry {
@@ -25,11 +26,8 @@ export interface OutboxItem {
   conflict?: { code?: string | undefined; detail?: string | undefined; current?: unknown } | undefined;
 }
 
-/**
- * How to re-apply an optimistic change on top of fresh server data. v1 kinds (block, task, adjustment) are gone;
- * each v2 entity adds its own kind (tasks in phase 4).
- */
-export type Optimistic = never;
+/** How to re-apply an optimistic change on top of fresh server data (until the write lands). */
+export type Optimistic = { kind: "task-put"; task: Task } | { kind: "task-remove"; id: string };
 
 class AgendaDb extends Dexie {
   cache!: EntityTable<CacheEntry, "key">;

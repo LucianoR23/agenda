@@ -1,5 +1,5 @@
-import { PlaceholderScreen } from "@/ui/screens/placeholder";
+import { TasksScreen } from "@/ui/screens/task-screens";
 
 export default function Page() {
-  return <PlaceholderScreen title="Tareas" icon="checklist" body="Las tareas, listas e Inbox llegan en la fase 4." />;
+  return <TasksScreen />;
 }

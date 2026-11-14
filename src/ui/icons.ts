@@ -69,6 +69,11 @@ export const ICONS = [
   "wb_twilight",
   "dark_mode",
   "light_mode",
+  // tasks
+  "repeat",
+  "inbox",
+  "search",
+  "label",
   // settings & tokens
   "public",
   "content_copy",

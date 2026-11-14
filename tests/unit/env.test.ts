@@ -46,6 +46,7 @@ describe("env", () => {
 
   it("requires https in production and an encryption key with Google", () => {
     expect(() => parseEnv({ ...base, NODE_ENV: "production", APP_ORIGIN: "http://agenda.lemydev.com" })).toThrow(/APP_ORIGIN/);
+    expect(parseEnv({ ...base, NODE_ENV: "production", APP_ORIGIN: "http://localhost:3200" }).APP_ORIGIN).toBe("http://localhost:3200");
     expect(() => parseEnv({ ...base, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "s" })).toThrow(/ENCRYPTION_KEY/);
     expect(() => parseEnv({ ...base, ENCRYPTION_KEY: "dG9vLXNob3J0" })).toThrow(/32 bytes/);
   });

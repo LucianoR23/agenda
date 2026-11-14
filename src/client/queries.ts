@@ -4,7 +4,7 @@ import { QueryClient, skipToken, useQuery, useQueryClient } from "@tanstack/reac
 import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
 import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
-import type { ApiToken, Device, SessionState, Settings } from "./types";
+import type { ApiToken, Device, SessionState, Settings, Task, TaskList, TaskQuery } from "./types";
 
 const CACHE_DAYS = 14;
 /** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
@@ -61,6 +61,13 @@ function useCached<T>(key: unknown[], path: string | null, opts: { refetchInterv
 export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/api/auth/devices");
 export const useTokens = () => useCached<{ tokens: ApiToken[] }>(["tokens"], "/api/tokens");
 export const useSettings = () => useCached<Settings>(["settings"], "/api/settings");
+export const useTaskLists = () => useCached<{ lists: TaskList[] }>(["lists"], "/api/lists");
+
+/** Tasks for a view/filter; the query object is part of the cache key (and drives optimistic updates). */
+export function useTasks(query: TaskQuery) {
+  const params = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "") as [string, string][]);
+  return useCached<{ tasks: Task[] }>(["tasks", query], `/api/tasks?${params}`);
+}
 
 export const useSession = () =>
   useQuery<SessionState, ApiProblem>({

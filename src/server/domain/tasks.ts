@@ -1,6 +1,6 @@
 import { and, arrayContains, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, ne, type SQL, sql } from "drizzle-orm";
 import { one } from "../db/one";
-import { task, taskList } from "../db/schema";
+import { changeLog, task, taskList } from "../db/schema";
 import { type Ctx, sourceOf } from "../http/context";
 import { ApiError, notFound, versionConflict } from "../http/errors";
 import { diffFields, recordChange } from "./changes";
@@ -412,9 +412,28 @@ export async function completeTask(ctx: Ctx, id: string, version?: number) {
   return { task: taskOut(done, ctx), next };
 }
 
+/** The occurrence that completing `id` spawned (recorded in change_log), if it's still open and untouched. */
+async function spawnedBy(ctx: Ctx, id: string, seriesId: string): Promise<string | null> {
+  const [log] = await ctx.db
+    .select({ entityId: changeLog.entityId })
+    .from(changeLog)
+    .where(and(eq(changeLog.entity, "task"), eq(changeLog.action, "create"), sql`${changeLog.diff} -> 'after' ->> 'from' = ${id}`))
+    .orderBy(desc(changeLog.id))
+    .limit(1);
+  if (!log) return null;
+  const [next] = await ctx.db
+    .select({ id: task.id })
+    .from(task)
+    .where(
+      and(eq(task.id, log.entityId), eq(task.seriesId, seriesId), eq(task.status, "open"), eq(task.version, 1), isNull(task.deletedAt)),
+    );
+  return next?.id ?? null;
+}
+
 /**
- * Back to open ("Deshacer"). `nextId`: the occurrence that completing created, removed again so undo leaves no
- * duplicate (only if it's still open and in the same series).
+ * Back to open ("Deshacer"). The occurrence that completing it created is removed again so undo leaves no
+ * duplicate: `nextId` when the client knows it, otherwise found through change_log (works for offline undo). An
+ * occurrence that was already edited is kept.
  */
 export async function reopenTask(ctx: Ctx, id: string, nextId?: string) {
   const t = await findTask(ctx, id, true);
@@ -425,13 +444,14 @@ export async function reopenTask(ctx: Ctx, id: string, nextId?: string) {
       .where(eq(task.id, id));
     await recordChange(ctx, "task", id, "update", { fields: { status: { from: t.status, to: "open" } } });
   }
-  if (nextId && t.seriesId) {
+  const spawned = t.seriesId ? (nextId ?? (await spawnedBy(ctx, id, t.seriesId))) : null;
+  if (spawned && t.seriesId) {
     const removed = await ctx.db
       .update(task)
       .set({ deletedAt: toDate(ctx.now), updatedBy: sourceOf(ctx.caller) })
-      .where(and(eq(task.id, nextId), eq(task.seriesId, t.seriesId), eq(task.status, "open"), isNull(task.deletedAt)))
+      .where(and(eq(task.id, spawned), eq(task.seriesId, t.seriesId), eq(task.status, "open"), isNull(task.deletedAt)))
       .returning({ id: task.id });
-    if (removed[0]) await recordChange(ctx, "task", nextId, "delete", { after: { undoOf: id } });
+    if (removed[0]) await recordChange(ctx, "task", spawned, "delete", { after: { undoOf: id } });
   }
   return getTask(ctx, id);
 }

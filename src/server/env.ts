@@ -68,7 +68,9 @@ const Env = z
       });
     if (e.GOOGLE_CLIENT_ID && !e.ENCRYPTION_KEY)
       ctx.addIssue({ code: "custom", path: ["ENCRYPTION_KEY"], message: "required when Google Calendar is configured" });
-    if (e.NODE_ENV === "production" && !e.APP_ORIGIN.startsWith("https://"))
+    // production builds run on https; plain http only on the loopback (E2E tests, local checks)
+    const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(e.APP_ORIGIN);
+    if (e.NODE_ENV === "production" && !e.APP_ORIGIN.startsWith("https://") && !local)
       ctx.addIssue({ code: "custom", path: ["APP_ORIGIN"], message: "must be https in production" });
   });
 

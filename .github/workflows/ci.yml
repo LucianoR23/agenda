@@ -57,10 +57,39 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Unit tests (API integration tests return in phase 2)
+      - name: Unit + integration + contract tests (real Postgres 18)
         run: pnpm test:coverage
 
-  # e2e job removed in phase 0 (v1 flows deleted); it returns with the first v2 screens.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18-trixie
+        env:
+          POSTGRES_USER: agenda
+          POSTGRES_PASSWORD: agenda
+          POSTGRES_DB: agenda_test
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agenda -d agenda_test" --health-interval 2s --health-retries 20
+    env:
+      TZ: America/Buenos_Aires
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Mobile E2E (production standalone build, Android viewport)
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-results
+          path: test-results
 
   docker:
     runs-on: ubuntu-latest

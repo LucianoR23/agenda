@@ -3651,7 +3651,7 @@ paths:
         - Tasks
       summary: Back to open (undo a completion)
       description: |-
-        Pass `nextId` (from completeTask) to remove the occurrence that completing created.
+        Also removes the occurrence that completing created (pass `nextId`, or the server finds it), unless it was edited since.
 
         **Actors:** user, API token with `write`.
       security:

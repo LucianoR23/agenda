@@ -258,3 +258,23 @@ export function TextField({
     </label>
   );
 }
+
+/** Multi-line companion of TextField (notes). Grows with its content up to `rows`. */
+export function TextArea({
+  label,
+  hideLabel = true,
+  className,
+  rows = 3,
+  ...rest
+}: { label: string; hideLabel?: boolean } & Omit<ComponentProps<"textarea">, "aria-label">) {
+  return (
+    <label className={cx("flex flex-col gap-1.5", className)}>
+      <span className={hideLabel ? "sr-only" : "text-caption text-muted"}>{label}</span>
+      <textarea
+        {...rest}
+        rows={rows}
+        className="w-full resize-y rounded-md border border-border2 bg-surface px-3.5 py-3 text-body text-text outline-none placeholder:text-muted focus:border-accent"
+      />
+    </label>
+  );
+}

@@ -3,8 +3,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { uuidv7 } from "uuidv7";
+import { todayLocal } from "@/ui/time";
 import { ApiProblem, api } from "./api";
 import { idb, type Optimistic, type OutboxItem } from "./db";
+import { putTask, removeTask } from "./task-cache";
+import type { Task, TaskList, TaskQuery } from "./types";
 
 // ---------- status store ----------
 
@@ -49,16 +52,39 @@ async function refreshCounts() {
 
 // ---------- optimistic edits ----------
 
-/** Applies one optimistic change to whatever is in the query cache. No kinds yet (see `Optimistic`). */
-function applyOne(_qc: QueryClient, _o: Optimistic) {}
+type TaskListData = { tasks: Task[] };
+type ListsData = { lists: TaskList[] };
+
+const inboxIdOf = (qc: QueryClient) => qc.getQueryData<ListsData>(["lists"])?.lists.find((l) => l.isInbox)?.id ?? null;
+
+/** Applies an optimistic change to one fetched task list (key `["tasks", query]`). */
+function applyToTasks(qc: QueryClient, data: TaskListData, query: TaskQuery, o: Optimistic): TaskListData {
+  if (o.kind === "task-remove") return { tasks: removeTask(data.tasks, o.id) };
+  return { tasks: putTask(data.tasks, o.task, query, todayLocal(), inboxIdOf(qc)) };
+}
+
+/** Applies one optimistic change to every cached task query. */
+function applyOne(qc: QueryClient, o: Optimistic) {
+  for (const q of qc.getQueryCache().findAll({ queryKey: ["tasks"] })) {
+    const data = q.state.data as TaskListData | undefined;
+    if (data) qc.setQueryData(q.queryKey, applyToTasks(qc, data, (q.queryKey[1] ?? {}) as TaskQuery, o));
+  }
+}
+
+let pendingQc: QueryClient | null = null;
 
 /** Queued (not yet sent) edits applied to freshly fetched data, so a refetch never "undoes" them. */
-export async function withPending<T>(_key: unknown[], data: T): Promise<T> {
-  return data;
+export async function withPending<T>(key: unknown[], data: T): Promise<T> {
+  if (key[0] !== "tasks" || !pendingQc) return data;
+  const items = (await idb().outbox.orderBy("createdAt").toArray()).filter((i) => i.state === "pending" && i.optimistic);
+  let out = data as unknown as TaskListData;
+  for (const i of items) if (i.optimistic) out = applyToTasks(pendingQc, out, (key[1] ?? {}) as TaskQuery, i.optimistic);
+  return out as unknown as T;
 }
 
 /** Re-applies queued edits to what is already in the query cache (after hydrating from IndexedDB). */
 export async function reapplyPending(qc: QueryClient) {
+  pendingQc = qc;
   const items = await idb().outbox.orderBy("createdAt").toArray();
   for (const i of items) if (i.optimistic && i.state === "pending") applyOne(qc, i.optimistic);
 }
@@ -153,6 +179,7 @@ const notifyRejected = (item: OutboxItem, reason: string) => {
 
 /** Wires connectivity events and a periodic retry. Call once on the client. */
 export function startSync(qc: QueryClient) {
+  pendingQc = qc;
   try {
     const last = localStorage.getItem("agenda:lastSync");
     if (last) set({ lastSync: Number(last) });
