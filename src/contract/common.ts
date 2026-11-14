@@ -32,6 +32,34 @@ export const Timestamp = z.iso.datetime({ offset: true }).openapi("Timestamp", {
   example: "2026-10-19T07:00:12.345-03:00",
 });
 
+/**
+ * Forgiving date-time input (Sunday): ISO 8601 with or without offset. Without one it's the user's wall time
+ * (`2026-11-14T09:00` = 09:00 in Buenos Aires).
+ */
+export const DateTimeInput = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?([Zz]|[+-]\d{2}:\d{2})?$/, "Expected an ISO date-time, e.g. 2026-11-14T09:00")
+  .refine((s) => !Number.isNaN(new Date(`${s.slice(0, 16)}:00Z`).getTime()), "Invalid date-time")
+  .openapi("DateTimeInput", {
+    description: "ISO 8601 date-time. With offset (`-03:00`, `Z`) it's that instant; without, the user's local time.",
+    example: "2026-11-14T09:00",
+  });
+
+/** Caller-chosen idempotency handle on creates. */
+export const ClientId = z.string().trim().min(1).max(100).openapi("ClientId", {
+  description:
+    "Your own id for this item (≤ 100 chars). Sending the same clientId again doesn't duplicate: it returns the existing item (200), updated with the fields you sent.",
+  example: "sunday-2026-11-14-contador",
+});
+
+/** Human-readable time in Spanish, for reading back to the user. */
+export const WhenText = z.string().nullable().openapi({
+  description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.',
+  example: "jueves 14 de noviembre, 09:00",
+});
+
+export const AppUrl = z.url().openapi({ description: "Opens it in the agenda app." });
+
 export const Uuid = z.uuid().openapi("Uuid", { example: "019a0a6e-5c3e-7b2a-9d41-3f0c8a1b2c3d" });
 
 /** Who created or last changed something: Lemy in the app, an API token (Sunday), or the app itself. */

@@ -15,6 +15,7 @@ import type { Caller, Ctx, Handler, HandlerResult } from "./context";
 import { ApiError, validation } from "./errors";
 import { complete, release, reserve } from "./idempotency";
 import { clientIp } from "./ip";
+import { limitToken } from "./ratelimit";
 
 type Compiled = { def: RouteDef; regex: RegExp; keys: string[]; literals: number };
 
@@ -123,6 +124,7 @@ async function authenticate(
     const m = /^Bearer\s+(\S+)$/i.exec(authz);
     const token = m?.[1] ? await authenticateToken(db, m[1], now, ip) : null;
     if (!token) throw new ApiError(401, "UNAUTHORIZED", "Token inválido, revocado o vencido.");
+    limitToken(token.id, now.epochMilliseconds);
     if (route.access === "public") return { kind: "token", tokenId: token.id, name: token.name, scopes: token.scopes };
     if (!route.token) throw new ApiError(403, "FORBIDDEN", "Esta operación no está disponible para tokens de API.");
     if (!token.scopes.includes(route.token))
@@ -140,8 +142,50 @@ async function authenticate(
   throw new ApiError(401, "UNAUTHORIZED");
 }
 
+// ---------- CORS (docs/v2/04: browser-side tool servers in Open WebUI) ----------
+
+const CORS_METHODS = "GET, POST, PUT, PATCH, DELETE";
+const CORS_HEADERS = "Authorization, Content-Type, Idempotency-Key, If-Match";
+const CORS_EXPOSE = "ETag, Retry-After, X-Request-Id, Idempotent-Replayed";
+
+/** The request's Origin when it's in CORS_ALLOWED_ORIGINS. No credentials: token calls carry no cookies. */
+function allowedOrigin(req: Request): string | null {
+  const origin = req.headers.get("origin");
+  return origin && env().CORS_ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
+function preflight(req: Request): Response {
+  const origin = allowedOrigin(req);
+  const requestId = `req_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+  const method = req.headers.get("access-control-request-method")?.toUpperCase() ?? "";
+  if (!origin || !CORS_METHODS.split(", ").includes(method))
+    return respond(403, new ApiError(403, "ORIGIN_NOT_ALLOWED").toBody(requestId), requestId, { Vary: "Origin" });
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": CORS_METHODS,
+      "Access-Control-Allow-Headers": CORS_HEADERS,
+      "Access-Control-Max-Age": "600",
+      Vary: "Origin",
+    },
+  });
+}
+
 /** Entry point for every /api request (the catch-all route and the tests call this). */
 export async function handle(req: Request): Promise<Response> {
+  if (req.method.toUpperCase() === "OPTIONS") return preflight(req);
+  const res = await dispatch(req);
+  const origin = allowedOrigin(req);
+  res.headers.append("Vary", "Origin");
+  if (origin) {
+    res.headers.set("Access-Control-Allow-Origin", origin);
+    res.headers.set("Access-Control-Expose-Headers", CORS_EXPOSE);
+  }
+  return res;
+}
+
+async function dispatch(req: Request): Promise<Response> {
   const requestId = `req_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
@@ -173,16 +217,18 @@ export async function handle(req: Request): Promise<Response> {
     let parsedBody: unknown;
     if (route.body) {
       const type = req.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-      if (type !== "application/json") throw new ApiError(415, "UNSUPPORTED_MEDIA_TYPE");
       rawBody = await req.text();
+      if (rawBody && type !== "application/json") throw new ApiError(415, "UNSUPPORTED_MEDIA_TYPE");
       let json: unknown;
       try {
         json = rawBody ? JSON.parse(rawBody) : undefined;
       } catch {
         throw validation([{ path: "/", message: "Body is not valid JSON" }]);
       }
-      if (json === undefined) errors.push({ path: "/", message: "Body is required" });
-      else parsedBody = parse(route.body, json, "", errors);
+      // no body = `{}`: actions whose fields are all optional (complete, snooze, log) can be called bare
+      const empty = json === undefined && route.body.safeParse({}).success;
+      if (json === undefined && !empty) errors.push({ path: "/", message: "Body is required" });
+      else parsedBody = parse(route.body, empty ? {} : json, "", errors);
     }
     if (errors.length) throw validation(errors);
     const ifMatch = route.ifMatch ? parseIfMatch(req.headers.get("if-match")) : null;

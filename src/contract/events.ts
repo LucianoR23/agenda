@@ -1,4 +1,4 @@
-import { ItemSource, LocalDate, Mutable, orNull, Timestamp, Uuid } from "./common";
+import { AppUrl, ClientId, DateTimeInput, ItemSource, LocalDate, Mutable, orNull, Timestamp, Uuid, WhenText } from "./common";
 import { z } from "./zod";
 
 const Rrule = z.string().max(300).openapi({
@@ -26,10 +26,12 @@ export const Event = z
     endsAt: orNull(Timestamp),
     startDate: orNull(LocalDate).openapi({ description: "All-day events." }),
     endDate: orNull(LocalDate).openapi({ description: "All-day events: exclusive (a one-day event ends the next day)." }),
+    whenText: WhenText,
     timezone: z.string().openapi({ description: "IANA zone the event lives in (recurrence expansion)." }),
     rrule: Rrule.nullable(),
     reminderOffsets: Offsets,
     source: ItemSource,
+    url: AppUrl,
     ...Mutable,
   })
   .openapi("Event");
@@ -43,12 +45,13 @@ export const EventCreate = z
     notes: z.string().max(10_000).optional(),
     location: z.string().max(500).optional(),
     allDay: z.boolean().optional().openapi({ description: "true → `startDate` (+ `endDate`); otherwise `startsAt` (+ `endsAt`)." }),
-    startsAt: Timestamp.optional(),
-    endsAt: Timestamp.optional(),
+    startsAt: DateTimeInput.optional(),
+    endsAt: DateTimeInput.optional().openapi({ description: "Default: no end time." }),
     startDate: LocalDate.optional(),
     endDate: LocalDate.optional().openapi({ description: "Exclusive; default the day after `startDate`." }),
     rrule: Rrule.optional(),
     reminderOffsets: Offsets.optional(),
+    clientId: ClientId.optional(),
   })
   .openapi("EventCreate");
 
@@ -58,8 +61,8 @@ export const EventPatch = z
     notes: z.string().max(10_000).nullable().optional(),
     location: z.string().max(500).nullable().optional(),
     allDay: z.boolean().optional(),
-    startsAt: orNull(Timestamp).optional(),
-    endsAt: orNull(Timestamp).optional(),
+    startsAt: orNull(DateTimeInput).optional(),
+    endsAt: orNull(DateTimeInput).optional(),
     startDate: orNull(LocalDate).optional(),
     endDate: orNull(LocalDate).optional(),
     rrule: Rrule.nullable().optional(),
@@ -90,12 +93,14 @@ export const AgendaEvent = z
     endsAt: orNull(Timestamp),
     startDate: orNull(LocalDate),
     endDate: orNull(LocalDate),
+    whenText: WhenText,
     recurring: z.boolean(),
     rrule: z.string().nullable(),
     reminderOffsets: z.array(z.int()),
     tentative: z.boolean(),
     htmlLink: z.string().nullable().openapi({ description: "Open in Google Calendar." }),
     calendar: orNull(CalendarRef),
+    url: AppUrl,
   })
   .openapi("AgendaEvent");
 

@@ -11,6 +11,7 @@ const contador = {
   title: "Llamar al contador",
   body: null,
   fireAt: "2026-11-17T09:00:00.000-03:00",
+  whenText: "martes 17 de noviembre, 09:00",
   rrule: null,
   status: "scheduled" as const,
   urgent: false,
@@ -20,12 +21,21 @@ const contador = {
   snoozedFrom: null,
   lastFiredAt: null,
   source: "user" as const,
+  url: ex.appUrl(`/recordatorios?reminder=${ex.uid(40)}`),
   version: 1,
   createdAt: at,
   updatedAt: at,
   updatedBy: "user" as const,
 };
-const pastilla = { ...contador, id: ex.uid(41), title: "Tomar la pastilla", fireAt: "2026-11-17T08:00:00.000-03:00", rrule: "FREQ=DAILY" };
+const pastilla = {
+  ...contador,
+  id: ex.uid(41),
+  title: "Tomar la pastilla",
+  fireAt: "2026-11-17T08:00:00.000-03:00",
+  whenText: "martes 17 de noviembre, 08:00",
+  rrule: "FREQ=DAILY",
+  url: ex.appUrl(`/recordatorios?reminder=${ex.uid(41)}`),
+};
 
 const idParam = z.strictObject({ id: Uuid });
 
@@ -71,11 +81,18 @@ export const reminderRoutes: RouteDef[] = [
     tag: "Reminders",
     summary: "Push notification at a moment",
     description:
-      "`fireAt` with its offset. Optional RRULE (hourly to yearly), `urgent` (ignores quiet hours) and `taskId` (Listo also completes the task).",
+      "`fireAt` in the future, with or without offset (without = the user's local time). Optional RRULE (hourly to yearly), `urgent` (ignores quiet hours) and `taskId` (Listo also completes the task).",
     access: "user",
     token: "write",
     body: ReminderCreate,
-    responses: { 201: { description: "Created.", schema: Reminder } },
+    responses: {
+      200: {
+        description: "Same `clientId` as an earlier create: that item, updated with the fields sent (no duplicate).",
+        schema: Reminder,
+      },
+      201: { description: "Created.", schema: Reminder },
+      409: { description: "`CONFLICT`: the clientId belonged to a deleted reminder." },
+    },
     exchanges: [
       {
         name: "create",

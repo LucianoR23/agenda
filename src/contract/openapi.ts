@@ -4,15 +4,18 @@ import { ErrorBody } from "./common";
 import type { Exchange, ResponseDef, RouteDef } from "./route-def";
 import { calendarRoutes, eventRoutes } from "./routes/events";
 import { pushRoutes, reminderRoutes } from "./routes/reminders";
+import { sundayRoutes } from "./routes/sunday";
 import { systemRoutes } from "./routes/system";
 import { taskRoutesAll } from "./routes/tasks";
 import { habitRoutes, reviewRoutes, sleepRoutes } from "./routes/tracking";
+import { SUNDAY_GUIDE, SUNDAY_OPERATIONS, type SundayOperation } from "./sunday";
 import { z } from "./zod";
 
 export const API_VERSION = "2.0.0-alpha";
 
 export const routes: RouteDef[] = [
   ...systemRoutes,
+  ...sundayRoutes,
   ...pushRoutes,
   ...taskRoutesAll,
   ...reminderRoutes,
@@ -25,8 +28,21 @@ export const routes: RouteDef[] = [
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
-const security = (r: RouteDef): NonNullable<RouteConfig["security"]> =>
-  r.access === "user" ? [{ session: [] }, ...(r.token ? [{ apiToken: [r.token] }] : [])] : [];
+/** `full`: openapi.yaml / openapi.json (app + Sunday). `sunday`: only Sunday's tools, token auth only. */
+export type Audience = "full" | "sunday";
+
+const SUNDAY = new Set<string>(SUNDAY_OPERATIONS);
+export const isSunday = (r: RouteDef) => SUNDAY.has(r.operationId);
+export const sundayRouteList = () => routes.filter(isSunday);
+/** Usage guidance for the model (SUNDAY_GUIDE), empty for app-only routes. */
+const guide = (r: RouteDef): string => (isSunday(r) ? SUNDAY_GUIDE[r.operationId as SundayOperation] : "");
+
+const security = (r: RouteDef, audience: Audience): NonNullable<RouteConfig["security"]> =>
+  audience === "sunday"
+    ? [{ apiToken: [r.token ?? "read"] }]
+    : r.access === "user"
+      ? [{ session: [] }, ...(r.token ? [{ apiToken: [r.token] }] : [])]
+      : [];
 
 const actors = (r: RouteDef): string[] =>
   r.access === "user"
@@ -61,6 +77,10 @@ export function effectiveResponses(r: RouteDef): Record<number, ResponseDef> {
         : "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin).",
     );
   }
+  if (r.token)
+    res[429] = append(res[429], "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day.", {
+      headers: ["Retry-After"],
+    });
   if (WRITE_METHODS.has(r.method)) {
     res[409] = append(res[409], "`IDEMPOTENCY_IN_PROGRESS`.");
     res[422] = append(res[422], "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body.");
@@ -68,54 +88,60 @@ export function effectiveResponses(r: RouteDef): Record<number, ResponseDef> {
   return res;
 }
 
-export function buildRegistry() {
+export function buildRegistry(audience: Audience = "full") {
   const registry = new OpenAPIRegistry();
+  const sunday = audience === "sunday";
 
-  registry.registerComponent("securitySchemes", "session", {
-    type: "apiKey",
-    in: "cookie",
-    name: "agenda_session",
-    description: "Trusted-device session cookie. Actor = `user`.",
-  });
+  if (!sunday)
+    registry.registerComponent("securitySchemes", "session", {
+      type: "apiKey",
+      in: "cookie",
+      name: "agenda_session",
+      description: "Trusted-device session cookie. Actor = `user`.",
+    });
   registry.registerComponent("securitySchemes", "apiToken", {
     type: "http",
     scheme: "bearer",
     description: "Named API token `agd_…` (Ajustes → Tokens de API). Scopes: `read`, `write`, `notify`. Actor = `sunday`.",
   });
 
-  const IdempotencyKey = registry.registerParameter(
-    "IdempotencyKey",
-    z
-      .string()
-      .min(1)
-      .max(200)
-      .optional()
-      .openapi({
-        param: { name: "Idempotency-Key", in: "header" },
-        description: "Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.",
-        example: "019a0a6e-1c00-7000-8000-000000000001",
-      }),
-  );
-  // registered only when a route uses it, so the spec has no unused components
-  const IfMatch = routes.some((r) => r.ifMatch)
-    ? registry.registerParameter(
-        "IfMatch",
+  const IdempotencyKey = sunday
+    ? undefined
+    : registry.registerParameter(
+        "IdempotencyKey",
         z
           .string()
+          .min(1)
+          .max(200)
           .optional()
           .openapi({
-            param: { name: "If-Match", in: "header" },
-            description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `VERSION_CONFLICT` with the current resource.',
-            example: '"7"',
+            param: { name: "Idempotency-Key", in: "header" },
+            description: "Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.",
+            example: "019a0a6e-1c00-7000-8000-000000000001",
           }),
-      )
-    : undefined;
+      );
+  // registered only when a route uses it, so the spec has no unused components
+  const IfMatch =
+    !sunday && routes.some((r) => r.ifMatch)
+      ? registry.registerParameter(
+          "IfMatch",
+          z
+            .string()
+            .optional()
+            .openapi({
+              param: { name: "If-Match", in: "header" },
+              description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `VERSION_CONFLICT` with the current resource.',
+              example: '"7"',
+            }),
+        )
+      : undefined;
 
   registry.register("Error", ErrorBody);
 
-  for (const r of routes) {
+  // Sunday's tools get no header parameters: Open WebUI would offer them to the model (clientId covers retries)
+  for (const r of sunday ? sundayRouteList() : routes) {
     const headers: ZodType[] = [];
-    if (WRITE_METHODS.has(r.method)) headers.push(IdempotencyKey);
+    if (WRITE_METHODS.has(r.method) && IdempotencyKey) headers.push(IdempotencyKey);
     if (r.ifMatch && IfMatch) headers.push(IfMatch);
 
     const bodyExamples = Object.fromEntries(
@@ -150,11 +176,13 @@ export function buildRegistry() {
       method: r.method,
       path: r.path,
       operationId: r.operationId,
-      tags: [r.tag],
+      tags: sunday ? [r.tag] : isSunday(r) ? [r.tag, "sunday"] : [r.tag],
       summary: r.summary,
-      description: [r.description, `**Actors:** ${actors(r).join(", ")}.`].filter(Boolean).join("\n\n"),
-      security: security(r),
-      "x-actors": actors(r),
+      description: sunday
+        ? [r.description ?? r.summary, guide(r)].filter(Boolean).join("\n\n")
+        : [r.description, guide(r), `**Actors:** ${actors(r).join(", ")}.`].filter(Boolean).join("\n\n"),
+      security: security(r, audience),
+      ...(sunday ? {} : { "x-actors": actors(r) }),
       request: {
         ...(r.params ? { params: r.params } : {}),
         ...(r.query ? { query: r.query } : {}),
@@ -181,8 +209,30 @@ export function buildRegistry() {
   return registry;
 }
 
-export function generateOpenApiDocument() {
-  const generator = new OpenApiGeneratorV31(buildRegistry().definitions, { sortComponents: "alphabetically" });
+const DOMAIN_TAGS = ["Tasks", "Reminders", "Events", "Habits", "Sleep", "Review"];
+
+export function generateOpenApiDocument(audience: Audience = "full") {
+  const generator = new OpenApiGeneratorV31(buildRegistry(audience).definitions, { sortComponents: "alphabetically" });
+  if (audience === "sunday")
+    return generator.generateDocument({
+      openapi: "3.1.0",
+      info: {
+        title: "Agenda de Lemy",
+        version: API_VERSION,
+        description: [
+          "Lemy's personal agenda: tasks, reminders, events (his own plus Google Calendar, read-only), habits, sleep and the day's review. Times are in his timezone, America/Buenos_Aires.",
+          "",
+          "- Unsure what day it is? Call getNow before turning hoy/mañana/el viernes into dates.",
+          "- To change or delete something, get its id first with searchAgenda (or a list operation).",
+          "- Date-times may omit the offset (`2026-11-14T09:00`): that's Lemy's local time.",
+          "- On creates, send a `clientId` of your own: retrying with it never duplicates.",
+          "- Every item carries `whenText` (a Spanish date ready to read back) and `url` (opens it in the app).",
+          "- Errors come as `{ error: { code, message } }`; `message` says, in Spanish, what to do next.",
+        ].join("\n"),
+      },
+      servers: [{ url: "https://agenda.lemydev.com" }],
+      tags: [{ name: "Assistant" }, ...DOMAIN_TAGS.map((name) => ({ name }))],
+    });
   return generator.generateDocument({
     openapi: "3.1.0",
     info: {
@@ -193,24 +243,23 @@ export function generateOpenApiDocument() {
         "",
         '- **Errors:** `{ "error": { "code", "message", "details"?, "requestId" } }`; `message` is a Spanish sentence that says what to do.',
         "- **Concurrency:** resources carry `version` + `ETag`; writes accept `If-Match` or `version` in the body.",
-        "- **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH.",
+        "- **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH; creates also take `clientId`.",
+        "- **Sunday:** operations tagged `sunday` make up `/api/openapi.sunday.json`.",
         "- Unknown fields are rejected everywhere.",
       ].join("\n"),
     },
     servers: [{ url: "https://agenda.lemydev.com" }, { url: "http://localhost:3000" }],
     tags: [
-      { name: "Tasks" },
-      { name: "Reminders" },
-      { name: "Events" },
+      { name: "Assistant" },
+      ...DOMAIN_TAGS.slice(0, 3).map((name) => ({ name })),
       { name: "Calendars" },
-      { name: "Habits" },
-      { name: "Sleep" },
-      { name: "Review" },
+      ...DOMAIN_TAGS.slice(3).map((name) => ({ name })),
       { name: "Auth" },
       { name: "Settings" },
       { name: "Tokens" },
       { name: "Push" },
       { name: "Ops" },
+      { name: "sunday", description: "Published to Sunday (Open WebUI) in /api/openapi.sunday.json." },
     ],
   });
 }

@@ -7,6 +7,7 @@ import * as calendars from "../calendar/service";
 import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
+import * as assistant from "../domain/assistant";
 import * as events from "../domain/events";
 import * as habits from "../domain/habits";
 import { overview } from "../domain/overview";
@@ -24,6 +25,7 @@ import { sendNotice } from "../push";
 
 let openApiFull: unknown = null;
 let openApiCompact: unknown = null;
+let openApiSunday: unknown = null;
 
 export const handlers: Record<string, Handler> = {
   // ---------- ops ----------
@@ -46,6 +48,15 @@ export const handlers: Record<string, Handler> = {
     openApiCompact ??= withoutExamples(openApiFull);
     return json(200, query.examples === "true" ? openApiFull : openApiCompact, { "Cache-Control": "public, max-age=300" });
   },
+
+  openapiSunday: async () => {
+    openApiSunday ??= { ...withoutExamples(generateOpenApiDocument("sunday")), servers: [{ url: new URL(env().APP_ORIGIN).origin }] };
+    return json(200, openApiSunday, { "Cache-Control": "public, max-age=300" });
+  },
+
+  // ---------- assistant ----------
+  getNow: async (ctx) => json(200, assistant.now(ctx)),
+  sendPushNotification: async (ctx, { body }) => json(200, await assistant.notify(ctx, body)),
 
   // ---------- push ----------
   pushSubscribe: async (ctx, { body }) => {
@@ -118,7 +129,10 @@ export const handlers: Record<string, Handler> = {
   deleteTaskList: async (ctx, { params }) => json(200, await tasks.deleteList(ctx, params.id)),
   listTasks: async (ctx, { query }) => json(200, { tasks: await tasks.listTasks(ctx, query) }),
   getTask: async (ctx, { params }) => json(200, await tasks.getTask(ctx, params.id)),
-  createTask: async (ctx, { body }) => json(201, await tasks.createTask(ctx, body)),
+  createTask: async (ctx, { body }) => {
+    const r = await tasks.createTask(ctx, body);
+    return json(r.created ? 201 : 200, r.reminder ? { ...r.task, reminder: r.reminder } : r.task);
+  },
   updateTask: async (ctx, { params, body }) => json(200, await tasks.updateTask(ctx, params.id, body)),
   completeTask: async (ctx, { params, body }) => json(200, await tasks.completeTask(ctx, params.id, body.version)),
   reopenTask: async (ctx, { params, body }) => json(200, await tasks.reopenTask(ctx, params.id, body.nextId)),
@@ -144,7 +158,10 @@ export const handlers: Record<string, Handler> = {
   // ---------- reminders ----------
   listReminders: async (ctx, { query }) => json(200, { reminders: await reminders.listReminders(ctx, query) }),
   getReminder: async (ctx, { params }) => json(200, await reminders.getReminder(ctx, params.id)),
-  createReminder: async (ctx, { body }) => json(201, await reminders.createReminder(ctx, body)),
+  createReminder: async (ctx, { body }) => {
+    const r = await reminders.createReminder(ctx, body);
+    return json(r.created ? 201 : 200, r.reminder);
+  },
   updateReminder: async (ctx, { params, body }) => json(200, await reminders.updateReminder(ctx, params.id, body)),
   snoozeReminder: async (ctx, { params, body }) => json(200, await reminders.snoozeReminder(ctx, params.id, body)),
   doneReminder: async (ctx, { params }) => json(200, await reminders.doneReminder(ctx, params.id)),
@@ -157,7 +174,10 @@ export const handlers: Record<string, Handler> = {
   getAgendaOverview: async (ctx, { query }) => json(200, await overview(ctx, query)),
   listEvents: async (ctx, { query }) => json(200, { events: await events.listEvents(ctx, query) }),
   getEvent: async (ctx, { params }) => json(200, await events.getEvent(ctx, params.id)),
-  createEvent: async (ctx, { body }) => json(201, await events.createEvent(ctx, body)),
+  createEvent: async (ctx, { body }) => {
+    const r = await events.createEvent(ctx, body);
+    return json(r.created ? 201 : 200, r.event);
+  },
   updateEvent: async (ctx, { params, body }) => json(200, await events.updateEvent(ctx, params.id, body)),
   deleteEvent: async (ctx, { params }) => {
     await events.deleteEvent(ctx, params.id);

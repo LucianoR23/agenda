@@ -131,3 +131,57 @@ export function dateRange(from: IsoDate, to: IsoDate): IsoDate[] {
 
 /** ISO weekday: 1 = Monday … 7 = Sunday. */
 export const dayOfWeek = (date: IsoDate): number => plain(date).dayOfWeek;
+
+// ---------- forgiving input & human text (Sunday) ----------
+
+const HAS_OFFSET = /(Z|[+-]\d{2}:?\d{2})$/i;
+
+/**
+ * An instant from an ISO date-time with or without offset. Without one (`2026-11-14T09:00`) it's a wall time in
+ * `tz`, so Sunday can say "a las 9" without working out the offset.
+ */
+export function localInstant(s: string, tz: string): Temporal.Instant {
+  if (HAS_OFFSET.test(s)) return Temporal.Instant.from(s);
+  return Temporal.PlainDateTime.from(s).toZonedDateTime(tz, { disambiguation: "compatible" }).toInstant();
+}
+
+/** `YYYY-MM-DD` as is; a date-time is split into its local date and `HH:mm` in `tz`. */
+export function splitDue(s: string, tz: string): { date: IsoDate; time: LocalTime | null } {
+  if (!s.includes("T")) return { date: s, time: null };
+  const z = zoned(localInstant(s, tz), tz);
+  return { date: z.toPlainDate().toString(), time: z.toPlainTime().toString({ smallestUnit: "minute" }) };
+}
+
+const WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+const MONTHS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+export const weekdayName = (date: IsoDate): string => WEEKDAYS[plain(date).dayOfWeek - 1] ?? "";
+
+/** "jueves 14 de noviembre" (+ the year when it isn't `currentYear`). */
+export function dateText(date: IsoDate, currentYear?: number): string {
+  const d = plain(date);
+  const year = currentYear !== undefined && d.year !== currentYear ? ` de ${d.year}` : "";
+  return `${weekdayName(date)} ${d.day} de ${MONTHS[d.month - 1]}${year}`;
+}
+
+/** "jueves 14 de noviembre, 09:00". */
+export function instantText(at: Temporal.Instant | Date, tz: string, currentYear?: number): string {
+  const z = zoned(at instanceof Date ? fromDate(at) : at, tz);
+  return `${dateText(z.toPlainDate().toString(), currentYear)}, ${z.toPlainTime().toString({ smallestUnit: "minute" })}`;
+}
+
+/** Year of "now" in `tz` (the active clock), to leave it out of this year's dates. */
+export const yearNow = (tz: string, c: Clock = active): number => zoned(c.now(), tz).year;

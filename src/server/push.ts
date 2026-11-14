@@ -99,7 +99,7 @@ export async function sendPush(db: DbLike, payload: PushPayload, opts: SendOptio
 export async function sendNotice(
   db: DbLike,
   msg: { title: string; body: string; url: string; tag?: string },
-  opts: { kind?: "notice" | "test"; source?: ItemSource; tokenId?: string | null } = {},
+  opts: { kind?: "notice" | "test"; source?: ItemSource; tokenId?: string | null; at?: Temporal.Instant } = {},
 ) {
   const kind = opts.kind ?? "notice";
   const r = await sendPush(db, { type: kind, ...msg });
@@ -112,6 +112,7 @@ export async function sendNotice(
     tokenId: opts.tokenId ?? null,
     devicesOk: r.ok,
     devicesFailed: r.failed,
+    ...(opts.at ? { createdAt: new Date(opts.at.epochMilliseconds) } : {}),
   });
   return r;
 }

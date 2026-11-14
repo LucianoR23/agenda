@@ -1,4 +1,4 @@
-import { ItemSource, Mutable, orNull, Timestamp, Uuid } from "./common";
+import { AppUrl, ClientId, DateTimeInput, ItemSource, Mutable, orNull, Timestamp, Uuid, WhenText } from "./common";
 import { z } from "./zod";
 
 export const ReminderStatus = z.enum(["scheduled", "sent", "done", "cancelled", "missed"]).openapi("ReminderStatus", {
@@ -17,6 +17,7 @@ export const Reminder = z
     title: z.string(),
     body: z.string().nullable(),
     fireAt: Timestamp.openapi({ description: "Next (or last) moment it fires, in the user's timezone." }),
+    whenText: WhenText,
     rrule: Rrule.nullable(),
     status: ReminderStatus,
     urgent: z.boolean().openapi({ description: "Ignores quiet hours and goes out with high urgency." }),
@@ -26,6 +27,7 @@ export const Reminder = z
     snoozedFrom: orNull(Timestamp).openapi({ description: "Original time of a postponed occurrence." }),
     lastFiredAt: orNull(Timestamp),
     source: ItemSource,
+    url: AppUrl,
     ...Mutable,
   })
   .openapi("Reminder");
@@ -37,10 +39,11 @@ export const ReminderCreate = z
     id: Uuid.optional().openapi({ description: "Client-generated id (offline creates)." }),
     title: Title,
     body: z.string().max(2000).optional(),
-    fireAt: Timestamp,
+    fireAt: DateTimeInput,
     rrule: Rrule.optional(),
     urgent: z.boolean().optional(),
     taskId: Uuid.optional(),
+    clientId: ClientId.optional(),
   })
   .openapi("ReminderCreate");
 
@@ -48,7 +51,7 @@ export const ReminderPatch = z
   .strictObject({
     title: Title.optional(),
     body: z.string().max(2000).nullable().optional(),
-    fireAt: Timestamp.optional().openapi({ description: "A new time re-arms a reminder that already fired." }),
+    fireAt: DateTimeInput.optional().openapi({ description: "A new time re-arms a reminder that already fired." }),
     rrule: Rrule.nullable().optional(),
     urgent: z.boolean().optional(),
     taskId: orNull(Uuid).optional(),
@@ -59,7 +62,7 @@ export const ReminderPatch = z
 export const SnoozeInput = z
   .strictObject({
     minutes: z.int().min(1).max(10_080).optional().openapi({ description: "Default: the user's snooze setting." }),
-    until: Timestamp.optional(),
+    until: DateTimeInput.optional(),
   })
   .refine((b) => !(b.minutes && b.until), { message: "Use minutes or until, not both" })
   .openapi("SnoozeInput");

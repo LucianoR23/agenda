@@ -5,12 +5,55 @@ import { type Ctx, sourceOf } from "../http/context";
 import { ApiError, notFound, validation, versionConflict } from "../http/errors";
 import { diffFields, recordChange } from "./changes";
 import { clearEventReminders, materializeEventReminders } from "./event-reminders";
+import { eventUrl } from "./links";
 import { eventOccurrences, normalizeEventRrule } from "./recurrence";
-import { addDays, daysBetween, formatInstant, fromDate, type IsoDate, toDate, toInstant } from "./time";
+import {
+  addDays,
+  dateText,
+  daysBetween,
+  formatInstant,
+  fromDate,
+  type IsoDate,
+  instantText,
+  localInstant,
+  timeOf,
+  toDate,
+  toInstant,
+  yearNow,
+} from "./time";
 
 type Row = typeof event.$inferSelect;
 type ExtRow = typeof externalEvent.$inferSelect;
 type SourceRow = typeof calendarSource.$inferSelect;
+
+/** "jueves 14 de noviembre, 10:00–11:00", "sábado 16 de noviembre (todo el día)". */
+export function eventWhen(
+  e: {
+    allDay: boolean;
+    startsAt: Temporal.Instant | Date | null;
+    endsAt: Temporal.Instant | Date | null;
+    startDate: IsoDate | null;
+    endDate: IsoDate | null;
+  },
+  tz: string,
+): string | null {
+  const year = yearNow(tz);
+  if (e.allDay) {
+    if (!e.startDate) return null;
+    const last = e.endDate ? addDays(e.endDate, -1) : e.startDate;
+    return last > e.startDate
+      ? `del ${dateText(e.startDate, year)} al ${dateText(last, year)} (todo el día)`
+      : `${dateText(e.startDate, year)} (todo el día)`;
+  }
+  if (!e.startsAt) return null;
+  const start = e.startsAt instanceof Date ? fromDate(e.startsAt) : e.startsAt;
+  const text = instantText(start, tz, year);
+  if (!e.endsAt) return text;
+  const end = e.endsAt instanceof Date ? fromDate(e.endsAt) : e.endsAt;
+  return instantText(end, tz, year).startsWith(text.slice(0, text.lastIndexOf(",")))
+    ? `${text}–${timeOf(end, tz)}`
+    : `${text} → ${instantText(end, tz, year)}`;
+}
 
 export function eventOut(r: Row, ctx: Pick<Ctx, "tz">) {
   return {
@@ -23,10 +66,12 @@ export function eventOut(r: Row, ctx: Pick<Ctx, "tz">) {
     endsAt: r.endsAt ? formatInstant(r.endsAt, ctx.tz) : null,
     startDate: r.startDate,
     endDate: r.endDate,
+    whenText: eventWhen(r, ctx.tz),
     timezone: r.timezone,
     rrule: r.rrule,
     reminderOffsets: r.reminderOffsets,
     source: r.source,
+    url: eventUrl(r.id),
     version: r.version,
     createdAt: formatInstant(r.createdAt, ctx.tz),
     updatedAt: formatInstant(r.updatedAt, ctx.tz),
@@ -92,7 +137,7 @@ const dtstartOf = (t: Times, tz: string): Temporal.ZonedDateTime =>
 
 const offsets = (o: number[] | undefined) => (o ? [...new Set(o)].sort((a, b) => b - a) : undefined);
 
-const instant = (s: string | null | undefined) => (s ? Temporal.Instant.from(s) : null);
+const instant = (s: string | null | undefined, tz: string) => (s ? localInstant(s, tz) : null);
 
 // ---------- writes ----------
 
@@ -108,9 +153,39 @@ export interface EventCreate {
   endDate?: string;
   rrule?: string;
   reminderOffsets?: number[];
+  clientId?: string;
 }
 
-export async function createEvent(ctx: Ctx, input: EventCreate) {
+/** Same clientId again: update what was sent and differs, never a duplicate. */
+async function upsertByClientId(ctx: Ctx, existing: Row, input: EventCreate): Promise<{ created: false; event: EventOut }> {
+  if (existing.deletedAt)
+    throw new ApiError(409, "CONFLICT", `El clientId "${existing.clientId}" ya se usó para un evento que se borró. Usá otro clientId.`);
+  const same = (a: string | undefined, b: Date | null) => a === undefined || (b !== null && localInstant(a, ctx.tz).equals(fromDate(b)));
+  const patch: EventPatch = {};
+  if (input.title !== existing.title) patch.title = input.title;
+  if (input.notes !== undefined && (input.notes.trim() || null) !== existing.notes) patch.notes = input.notes;
+  if (input.location !== undefined && (input.location.trim() || null) !== existing.location) patch.location = input.location;
+  const allDay = input.allDay ?? existing.allDay;
+  if (allDay !== existing.allDay) patch.allDay = allDay;
+  if (allDay) {
+    if (input.startDate !== undefined && input.startDate !== existing.startDate) patch.startDate = input.startDate;
+    if (input.endDate !== undefined && input.endDate !== existing.endDate) patch.endDate = input.endDate;
+  } else {
+    if (!same(input.startsAt, existing.startsAt)) patch.startsAt = input.startsAt ?? null;
+    if (!same(input.endsAt, existing.endsAt)) patch.endsAt = input.endsAt ?? null;
+  }
+  if (input.rrule !== undefined && input.rrule !== existing.rrule) patch.rrule = input.rrule;
+  const offs = offsets(input.reminderOffsets);
+  if (offs && offs.join() !== existing.reminderOffsets.join()) patch.reminderOffsets = offs;
+  const out = Object.keys(patch).length ? await updateEvent(ctx, existing.id, patch) : eventOut(existing, ctx);
+  return { created: false, event: out };
+}
+
+export async function createEvent(ctx: Ctx, input: EventCreate): Promise<{ created: boolean; event: EventOut }> {
+  if (input.clientId) {
+    const [existing] = await ctx.db.select().from(event).where(eq(event.clientId, input.clientId)).for("update");
+    if (existing) return upsertByClientId(ctx, existing, input);
+  }
   const allDay = input.allDay ?? false;
   if (allDay && (input.startsAt || input.endsAt))
     throw validation([{ path: "/startsAt", message: "All-day events use startDate/endDate, not startsAt/endsAt" }]);
@@ -118,8 +193,8 @@ export async function createEvent(ctx: Ctx, input: EventCreate) {
     throw validation([{ path: "/startDate", message: "Timed events use startsAt/endsAt; set allDay: true for dates" }]);
   const t = checkTimes({
     allDay,
-    startsAt: instant(input.startsAt),
-    endsAt: instant(input.endsAt),
+    startsAt: instant(input.startsAt, ctx.tz),
+    endsAt: instant(input.endsAt, ctx.tz),
     startDate: input.startDate ?? null,
     endDate: input.endDate ?? null,
   });
@@ -140,6 +215,7 @@ export async function createEvent(ctx: Ctx, input: EventCreate) {
         timezone: ctx.tz,
         rrule: input.rrule ? normalizeEventRrule(input.rrule, dtstartOf(t, ctx.tz)) : null,
         reminderOffsets: offsets(input.reminderOffsets) ?? [],
+        clientId: input.clientId ?? null,
         source,
         updatedBy: source,
       })
@@ -148,7 +224,7 @@ export async function createEvent(ctx: Ctx, input: EventCreate) {
   );
   await recordChange(ctx, "event", row.id, "create");
   await materializeEventReminders(ctx.db, ctx.now, { eventId: row.id });
-  return eventOut(row, ctx);
+  return { created: true, event: eventOut(row, ctx) };
 }
 
 export interface EventPatch {
@@ -182,8 +258,8 @@ function patchedTimes(r: Row, b: EventPatch, tz: string): Times {
       endDate = addDays(startDate, daysBetween(r.startDate, r.endDate));
     return checkTimes({ allDay, startDate, endDate, startsAt: null, endsAt: null });
   }
-  const startsAt = b.startsAt !== undefined ? instant(b.startsAt) : r.allDay ? null : r.startsAt && fromDate(r.startsAt);
-  let endsAt = b.endsAt !== undefined ? instant(b.endsAt) : null;
+  const startsAt = b.startsAt !== undefined ? instant(b.startsAt, tz) : r.allDay ? null : r.startsAt && fromDate(r.startsAt);
+  let endsAt = b.endsAt !== undefined ? instant(b.endsAt, tz) : null;
   if (b.endsAt === undefined && !r.allDay && r.startsAt && r.endsAt && startsAt)
     endsAt = startsAt.add({ milliseconds: r.endsAt.getTime() - r.startsAt.getTime() });
   if (b.endsAt === undefined && r.allDay && startsAt) endsAt = startsAt.add({ hours: 1 });
@@ -249,12 +325,27 @@ export interface AgendaEventOut {
   endsAt: string | null;
   startDate: string | null;
   endDate: string | null;
+  whenText: string | null;
   recurring: boolean;
   rrule: string | null;
   reminderOffsets: number[];
   tentative: boolean;
   htmlLink: string | null;
   calendar: { id: string; name: string; color: string | null } | null;
+  url: string;
+}
+
+/** Fills whenText/url once the occurrence's times are known. */
+function finish(o: Omit<AgendaEventOut, "whenText" | "url">, tz: string): AgendaEventOut {
+  const at = (s: string | null) => (s ? Temporal.Instant.from(s) : null);
+  return {
+    ...o,
+    whenText: eventWhen(
+      { allDay: o.allDay, startsAt: at(o.startsAt), endsAt: at(o.endsAt), startDate: o.startDate, endDate: o.endDate },
+      tz,
+    ),
+    url: eventUrl(o.eventId ?? o.id),
+  };
 }
 
 /** [from 00:00, to + 1 00:00) in the user's timezone. */
@@ -264,6 +355,10 @@ export const rangeOf = (from: IsoDate, to: IsoDate, tz: string) => ({
 });
 
 function occurrence(r: Row, start: Temporal.ZonedDateTime | null, ctx: Pick<Ctx, "tz">): AgendaEventOut {
+  return finish(occurrenceTimes(r, start, ctx), ctx.tz);
+}
+
+function occurrenceTimes(r: Row, start: Temporal.ZonedDateTime | null, ctx: Pick<Ctx, "tz">): Omit<AgendaEventOut, "whenText" | "url"> {
   const base = {
     eventId: r.id,
     externalEventId: null,
@@ -313,6 +408,10 @@ function occurrence(r: Row, start: Temporal.ZonedDateTime | null, ctx: Pick<Ctx,
 }
 
 function externalOut(e: ExtRow, s: SourceRow, ctx: Pick<Ctx, "tz">): AgendaEventOut {
+  return finish(externalTimes(e, s, ctx), ctx.tz);
+}
+
+function externalTimes(e: ExtRow, s: SourceRow, ctx: Pick<Ctx, "tz">): Omit<AgendaEventOut, "whenText" | "url"> {
   return {
     id: e.id,
     eventId: null,

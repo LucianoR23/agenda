@@ -6,7 +6,7 @@ const flag = (fallback: boolean) => z.stringbool().default(fallback);
 /** Comma-separated list of origins → array of URLs (empty string → []). */
 const origins = z
   .string()
-  .default("")
+  .default("https://sunday.lemydev.com")
   .transform((s) =>
     s
       .split(",")

@@ -4,10 +4,11 @@ import { reminder, reminderDelivery, task } from "../db/schema";
 import { type Ctx, sourceOf } from "../http/context";
 import { ApiError, notFound, versionConflict } from "../http/errors";
 import { diffFields, recordChange } from "./changes";
+import { reminderUrl } from "./links";
 import { normalizeReminderRrule } from "./recurrence";
 import { getSettings } from "./settings";
 import { completeTask } from "./tasks";
-import { formatInstant, fromDate, toDate } from "./time";
+import { formatInstant, fromDate, instantText, localInstant, toDate, yearNow } from "./time";
 
 type Row = typeof reminder.$inferSelect;
 
@@ -17,6 +18,7 @@ export function reminderOut(r: Row, ctx: Pick<Ctx, "tz">) {
     title: r.title,
     body: r.body,
     fireAt: formatInstant(r.fireAt, ctx.tz),
+    whenText: instantText(r.fireAt, ctx.tz, yearNow(ctx.tz)),
     rrule: r.rrule,
     status: r.status,
     urgent: r.urgent,
@@ -26,6 +28,7 @@ export function reminderOut(r: Row, ctx: Pick<Ctx, "tz">) {
     snoozedFrom: r.snoozedFrom ? formatInstant(r.snoozedFrom, ctx.tz) : null,
     lastFiredAt: r.lastFiredAt ? formatInstant(r.lastFiredAt, ctx.tz) : null,
     source: r.source,
+    url: reminderUrl(r.id),
     version: r.version,
     createdAt: formatInstant(r.createdAt, ctx.tz),
     updatedAt: formatInstant(r.updatedAt, ctx.tz),
@@ -111,10 +114,34 @@ export interface ReminderCreate {
   rrule?: string;
   urgent?: boolean;
   taskId?: string;
+  clientId?: string;
 }
 
-export async function createReminder(ctx: Ctx, input: ReminderCreate) {
-  const fireAt = Temporal.Instant.from(input.fireAt);
+/** Same clientId again: update what was sent and differs (a new time re-arms it), never a duplicate. */
+async function upsertByClientId(ctx: Ctx, existing: Row, input: ReminderCreate): Promise<{ created: false; reminder: ReminderOut }> {
+  if (existing.deletedAt)
+    throw new ApiError(
+      409,
+      "CONFLICT",
+      `El clientId "${existing.clientId}" ya se usó para un recordatorio que se borró. Usá otro clientId.`,
+    );
+  const patch: ReminderPatch = {};
+  if (input.title !== existing.title) patch.title = input.title;
+  if (input.body !== undefined && input.body !== existing.body) patch.body = input.body;
+  if (!localInstant(input.fireAt, ctx.tz).equals(fromDate(existing.fireAt))) patch.fireAt = input.fireAt;
+  if (input.rrule !== undefined && input.rrule !== existing.rrule) patch.rrule = input.rrule;
+  if (input.urgent !== undefined && input.urgent !== existing.urgent) patch.urgent = input.urgent;
+  if (input.taskId !== undefined && input.taskId !== existing.taskId) patch.taskId = input.taskId;
+  const out = Object.keys(patch).length ? await updateReminder(ctx, existing.id, patch) : reminderOut(existing, ctx);
+  return { created: false, reminder: out };
+}
+
+export async function createReminder(ctx: Ctx, input: ReminderCreate): Promise<{ created: boolean; reminder: ReminderOut }> {
+  if (input.clientId) {
+    const [existing] = await ctx.db.select().from(reminder).where(eq(reminder.clientId, input.clientId)).for("update");
+    if (existing) return upsertByClientId(ctx, existing, input);
+  }
+  const fireAt = localInstant(input.fireAt, ctx.tz);
   assertFuture(ctx, fireAt);
   await assertTask(ctx, input.taskId);
   const source = sourceOf(ctx.caller);
@@ -129,6 +156,7 @@ export async function createReminder(ctx: Ctx, input: ReminderCreate) {
         rrule: input.rrule ? normalizeReminderRrule(input.rrule, fireAt, ctx.tz) : null,
         urgent: input.urgent ?? false,
         taskId: input.taskId ?? null,
+        clientId: input.clientId ?? null,
         source,
         updatedBy: source,
       })
@@ -136,7 +164,7 @@ export async function createReminder(ctx: Ctx, input: ReminderCreate) {
     "reminder insert",
   );
   await recordChange(ctx, "reminder", row.id, "create");
-  return reminderOut(row, ctx);
+  return { created: true, reminder: reminderOut(row, ctx) };
 }
 
 export interface ReminderPatch {
@@ -157,7 +185,7 @@ const assertVersion = (ctx: Ctx, r: Row, v?: number) => {
 export async function updateReminder(ctx: Ctx, id: string, body: ReminderPatch) {
   const r = await find(ctx, id, true);
   assertVersion(ctx, r, body.version);
-  const fireAt = body.fireAt ? Temporal.Instant.from(body.fireAt) : fromDate(r.fireAt);
+  const fireAt = body.fireAt ? localInstant(body.fireAt, ctx.tz) : fromDate(r.fireAt);
   if (body.fireAt) assertFuture(ctx, fireAt);
   if (body.taskId !== undefined) await assertTask(ctx, body.taskId);
   const rrule = body.rrule !== undefined ? body.rrule : r.rrule;
@@ -190,7 +218,7 @@ export async function snoozeReminder(ctx: Ctx, id: string, body: { minutes?: num
   const r = await find(ctx, id, true);
   if (r.status === "cancelled") throw new ApiError(409, "CONFLICT", "Ese recordatorio está cancelado.");
   const until = body.until
-    ? Temporal.Instant.from(body.until)
+    ? localInstant(body.until, ctx.tz)
     : ctx.now.add({ minutes: body.minutes ?? (await getSettings(ctx.db)).defaultSnoozeMinutes });
   if (Temporal.Instant.compare(until, ctx.now) <= 0)
     throw new ApiError(400, "VALIDATION_ERROR", "Posponer necesita un momento futuro.", {

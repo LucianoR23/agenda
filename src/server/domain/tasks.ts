@@ -1,12 +1,14 @@
 import { and, arrayContains, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, ne, type SQL, sql } from "drizzle-orm";
 import { one } from "../db/one";
-import { changeLog, task, taskList } from "../db/schema";
+import { changeLog, reminder, task, taskList } from "../db/schema";
 import { type Ctx, sourceOf } from "../http/context";
 import { ApiError, notFound, versionConflict } from "../http/errors";
 import { diffFields, recordChange } from "./changes";
 import { onTaskCompleted, onTaskReopened } from "./habits";
+import { taskUrl } from "./links";
 import { nextOccurrence, normalizeTaskRrule } from "./recurrence";
-import { formatInstant, type IsoDate, type LocalTime, toDate, today, toInstant } from "./time";
+import { createReminder, type ReminderOut, updateReminder } from "./reminders";
+import { dateText, formatInstant, type IsoDate, type LocalTime, splitDue, toDate, today, toInstant, zoned } from "./time";
 
 type TaskRow = typeof task.$inferSelect;
 type ListRow = typeof taskList.$inferSelect;
@@ -27,6 +29,7 @@ export function taskOut(t: TaskRow, ctx: Pick<Ctx, "tz" | "now">) {
     dueDate: t.dueDate,
     dueTime,
     dueAt: t.dueDate && dueTime ? formatInstant(toInstant(t.dueDate, dueTime, ctx.tz), ctx.tz) : null,
+    whenText: t.dueDate ? `${dateText(t.dueDate, zoned(ctx.now, ctx.tz).year)}${dueTime ? `, ${dueTime}` : ""}` : null,
     overdue: t.status === "open" && !!t.dueDate && t.dueDate < today(ctx.tz, { now: () => ctx.now }),
     rrule: t.rrule,
     seriesId: t.seriesId,
@@ -34,6 +37,7 @@ export function taskOut(t: TaskRow, ctx: Pick<Ctx, "tz" | "now">) {
     sortOrder: t.sortOrder,
     tags: t.tags,
     source: t.source,
+    url: taskUrl(t.id),
     version: t.version,
     createdAt: formatInstant(t.createdAt, ctx.tz),
     updatedAt: formatInstant(t.updatedAt, ctx.tz),
@@ -81,6 +85,35 @@ async function findList(ctx: Ctx, id: string, lock = false): Promise<ListRow> {
   const [l] = lock ? await q.for("update") : await q;
   if (!l) throw notFound("No encontré esa lista. Usá listTaskLists para ver las listas.");
   return l;
+}
+
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
+
+/** A list by name (case and accents don't matter), for callers that only know "Casa". */
+async function listByName(ctx: Ctx, name: string): Promise<ListRow> {
+  const lists = await ctx.db.select().from(taskList).where(isNull(taskList.deletedAt)).orderBy(asc(taskList.sortOrder));
+  const hit = lists.find((l) => fold(l.name) === fold(name));
+  if (hit) return hit;
+  throw new ApiError(
+    400,
+    "VALIDATION_ERROR",
+    `No hay una lista "${name}". Las listas son: ${lists.map((l) => l.name).join(", ")}. Usá una de esas o creala con createTaskList.`,
+    { fields: [{ path: "/list", message: "Unknown list" }] },
+  );
+}
+
+/** listId, or a list name → its id; undefined when neither was sent. */
+async function resolveList(ctx: Ctx, b: { listId?: string; list?: string }): Promise<string | undefined> {
+  if (b.listId) return (await findList(ctx, b.listId)).id;
+  if (b.list) return (await listByName(ctx, b.list)).id;
+  return undefined;
+}
+
+/** `dueDate` may carry a time (`2026-11-14T09:00`): split it, unless dueTime is sent too. */
+function dueOf(ctx: Ctx, dueDate: string | null | undefined, dueTime: LocalTime | null | undefined) {
+  if (dueDate === undefined || dueDate === null) return { dueDate, dueTime };
+  const d = splitDue(dueDate, ctx.tz);
+  return { dueDate: d.date, dueTime: dueTime !== undefined ? dueTime : (d.time ?? undefined) };
 }
 
 // table-qualified on purpose: drizzle renders `${taskList.id}` unqualified in single-table selects, which inside
@@ -281,16 +314,66 @@ export interface TaskCreate {
   title: string;
   notes?: string;
   listId?: string;
+  list?: string;
   priority?: number;
-  dueDate?: IsoDate;
+  /** `YYYY-MM-DD` or a date-time. */
+  dueDate?: string;
   dueTime?: LocalTime;
   rrule?: string;
   tags?: string[];
+  reminderAt?: string;
+  clientId?: string;
 }
 
-export async function createTask(ctx: Ctx, body: TaskCreate) {
-  const listId = body.listId ? (await findList(ctx, body.listId)).id : (await inbox(ctx)).id;
-  const when = schedule(ctx, { dueDate: body.dueDate ?? null, dueTime: body.dueTime ?? null, rrule: body.rrule ?? null });
+/** createTask's result: `created` false when the clientId already existed (it was updated instead). */
+export interface TaskCreated {
+  created: boolean;
+  task: TaskOut;
+  reminder: ReminderOut | null;
+}
+
+/** The task's own reminder ("recordame a las 9"): moved if it already has a pending one, created otherwise. */
+async function taskReminder(ctx: Ctx, t: TaskOut, fireAt: string): Promise<ReminderOut> {
+  const [pending] = await ctx.db
+    .select({ id: reminder.id })
+    .from(reminder)
+    .where(and(eq(reminder.taskId, t.id), eq(reminder.status, "scheduled"), isNull(reminder.deletedAt)))
+    .orderBy(asc(reminder.fireAt))
+    .limit(1);
+  return pending
+    ? updateReminder(ctx, pending.id, { fireAt })
+    : createReminder(ctx, { title: t.title, fireAt, taskId: t.id }).then((r) => r.reminder);
+}
+
+/** Same clientId again: update the fields that were sent and differ, instead of creating a duplicate. */
+async function upsertByClientId(ctx: Ctx, existing: TaskRow, body: TaskCreate): Promise<TaskCreated> {
+  if (existing.deletedAt)
+    throw new ApiError(409, "CONFLICT", `El clientId "${existing.clientId}" ya se usó para una tarea que se borró. Usá otro clientId.`);
+  const current = taskOut(existing, ctx);
+  const listId = await resolveList(ctx, body);
+  const due = dueOf(ctx, body.dueDate, body.dueTime);
+  const patch: TaskPatch = {};
+  if (body.title !== current.title) patch.title = body.title;
+  if (body.notes !== undefined && body.notes !== current.notes) patch.notes = body.notes;
+  if (listId !== undefined && listId !== current.listId) patch.listId = listId;
+  if (body.priority !== undefined && body.priority !== current.priority) patch.priority = body.priority;
+  if (due.dueDate !== undefined && due.dueDate !== current.dueDate) patch.dueDate = due.dueDate;
+  if (due.dueTime !== undefined && due.dueTime !== current.dueTime) patch.dueTime = due.dueTime;
+  if (body.rrule !== undefined && body.rrule !== current.rrule) patch.rrule = body.rrule;
+  if (body.tags !== undefined && [...new Set(body.tags)].join("\n") !== current.tags.join("\n")) patch.tags = body.tags;
+  const out = Object.keys(patch).length ? await updateTask(ctx, existing.id, patch) : current;
+  const rem = body.reminderAt ? await taskReminder(ctx, out, body.reminderAt) : null;
+  return { created: false, task: out, reminder: rem };
+}
+
+export async function createTask(ctx: Ctx, body: TaskCreate): Promise<TaskCreated> {
+  if (body.clientId) {
+    const [existing] = await ctx.db.select().from(task).where(eq(task.clientId, body.clientId)).for("update");
+    if (existing) return upsertByClientId(ctx, existing, body);
+  }
+  const listId = (await resolveList(ctx, body)) ?? (await inbox(ctx)).id;
+  const due = dueOf(ctx, body.dueDate, body.dueTime);
+  const when = schedule(ctx, { dueDate: due.dueDate ?? null, dueTime: due.dueTime ?? null, rrule: body.rrule ?? null });
   const source = sourceOf(ctx.caller);
   const row = one(
     await ctx.db
@@ -304,6 +387,7 @@ export async function createTask(ctx: Ctx, body: TaskCreate) {
         ...when,
         tags: [...new Set(body.tags ?? [])],
         sortOrder: await nextSortOrder(ctx, listId),
+        clientId: body.clientId ?? null,
         source,
         updatedBy: source,
       })
@@ -311,15 +395,18 @@ export async function createTask(ctx: Ctx, body: TaskCreate) {
     "task insert",
   );
   await recordChange(ctx, "task", row.id, "create");
-  return taskOut(row, ctx);
+  const out = taskOut(row, ctx);
+  return { created: true, task: out, reminder: body.reminderAt ? await taskReminder(ctx, out, body.reminderAt) : null };
 }
 
 export interface TaskPatch {
   title?: string;
   notes?: string | null;
   listId?: string;
+  list?: string;
   priority?: number;
-  dueDate?: IsoDate | null;
+  /** `YYYY-MM-DD` or a date-time (also sets dueTime). */
+  dueDate?: string | null;
   dueTime?: LocalTime | null;
   rrule?: string | null;
   tags?: string[];
@@ -332,10 +419,18 @@ const assertVersion = (ctx: Ctx, t: TaskRow, bodyVersion?: number) => {
   if (expected != null && expected !== t.version) throw versionConflict(taskOut(t, ctx));
 };
 
-export async function updateTask(ctx: Ctx, id: string, body: TaskPatch) {
+export async function updateTask(ctx: Ctx, id: string, input: TaskPatch) {
   const t = await findTask(ctx, id, true);
-  assertVersion(ctx, t, body.version);
-  if (body.listId && body.listId !== t.listId) await findList(ctx, body.listId);
+  assertVersion(ctx, t, input.version);
+  const { list, ...rest } = input;
+  const due = dueOf(ctx, input.dueDate, input.dueTime);
+  const body: TaskPatch = {
+    ...rest,
+    ...(due.dueDate !== undefined ? { dueDate: due.dueDate } : {}),
+    ...(due.dueTime !== undefined ? { dueTime: due.dueTime } : {}),
+  };
+  if (list) body.listId = (await listByName(ctx, list)).id;
+  else if (body.listId && body.listId !== t.listId) await findList(ctx, body.listId);
 
   const dueDate = body.dueDate !== undefined ? body.dueDate : t.dueDate;
   // clearing the date clears the time and recurrence, but sending a time/rrule without a date is an error

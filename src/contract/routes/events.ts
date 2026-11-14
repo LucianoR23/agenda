@@ -32,10 +32,12 @@ const dentista = {
   endsAt: "2026-11-18T11:00:00.000-03:00",
   startDate: null,
   endDate: null,
+  whenText: "miércoles 18 de noviembre, 10:00–11:00",
   timezone: "America/Buenos_Aires",
   rrule: null,
   reminderOffsets: [60, 15],
   source: "user" as const,
+  url: ex.appUrl(`/calendario?event=${ex.uid(60)}`),
   ...meta,
 };
 
@@ -53,12 +55,14 @@ const dentistaOcc = {
   endsAt: dentista.endsAt,
   startDate: null,
   endDate: null,
+  whenText: dentista.whenText,
   recurring: false,
   rrule: null,
   reminderOffsets: [60, 15],
   tentative: false,
   htmlLink: null,
   calendar: null,
+  url: dentista.url,
 };
 
 const trabajo = { id: ex.uid(70), name: "Trabajo", color: "#4285f4" };
@@ -76,12 +80,14 @@ const daily = {
   endsAt: "2026-11-18T09:45:00.000-03:00",
   startDate: null,
   endDate: null,
+  whenText: "miércoles 18 de noviembre, 09:30–09:45",
   recurring: false,
   rrule: null,
   reminderOffsets: [],
   tentative: false,
   htmlLink: "https://www.google.com/calendar/event?eid=ZGFpbHk",
   calendar: trabajo,
+  url: ex.appUrl(`/calendario?event=${ex.uid(71)}`),
 };
 
 const source = {
@@ -172,7 +178,11 @@ export const eventRoutes: RouteDef[] = [
     access: "user",
     token: "write",
     body: EventCreate,
-    responses: { 201: { description: "Created.", schema: Event } },
+    responses: {
+      200: { description: "Same `clientId` as an earlier create: that item, updated with the fields sent (no duplicate).", schema: Event },
+      201: { description: "Created.", schema: Event },
+      409: { description: "`CONFLICT`: the clientId belonged to a deleted event." },
+    },
     exchanges: [
       {
         name: "create",
@@ -204,6 +214,8 @@ export const eventRoutes: RouteDef[] = [
           endsAt: null,
           startDate: "2026-11-20",
           endDate: "2026-11-21",
+          whenText: "viernes 20 de noviembre (todo el día)",
+          url: ex.appUrl(`/calendario?event=${ex.uid(61)}`),
           rrule: "FREQ=YEARLY",
           reminderOffsets: [],
         },
@@ -287,6 +299,7 @@ export const eventRoutes: RouteDef[] = [
           title: "Daily",
           body: "A las 09:30",
           fireAt: "2026-11-18T09:20:00.000-03:00",
+          whenText: "miércoles 18 de noviembre, 09:20",
           rrule: null,
           status: "scheduled",
           urgent: false,
@@ -296,6 +309,7 @@ export const eventRoutes: RouteDef[] = [
           snoozedFrom: null,
           lastFiredAt: null,
           source: "user",
+          url: ex.appUrl(`/recordatorios?reminder=${ex.uid(80)}`),
           ...meta,
         },
       },

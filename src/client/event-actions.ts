@@ -37,12 +37,14 @@ function asOccurrence(id: string, e: EventInput): AgendaEvent {
     endsAt: e.allDay ? null : (e.endsAt ?? null),
     startDate: e.allDay ? (e.startDate ?? null) : null,
     endDate: e.allDay ? (e.endDate ?? (e.startDate ? Temporal.PlainDate.from(e.startDate).add({ days: 1 }).toString() : null)) : null,
+    whenText: null,
     recurring: Boolean(e.rrule),
     rrule: e.rrule ?? null,
     reminderOffsets: e.reminderOffsets ?? [],
     tentative: false,
     htmlLink: null,
     calendar: null,
+    url: "",
   };
 }
 

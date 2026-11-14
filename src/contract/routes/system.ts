@@ -648,6 +648,26 @@ export const systemRoutes: RouteDef[] = [
       },
     ],
   },
+  {
+    operationId: "openapiSunday",
+    method: "get",
+    path: "/api/openapi.sunday.json",
+    tag: "Ops",
+    summary: "Sunday's tools (OpenAPI subset)",
+    description:
+      'Only the operations tagged `sunday`, token auth only, no header parameters or examples. Open WebUI loads this URL as a tool server (Bearer = the "sunday" API token).',
+    access: "public",
+    responses: { 200: { description: "OpenAPI 3.1 document.", schema: z.record(z.string(), z.unknown()) } },
+    exchanges: [
+      {
+        name: "doc",
+        summary: "Sunday's tools",
+        actor: "anonymous",
+        status: 200,
+        response: { openapi: "3.1.0", info: { title: "Agenda de Lemy", version: "2.0.0" } },
+      },
+    ],
+  },
   ...authRoutes,
   ...securityRoutes,
   {

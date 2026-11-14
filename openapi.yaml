@@ -8,12 +8,14 @@ info:
 
     - **Errors:** `{ "error": { "code", "message", "details"?, "requestId" } }`; `message` is a Spanish sentence that says what to do.
     - **Concurrency:** resources carry `version` + `ETag`; writes accept `If-Match` or `version` in the body.
-    - **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH.
+    - **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH; creates also take `clientId`.
+    - **Sunday:** operations tagged `sunday` make up `/api/openapi.sunday.json`.
     - Unknown fields are rejected everywhere.
 servers:
   - url: https://agenda.lemydev.com
   - url: http://localhost:3000
 tags:
+  - name: Assistant
   - name: Tasks
   - name: Reminders
   - name: Events
@@ -26,6 +28,8 @@ tags:
   - name: Tokens
   - name: Push
   - name: Ops
+  - name: sunday
+    description: Published to Sunday (Open WebUI) in /api/openapi.sunday.json.
 components:
   securitySchemes:
     session:
@@ -81,12 +85,22 @@ components:
             - type: "null"
         startDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
         endDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
+        whenText:
+          type:
+            - string
+            - "null"
+          description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.'
+          example: jueves 14 de noviembre, 09:00
         recurring:
           type: boolean
         rrule:
@@ -108,6 +122,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/CalendarRef"
             - type: "null"
+        url:
+          type: string
+          format: uri
+          description: Opens it in the agenda app.
       required:
         - id
         - eventId
@@ -122,12 +140,14 @@ components:
         - endsAt
         - startDate
         - endDate
+        - whenText
         - recurring
         - rrule
         - reminderOffsets
         - tentative
         - htmlLink
         - calendar
+        - url
       additionalProperties: false
     ApiToken:
       type: object
@@ -289,6 +309,12 @@ components:
         - currentPin
         - newPin
       additionalProperties: false
+    ClientId:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: "Your own id for this item (≤ 100 chars). Sending the same clientId again doesn't duplicate: it returns the existing item (200), updated with the fields you sent."
+      example: sunday-2026-11-14-contador
     CompleteInput:
       type: object
       properties:
@@ -310,11 +336,18 @@ components:
         - task
         - next
       additionalProperties: false
+    DateTimeInput:
+      type: string
+      pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?([Zz]|[+-]\d{2}:\d{2})?$
+      description: ISO 8601 date-time. With offset (`-03:00`, `Z`) it's that instant; without, the user's local time.
+      example: 2026-11-14T09:00
     DayReview:
       type: object
       properties:
         date:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         mood:
           type:
             - integer
@@ -388,7 +421,9 @@ components:
       type: object
       properties:
         date:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         tasks:
           type: object
           properties:
@@ -554,14 +589,24 @@ components:
             - type: "null"
         startDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
           description: All-day events.
         endDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
           description: "All-day events: exclusive (a one-day event ends the next day)."
+        whenText:
+          type:
+            - string
+            - "null"
+          description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.'
+          example: jueves 14 de noviembre, 09:00
         timezone:
           type: string
           description: IANA zone the event lives in (recurrence expansion).
@@ -585,6 +630,10 @@ components:
             - 10
         source:
           $ref: "#/components/schemas/ItemSource"
+        url:
+          type: string
+          format: uri
+          description: Opens it in the agenda app.
         version:
           type: integer
           minimum: 1
@@ -604,10 +653,12 @@ components:
         - endsAt
         - startDate
         - endDate
+        - whenText
         - timezone
         - rrule
         - reminderOffsets
         - source
+        - url
         - version
         - createdAt
         - updatedAt
@@ -634,11 +685,15 @@ components:
           type: boolean
           description: true → `startDate` (+ `endDate`); otherwise `startsAt` (+ `endsAt`).
         startsAt:
-          $ref: "#/components/schemas/Timestamp"
+          $ref: "#/components/schemas/DateTimeInput"
         endsAt:
-          $ref: "#/components/schemas/Timestamp"
+          allOf:
+            - $ref: "#/components/schemas/DateTimeInput"
+            - description: "Default: no end time."
         startDate:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         endDate:
           allOf:
             - $ref: "#/components/schemas/LocalDate"
@@ -659,6 +714,8 @@ components:
           example:
             - 30
             - 10
+        clientId:
+          $ref: "#/components/schemas/ClientId"
       required:
         - title
       additionalProperties: false
@@ -689,19 +746,23 @@ components:
           type: boolean
         startsAt:
           anyOf:
-            - $ref: "#/components/schemas/Timestamp"
+            - $ref: "#/components/schemas/DateTimeInput"
             - type: "null"
         endsAt:
           anyOf:
-            - $ref: "#/components/schemas/Timestamp"
+            - $ref: "#/components/schemas/DateTimeInput"
             - type: "null"
         startDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
         endDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
         rrule:
           type:
@@ -795,7 +856,9 @@ components:
         habitId:
           $ref: "#/components/schemas/Uuid"
         date:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         done:
           type: boolean
         value:
@@ -949,9 +1012,13 @@ components:
           type: object
           properties:
             start:
-              $ref: "#/components/schemas/LocalDate"
+              allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             end:
-              $ref: "#/components/schemas/LocalDate"
+              allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             count:
               type: number
               description: Days done (yes/no) or sum of values (numeric) in the period.
@@ -1031,7 +1098,9 @@ components:
       type: object
       properties:
         date:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         tasksDone:
           type: integer
         habitsMet:
@@ -1093,7 +1162,7 @@ components:
     LocalDate:
       type: string
       pattern: ^\d{4}-\d{2}-\d{2}$
-      description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+      description: Today in the user's timezone.
       example: 2026-10-19
     LocalTime:
       type: string
@@ -1110,9 +1179,13 @@ components:
             - month
             - year
         from:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         to:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         tasks:
           type: object
           properties:
@@ -1138,7 +1211,9 @@ components:
                 type: object
                 properties:
                   start:
-                    $ref: "#/components/schemas/LocalDate"
+                    allOf:
+                      - $ref: "#/components/schemas/LocalDate"
+                      - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
                   label:
                     type: string
                   done:
@@ -1250,13 +1325,105 @@ components:
         - mood
         - sources
       additionalProperties: false
+    NotifyInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 60
+        body:
+          type: string
+          minLength: 1
+          maxLength: 240
+        url:
+          type: string
+          maxLength: 500
+          description: "Opened on tap. An https link on sunday.lemydev.com or agenda.lemydev.com, or an app path like `/tareas`. Default: the app."
+          example: https://sunday.lemydev.com/c/019a0a6e
+        tag:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Same tag replaces the previous notification instead of stacking.
+          example: resumen-noche
+      required:
+        - title
+        - body
+      additionalProperties: false
+    NotifyResult:
+      type: object
+      properties:
+        delivered:
+          type: integer
+          description: "Devices that accepted it (0: no device subscribed or all offline)."
+        failed:
+          type: integer
+        remainingToday:
+          type: integer
+          description: Pushes left in the 24-hour window (20).
+      required:
+        - delivered
+        - failed
+        - remainingToday
+      additionalProperties: false
+    Now:
+      type: object
+      properties:
+        now:
+          $ref: "#/components/schemas/Timestamp"
+        date:
+          $ref: "#/components/schemas/LocalDate"
+        time:
+          $ref: "#/components/schemas/LocalTime"
+        weekday:
+          type: string
+          description: In Spanish.
+          example: jueves
+        whenText:
+          type: string
+          example: jueves 14 de noviembre, 09:12
+        timezone:
+          type: string
+          example: America/Buenos_Aires
+        utcOffset:
+          type: string
+          example: -03:00
+        tomorrow:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+        weekStart:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Monday of this week.
+        weekEnd:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Sunday of this week.
+      required:
+        - now
+        - date
+        - time
+        - weekday
+        - whenText
+        - timezone
+        - utcOffset
+        - tomorrow
+        - weekStart
+        - weekEnd
+      additionalProperties: false
     Overview:
       type: object
       properties:
         from:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         to:
-          $ref: "#/components/schemas/LocalDate"
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
         events:
           type: array
           items:
@@ -1466,6 +1633,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/Timestamp"
             - description: Next (or last) moment it fires, in the user's timezone.
+        whenText:
+          type:
+            - string
+            - "null"
+          description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.'
+          example: jueves 14 de noviembre, 09:00
         rrule:
           type:
             - string
@@ -1503,6 +1676,10 @@ components:
             - type: "null"
         source:
           $ref: "#/components/schemas/ItemSource"
+        url:
+          type: string
+          format: uri
+          description: Opens it in the agenda app.
         version:
           type: integer
           minimum: 1
@@ -1517,6 +1694,7 @@ components:
         - title
         - body
         - fireAt
+        - whenText
         - rrule
         - status
         - urgent
@@ -1526,11 +1704,13 @@ components:
         - snoozedFrom
         - lastFiredAt
         - source
+        - url
         - version
         - createdAt
         - updatedAt
         - updatedBy
       additionalProperties: false
+      description: The reminder `reminderAt` scheduled (only when sent).
     ReminderCreate:
       type: object
       properties:
@@ -1546,7 +1726,7 @@ components:
           type: string
           maxLength: 2000
         fireAt:
-          $ref: "#/components/schemas/Timestamp"
+          $ref: "#/components/schemas/DateTimeInput"
         rrule:
           type: string
           maxLength: 300
@@ -1556,6 +1736,8 @@ components:
           type: boolean
         taskId:
           $ref: "#/components/schemas/Uuid"
+        clientId:
+          $ref: "#/components/schemas/ClientId"
       required:
         - title
         - fireAt
@@ -1574,7 +1756,7 @@ components:
           maxLength: 2000
         fireAt:
           allOf:
-            - $ref: "#/components/schemas/Timestamp"
+            - $ref: "#/components/schemas/DateTimeInput"
             - description: A new time re-arms a reminder that already fired.
         rrule:
           type:
@@ -1939,7 +2121,7 @@ components:
           maximum: 10080
           description: "Default: the user's snooze setting."
         until:
-          $ref: "#/components/schemas/Timestamp"
+          $ref: "#/components/schemas/DateTimeInput"
       additionalProperties: false
     SyncInput:
       type: object
@@ -1969,7 +2151,9 @@ components:
           $ref: "#/components/schemas/Priority"
         dueDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
             - type: "null"
         dueTime:
           anyOf:
@@ -1981,6 +2165,12 @@ components:
             - $ref: "#/components/schemas/Timestamp"
             - type: "null"
           description: dueDate + dueTime as an instant (null without a time).
+        whenText:
+          type:
+            - string
+            - "null"
+          description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.'
+          example: jueves 14 de noviembre, 09:00
         overdue:
           type: boolean
           description: Open and due before today (user's timezone).
@@ -2008,6 +2198,10 @@ components:
             type: string
         source:
           $ref: "#/components/schemas/ItemSource"
+        url:
+          type: string
+          format: uri
+          description: Opens it in the agenda app.
         version:
           type: integer
           minimum: 1
@@ -2027,6 +2221,7 @@ components:
         - dueDate
         - dueTime
         - dueAt
+        - whenText
         - overdue
         - rrule
         - seriesId
@@ -2034,6 +2229,7 @@ components:
         - sortOrder
         - tags
         - source
+        - url
         - version
         - createdAt
         - updatedAt
@@ -2057,10 +2253,22 @@ components:
           allOf:
             - $ref: "#/components/schemas/Uuid"
             - description: "Default: Inbox."
+        list:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: "List by name instead of listId (case and accents don't matter). Must exist: listTaskLists shows them."
+          example: Casa
         priority:
           $ref: "#/components/schemas/Priority"
         dueDate:
-          $ref: "#/components/schemas/LocalDate"
+          anyOf:
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+            - $ref: "#/components/schemas/DateTimeInput"
+          description: "`YYYY-MM-DD`, or a date-time (`2026-11-14T09:00`) that also sets dueTime."
+          example: 2026-11-14
         dueTime:
           $ref: "#/components/schemas/LocalTime"
         rrule:
@@ -2076,9 +2284,121 @@ components:
             maxLength: 40
             pattern: ^[^\s#]+$
           maxItems: 20
+        reminderAt:
+          allOf:
+            - $ref: "#/components/schemas/DateTimeInput"
+            - description: Also push a reminder at this time, linked to the task ("recordame a las 9").
+        clientId:
+          $ref: "#/components/schemas/ClientId"
       required:
         - title
       additionalProperties: false
+    TaskCreated:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        listId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        notes:
+          type:
+            - string
+            - "null"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        priority:
+          $ref: "#/components/schemas/Priority"
+        dueDate:
+          anyOf:
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+            - type: "null"
+        dueTime:
+          anyOf:
+            - $ref: "#/components/schemas/LocalTime"
+            - type: "null"
+          description: Local time in the user's timezone; only with dueDate.
+        dueAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: dueDate + dueTime as an instant (null without a time).
+        whenText:
+          type:
+            - string
+            - "null"
+          description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.'
+          example: jueves 14 de noviembre, 09:00
+        overdue:
+          type: boolean
+          description: Open and due before today (user's timezone).
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the due date is the start).
+          example: FREQ=WEEKLY;BYDAY=MO
+        seriesId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Shared by every occurrence of a recurring task.
+        completedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        sortOrder:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          $ref: "#/components/schemas/ItemSource"
+        url:
+          type: string
+          format: uri
+          description: Opens it in the agenda app.
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+        reminder:
+          $ref: "#/components/schemas/Reminder"
+      required:
+        - id
+        - listId
+        - title
+        - notes
+        - status
+        - priority
+        - dueDate
+        - dueTime
+        - dueAt
+        - whenText
+        - overdue
+        - rrule
+        - seriesId
+        - completedAt
+        - sortOrder
+        - tags
+        - source
+        - url
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+      description: A Task, plus the reminder when `reminderAt` was sent.
     TaskList:
       type: object
       properties:
@@ -2184,11 +2504,20 @@ components:
           maxLength: 10000
         listId:
           $ref: "#/components/schemas/Uuid"
+        list:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: "List by name instead of listId (case and accents don't matter). Must exist: listTaskLists shows them."
+          example: Casa
         priority:
           $ref: "#/components/schemas/Priority"
         dueDate:
           anyOf:
-            - $ref: "#/components/schemas/LocalDate"
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+            - $ref: "#/components/schemas/DateTimeInput"
             - type: "null"
           description: null removes the date (and the time and recurrence).
         dueTime:
@@ -2437,6 +2766,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/openapi.sunday.json:
+    get:
+      operationId: openapiSunday
+      tags:
+        - Ops
+      summary: Sunday's tools (OpenAPI subset)
+      description: |-
+        Only the operations tagged `sunday`, token auth only, no header parameters or examples. Open WebUI loads this URL as a tool server (Bearer = the "sunday" API token).
+
+        **Actors:** anyone.
+      security: []
+      x-actors:
+        - anyone
+      responses:
+        "200":
+          description: OpenAPI 3.1 document.
+          content:
+            application/json:
+              examples:
+                doc:
+                  summary: Sunday's tools
+                  value:
+                    openapi: 3.1.0
+                    info:
+                      title: Agenda de Lemy
+                      version: 2.0.0
+              schema:
+                type: object
+                additionalProperties: {}
   /api/auth/session:
     get:
       operationId: getSession
@@ -3660,6 +4018,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       operationId: updateSettings
       tags:
@@ -4088,6 +4457,180 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/now:
+    get:
+      operationId: getNow
+      tags:
+        - Assistant
+        - sunday
+      summary: Current date, time and weekday of the user
+      description: |-
+        The user's clock (America/Buenos_Aires). Call it first whenever you need to resolve a relative date (hoy, mañana, el viernes, la semana que viene) and aren't sure what day it is. Also returns this week's Monday–Sunday.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      responses:
+        "200":
+          description: Now.
+          content:
+            application/json:
+              examples:
+                now:
+                  summary: Thursday morning
+                  value:
+                    now: 2026-11-19T09:12:30.000-03:00
+                    date: 2026-11-19
+                    time: 09:12
+                    weekday: jueves
+                    whenText: jueves 19 de noviembre, 09:12
+                    timezone: America/Buenos_Aires
+                    utcOffset: -03:00
+                    tomorrow: 2026-11-20
+                    weekStart: 2026-11-16
+                    weekEnd: 2026-11-22
+              schema:
+                $ref: "#/components/schemas/Now"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/notify:
+    post:
+      operationId: sendPushNotification
+      tags:
+        - Assistant
+        - sunday
+      summary: Send a push notification to Lemy's devices now
+      description: |-
+        For messages that must reach Lemy right away (an automation's result, "ya terminé"). For something at a later time use createReminder instead. Title ≤ 60 and body ≤ 240 characters. At most 20 per 24 hours.
+
+        **Actors:** user, API token with `notify`.
+      security:
+        - session: []
+        - apiToken:
+            - notify
+      x-actors:
+        - user
+        - API token with `notify`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              notify:
+                summary: Evening summary
+                value:
+                  title: Resumen del día
+                  body: "Hiciste 6 de 8 tareas y marcaste Gym. Mañana: dentista 10:00."
+                  tag: resumen-noche
+              badUrl:
+                summary: Link outside the allowed sites
+                value:
+                  title: Mirá esto
+                  body: Un link
+                  url: https://example.com
+            schema:
+              $ref: "#/components/schemas/NotifyInput"
+      responses:
+        "200":
+          description: "Sent (or no device available: see `delivered`)."
+          content:
+            application/json:
+              examples:
+                notify:
+                  summary: Evening summary
+                  value:
+                    delivered: 2
+                    failed: 0
+                    remainingToday: 19
+              schema:
+                $ref: "#/components/schemas/NotifyResult"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              examples:
+                badUrl:
+                  summary: Link outside the allowed sites
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: El link tiene que ser https en sunday.lemydev.com o agenda.lemydev.com, o una ruta de la app como /tareas.
+                      details:
+                        fields:
+                          - path: /url
+                            message: Host not allowed
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: 20 pushes in the last 24 hours. `RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/push/vapid:
     get:
       operationId: getVapidKey
@@ -4320,8 +4863,12 @@ paths:
       operationId: listTaskLists
       tags:
         - Tasks
+        - sunday
       summary: Task lists (Inbox first) with their open counts
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        The lists and their names, to pick `list` for createTask/updateTask.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -4383,13 +4930,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       operationId: createTaskList
       tags:
         - Tasks
+        - sunday
       summary: Create a list
       description: |-
         Names are unique (case-insensitive) among active lists.
+
+        Only when Lemy asks for a new list.
 
         **Actors:** user, API token with `write`.
       security:
@@ -4468,6 +5029,17 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -4570,6 +5142,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteTaskList
       tags:
@@ -4640,14 +5223,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/tasks:
     get:
       operationId: listTasks
       tags:
         - Tasks
+        - sunday
       summary: List tasks by view and filters
       description: |-
         Views: `today` (open, due today), `overdue`, `upcoming`, `inbox` (undated, in the Inbox), `done`. Filters combine (list, tag, status, due range, text). Dates are in the user's timezone.
+
+        For task-only questions ('¿qué tengo pendiente?', 'tareas de Casa', 'lo que hice ayer' with view=done). For a day's full picture prefer getAgendaOverview.
 
         **Actors:** user, API token with `read`.
       security:
@@ -4681,13 +5278,17 @@ paths:
           name: status
           in: query
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: false
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: dueFrom
           in: query
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: false
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: dueTo
@@ -4726,6 +5327,7 @@ paths:
                         dueDate: 2026-11-16
                         dueTime: 08:30
                         dueAt: 2026-11-16T08:30:00.000-03:00
+                        whenText: lunes 16 de noviembre, 08:30
                         overdue: false
                         rrule: FREQ=WEEKLY;BYDAY=MO
                         seriesId: 019a0a6e-1c00-7000-8000-00000000000b
@@ -4734,6 +5336,7 @@ paths:
                         tags:
                           - casa
                         source: user
+                        url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000b
                         version: 1
                         createdAt: 2026-11-16T08:12:00.000-03:00
                         updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -4766,13 +5369,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       operationId: createTask
       tags:
         - Tasks
+        - sunday
       summary: Create a task (without a list → Inbox)
       description: |-
         A time needs a date; a recurrence (RRULE body, e.g. `FREQ=WEEKLY;BYDAY=MO`) needs a date too.
+
+        A to-do. Without a date it goes to the Inbox. `dueDate` can be a date or a date-time ('mañana a las 9' → `2026-11-15T09:00`). `list` takes the list's name. `reminderAt` also schedules a push. Always send a `clientId`. For a push at a moment with nothing to do afterwards, createReminder fits better; for something with a start and end, createEvent.
 
         **Actors:** user, API token with `write`.
       security:
@@ -4796,6 +5413,19 @@ paths:
                   dueDate: 2026-11-17
                   dueTime: 09:00
                   priority: 2
+              sunday:
+                summary: "Sunday: tomorrow 9 in Casa, with a reminder at 8:45"
+                value:
+                  title: Sacar la basura
+                  dueDate: 2026-11-17T09:00
+                  list: casa
+                  reminderAt: 2026-11-17T08:45
+                  clientId: sunday-basura-17
+              unknownList:
+                summary: A list that doesn't exist
+                value:
+                  title: Comprar pintura
+                  list: Ferretería
               timeWithoutDate:
                 summary: Time without a date
                 value:
@@ -4804,6 +5434,12 @@ paths:
             schema:
               $ref: "#/components/schemas/TaskCreate"
       responses:
+        "200":
+          description: "Same `clientId` as an earlier create: that item, updated with the fields sent (no duplicate)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskCreated"
         "201":
           description: Created.
           content:
@@ -4821,6 +5457,7 @@ paths:
                     dueDate: 2026-11-17
                     dueTime: 09:00
                     dueAt: 2026-11-17T09:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     overdue: false
                     rrule: null
                     seriesId: null
@@ -4828,17 +5465,74 @@ paths:
                     sortOrder: 1
                     tags: []
                     source: user
+                    url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000a
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
                     updatedBy: user
+                sunday:
+                  summary: "Sunday: tomorrow 9 in Casa, with a reminder at 8:45"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000000c
+                    listId: 019a0a6e-1c00-7000-8000-000000000002
+                    title: Sacar la basura
+                    notes: null
+                    status: open
+                    priority: 0
+                    dueDate: 2026-11-17
+                    dueTime: 09:00
+                    dueAt: 2026-11-17T09:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
+                    overdue: false
+                    rrule: null
+                    seriesId: null
+                    completedAt: null
+                    sortOrder: 1
+                    tags: []
+                    source: sunday
+                    url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000c
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: sunday
+                    reminder:
+                      id: 019a0a6e-1c00-7000-8000-00000000002a
+                      title: Sacar la basura
+                      body: null
+                      fireAt: 2026-11-17T08:45:00.000-03:00
+                      whenText: martes 17 de noviembre, 08:45
+                      rrule: null
+                      status: scheduled
+                      urgent: false
+                      taskId: 019a0a6e-1c00-7000-8000-00000000000c
+                      eventId: null
+                      externalEventId: null
+                      snoozedFrom: null
+                      lastFiredAt: null
+                      source: sunday
+                      url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-00000000002a
+                      version: 1
+                      createdAt: 2026-11-16T08:12:00.000-03:00
+                      updatedAt: 2026-11-16T08:12:00.000-03:00
+                      updatedBy: sunday
               schema:
-                $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskCreated"
         "400":
           description: "`VALIDATION_ERROR` (details.fields)."
           content:
             application/json:
               examples:
+                unknownList:
+                  summary: A list that doesn't exist
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: 'No hay una lista "Ferretería". Las listas son: Inbox, Casa. Usá una de esas o creala con createTaskList.'
+                      details:
+                        fields:
+                          - path: /list
+                            message: Unknown list
+                      requestId: req_01JA9X7Q2M8K
                 timeWithoutDate:
                   summary: Time without a date
                   value:
@@ -4865,7 +5559,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: "`CONFLICT`: that id already exists. `IDEMPOTENCY_IN_PROGRESS`."
+          description: "`CONFLICT`: that id already exists, or the clientId belonged to a deleted task. `IDEMPOTENCY_IN_PROGRESS`."
           content:
             application/json:
               schema:
@@ -4882,13 +5576,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/tasks/{id}:
     get:
       operationId: getTask
       tags:
         - Tasks
+        - sunday
       summary: One task
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        Fetch one task by id (after a search) to check its current state.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -4920,6 +5629,7 @@ paths:
                     dueDate: 2026-11-17
                     dueTime: 09:00
                     dueAt: 2026-11-17T09:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     overdue: false
                     rrule: null
                     seriesId: null
@@ -4927,6 +5637,7 @@ paths:
                     sortOrder: 1
                     tags: []
                     source: user
+                    url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000a
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -4965,13 +5676,27 @@ paths:
                       requestId: req_01JA9X7Q2M8K
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       operationId: updateTask
       tags:
         - Tasks
+        - sunday
       summary: Change a task (reschedule, rename, move, cancel)
       description: |-
         `dueDate: null` removes the date, time and recurrence. Send `version` (or If-Match) to detect concurrent edits.
+
+        Reschedule ('pasala al viernes'), rename, move to another list (`list` by name) or cancel (`status: cancelled`). Only send the fields that change. Get the id with searchAgenda first.
 
         **Actors:** user, API token with `write`.
       security:
@@ -5020,6 +5745,7 @@ paths:
                     dueDate: 2026-11-19
                     dueTime: 10:00
                     dueAt: 2026-11-19T10:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     overdue: false
                     rrule: null
                     seriesId: null
@@ -5027,6 +5753,7 @@ paths:
                     sortOrder: 1
                     tags: []
                     source: user
+                    url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000a
                     version: 2
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5075,13 +5802,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteTask
       tags:
         - Tasks
+        - sunday
       summary: Delete a task
       description: |-
         Soft delete. If it was done, prefer completeTask.
+
+        Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled.
 
         **Actors:** user, API token with `write`.
       security:
@@ -5124,14 +5865,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/tasks/{id}/complete:
     post:
       operationId: completeTask
       tags:
         - Tasks
+        - sunday
       summary: Mark done (a recurring task spawns its next occurrence)
       description: |-
         Missed occurrences are skipped and completing counts for today. Completing a done task changes nothing.
+
+        When Lemy says he did it. A recurring task returns `next`, its next occurrence: mention when it comes back.
 
         **Actors:** user, API token with `write`.
       security:
@@ -5177,6 +5932,7 @@ paths:
                       dueDate: 2026-11-16
                       dueTime: 08:30
                       dueAt: 2026-11-16T08:30:00.000-03:00
+                      whenText: lunes 16 de noviembre, 08:30
                       overdue: false
                       rrule: FREQ=WEEKLY;BYDAY=MO
                       seriesId: 019a0a6e-1c00-7000-8000-00000000000b
@@ -5185,6 +5941,7 @@ paths:
                       tags:
                         - casa
                       source: user
+                      url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000b
                       version: 2
                       createdAt: 2026-11-16T08:12:00.000-03:00
                       updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5199,6 +5956,7 @@ paths:
                       dueDate: 2026-11-23
                       dueTime: 08:30
                       dueAt: 2026-11-23T08:30:00.000-03:00
+                      whenText: lunes 16 de noviembre, 08:30
                       overdue: false
                       rrule: FREQ=WEEKLY;BYDAY=MO
                       seriesId: 019a0a6e-1c00-7000-8000-00000000000b
@@ -5207,6 +5965,7 @@ paths:
                       tags:
                         - casa
                       source: user
+                      url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000b
                       version: 1
                       createdAt: 2026-11-16T08:12:00.000-03:00
                       updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5255,14 +6014,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/tasks/{id}/reopen:
     post:
       operationId: reopenTask
       tags:
         - Tasks
+        - sunday
       summary: Back to open (undo a completion)
       description: |-
         Also removes the occurrence that completing created (pass `nextId`, or the server finds it), unless it was edited since.
+
+        Undo a completion ('no, no la terminé').
 
         **Actors:** user, API token with `write`.
       security:
@@ -5308,6 +6081,7 @@ paths:
                     dueDate: 2026-11-16
                     dueTime: 08:30
                     dueAt: 2026-11-16T08:30:00.000-03:00
+                    whenText: lunes 16 de noviembre, 08:30
                     overdue: false
                     rrule: FREQ=WEEKLY;BYDAY=MO
                     seriesId: 019a0a6e-1c00-7000-8000-00000000000b
@@ -5316,6 +6090,7 @@ paths:
                     tags:
                       - casa
                     source: user
+                    url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000b
                     version: 3
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5360,6 +6135,17 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -5411,6 +6197,7 @@ paths:
                         dueDate: 2026-11-17
                         dueTime: 09:00
                         dueAt: 2026-11-17T09:00:00.000-03:00
+                        whenText: martes 17 de noviembre, 09:00
                         overdue: false
                         rrule: null
                         seriesId: null
@@ -5418,6 +6205,7 @@ paths:
                         sortOrder: 1
                         tags: []
                         source: user
+                        url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000a
                         version: 1
                         createdAt: 2026-11-16T08:12:00.000-03:00
                         updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5468,14 +6256,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/search:
     get:
       operationId: searchAgenda
       tags:
         - Tasks
+        - sunday
       summary: Find items by text (accent-insensitive)
       description: |-
         Use it to get an id before updating or deleting. Tasks first, then reminders, then local events.
+
+        Use it to find the id of something Lemy names by title ('la del contador') before updating, completing or deleting it. Covers tasks, reminders and Lemy's own events; Google Calendar events are found with listEvents. If several match, ask which one.
 
         **Actors:** user, API token with `read`.
       security:
@@ -5529,6 +6331,7 @@ paths:
                           dueDate: 2026-11-17
                           dueTime: 09:00
                           dueAt: 2026-11-17T09:00:00.000-03:00
+                          whenText: martes 17 de noviembre, 09:00
                           overdue: false
                           rrule: null
                           seriesId: null
@@ -5536,6 +6339,7 @@ paths:
                           sortOrder: 1
                           tags: []
                           source: user
+                          url: https://agenda.lemydev.com/tareas?task=019a0a6e-1c00-7000-8000-00000000000a
                           version: 1
                           createdAt: 2026-11-16T08:12:00.000-03:00
                           updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5560,14 +6364,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/reminders:
     get:
       operationId: listReminders
       tags:
         - Reminders
+        - sunday
       summary: Upcoming or recent reminders
       description: |-
         `upcoming`: scheduled, soonest first. `recent`: sent, done, missed or cancelled, newest first.
+
+        view=upcoming for the pending ones ('¿qué recordatorios tengo?'), view=recent for what already fired. Without view: all.
 
         **Actors:** user, API token with `read`.
       security:
@@ -5626,6 +6444,7 @@ paths:
                         title: Tomar la pastilla
                         body: null
                         fireAt: 2026-11-17T08:00:00.000-03:00
+                        whenText: martes 17 de noviembre, 08:00
                         rrule: FREQ=DAILY
                         status: scheduled
                         urgent: false
@@ -5635,6 +6454,7 @@ paths:
                         snoozedFrom: null
                         lastFiredAt: null
                         source: user
+                        url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000029
                         version: 1
                         createdAt: 2026-11-16T08:12:00.000-03:00
                         updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5643,6 +6463,7 @@ paths:
                         title: Llamar al contador
                         body: null
                         fireAt: 2026-11-17T09:00:00.000-03:00
+                        whenText: martes 17 de noviembre, 09:00
                         rrule: null
                         status: scheduled
                         urgent: false
@@ -5652,6 +6473,7 @@ paths:
                         snoozedFrom: null
                         lastFiredAt: null
                         source: user
+                        url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000028
                         version: 1
                         createdAt: 2026-11-16T08:12:00.000-03:00
                         updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5684,13 +6506,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       operationId: createReminder
       tags:
         - Reminders
+        - sunday
       summary: Push notification at a moment
       description: |-
-        `fireAt` with its offset. Optional RRULE (hourly to yearly), `urgent` (ignores quiet hours) and `taskId` (Listo also completes the task).
+        `fireAt` in the future, with or without offset (without = the user's local time). Optional RRULE (hourly to yearly), `urgent` (ignores quiet hours) and `taskId` (Listo also completes the task).
+
+        A push notification at a moment ('recordame a las 18 sacar la ropa'). `fireAt` can omit the offset: it's Lemy's local time. Must be in the future. `rrule` for repeating ones (`FREQ=DAILY`), `urgent` to ignore quiet hours. Always send a `clientId`.
 
         **Actors:** user, API token with `write`.
       security:
@@ -5720,6 +6556,12 @@ paths:
             schema:
               $ref: "#/components/schemas/ReminderCreate"
       responses:
+        "200":
+          description: "Same `clientId` as an earlier create: that item, updated with the fields sent (no duplicate)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
         "201":
           description: Created.
           content:
@@ -5732,6 +6574,7 @@ paths:
                     title: Llamar al contador
                     body: null
                     fireAt: 2026-11-17T09:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     rrule: null
                     status: scheduled
                     urgent: false
@@ -5741,6 +6584,7 @@ paths:
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
+                    url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000028
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5778,7 +6622,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          description: "`CONFLICT`: the clientId belonged to a deleted reminder. `IDEMPOTENCY_IN_PROGRESS`."
           content:
             application/json:
               schema:
@@ -5795,13 +6639,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/reminders/{id}:
     get:
       operationId: getReminder
       tags:
         - Reminders
+        - sunday
       summary: One reminder
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        Fetch one reminder by id.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -5828,6 +6687,7 @@ paths:
                     title: Llamar al contador
                     body: null
                     fireAt: 2026-11-17T09:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     rrule: null
                     status: scheduled
                     urgent: false
@@ -5837,6 +6697,7 @@ paths:
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
+                    url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000028
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5867,12 +6728,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       operationId: updateReminder
       tags:
         - Reminders
+        - sunday
       summary: Change a reminder's time or text
-      description: "**Actors:** user, API token with `write`."
+      description: |-
+        Change the time or text of a reminder. A new future time re-arms one that already fired.
+
+        **Actors:** user, API token with `write`.
       security:
         - session: []
         - apiToken:
@@ -5913,6 +6789,7 @@ paths:
                     title: Llamar al contador
                     body: null
                     fireAt: 2026-11-17T10:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     rrule: null
                     status: scheduled
                     urgent: false
@@ -5922,6 +6799,7 @@ paths:
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
+                    url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000028
                     version: 2
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -5970,12 +6848,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteReminder
       tags:
         - Reminders
+        - sunday
       summary: Cancel a reminder
-      description: "**Actors:** user, API token with `write`."
+      description: |-
+        Cancel a reminder Lemy no longer wants.
+
+        **Actors:** user, API token with `write`.
       security:
         - session: []
         - apiToken:
@@ -6016,14 +6909,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/reminders/{id}/snooze:
     post:
       operationId: snoozeReminder
       tags:
         - Reminders
+        - sunday
       summary: Postpone by minutes or until a time
       description: |-
         Without a body: the user's default snooze (10 min). A recurring series keeps its schedule.
+
+        'Recordámelo en media hora' about an existing reminder: `minutes`, or `until` a time.
 
         **Actors:** user, API token with `write`.
       security:
@@ -6064,6 +6971,7 @@ paths:
                     title: Llamar al contador
                     body: null
                     fireAt: 2026-11-17T09:10:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     rrule: null
                     status: scheduled
                     urgent: false
@@ -6073,6 +6981,7 @@ paths:
                     snoozedFrom: 2026-11-17T09:00:00.000-03:00
                     lastFiredAt: null
                     source: user
+                    url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000028
                     version: 2
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6121,14 +7030,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/reminders/{id}/done:
     post:
       operationId: doneReminder
       tags:
         - Reminders
+        - sunday
       summary: Listo (and complete the linked task)
       description: |-
         A one-off reminder becomes `done`; a recurring one keeps its next time.
+
+        Lemy confirms he did what the reminder asked (the linked task is completed too).
 
         **Actors:** user, API token with `write`.
       security:
@@ -6168,6 +7091,7 @@ paths:
                     title: Llamar al contador
                     body: null
                     fireAt: 2026-11-17T09:00:00.000-03:00
+                    whenText: martes 17 de noviembre, 09:00
                     rrule: null
                     status: done
                     urgent: false
@@ -6177,6 +7101,7 @@ paths:
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
+                    url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000028
                     version: 2
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6225,14 +7150,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/overview:
     get:
       operationId: getAgendaOverview
       tags:
         - Events
+        - sunday
       summary: Everything in a date range
       description: |-
         Local and Google Calendar events, open tasks due, reminders, plus overdue tasks. Use it for "¿qué tengo hoy/mañana/esta semana?". Default: today. At most 31 days.
+
+        The first call for any '¿qué tengo…?' question. Pass from/to for other days (to inclusive). Read times back with each item's `whenText`. Overdue tasks come apart in `overdue`.
 
         **Actors:** user, API token with `read`.
       security:
@@ -6284,6 +7223,7 @@ paths:
                         endsAt: 2026-11-18T09:45:00.000-03:00
                         startDate: null
                         endDate: null
+                        whenText: miércoles 18 de noviembre, 09:30–09:45
                         recurring: false
                         rrule: null
                         reminderOffsets: []
@@ -6293,6 +7233,7 @@ paths:
                           id: 019a0a6e-1c00-7000-8000-000000000046
                           name: Trabajo
                           color: "#4285f4"
+                        url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-000000000047
                       - id: 019a0a6e-1c00-7000-8000-00000000003c
                         eventId: 019a0a6e-1c00-7000-8000-00000000003c
                         externalEventId: null
@@ -6306,6 +7247,7 @@ paths:
                         endsAt: 2026-11-18T11:00:00.000-03:00
                         startDate: null
                         endDate: null
+                        whenText: miércoles 18 de noviembre, 10:00–11:00
                         recurring: false
                         rrule: null
                         reminderOffsets:
@@ -6314,6 +7256,7 @@ paths:
                         tentative: false
                         htmlLink: null
                         calendar: null
+                        url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-00000000003c
                     tasks: []
                     reminders: []
                     overdue: []
@@ -6337,14 +7280,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/events:
     get:
       operationId: listEvents
       tags:
         - Events
+        - sunday
       summary: Events in a date range
       description: |-
         Local events (recurring ones expanded) and, unless `includeExternal=false`, Google/iCal events (`readOnly: true`). Chronological; at most 92 days.
+
+        Calendar only (Lemy's events plus Google Calendar) for a range up to 92 days. Google events have `readOnly: true`: they can't be changed here, only get a reminder with remindExternalEvent.
 
         **Actors:** user, API token with `read`.
       security:
@@ -6404,6 +7361,7 @@ paths:
                         endsAt: 2026-11-18T09:45:00.000-03:00
                         startDate: null
                         endDate: null
+                        whenText: miércoles 18 de noviembre, 09:30–09:45
                         recurring: false
                         rrule: null
                         reminderOffsets: []
@@ -6413,6 +7371,7 @@ paths:
                           id: 019a0a6e-1c00-7000-8000-000000000046
                           name: Trabajo
                           color: "#4285f4"
+                        url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-000000000047
                       - id: 019a0a6e-1c00-7000-8000-00000000003c
                         eventId: 019a0a6e-1c00-7000-8000-00000000003c
                         externalEventId: null
@@ -6426,6 +7385,7 @@ paths:
                         endsAt: 2026-11-18T11:00:00.000-03:00
                         startDate: null
                         endDate: null
+                        whenText: miércoles 18 de noviembre, 10:00–11:00
                         recurring: false
                         rrule: null
                         reminderOffsets:
@@ -6434,6 +7394,7 @@ paths:
                         tentative: false
                         htmlLink: null
                         calendar: null
+                        url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-00000000003c
               schema:
                 type: object
                 properties:
@@ -6462,13 +7423,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       operationId: createEvent
       tags:
         - Events
+        - sunday
       summary: Create a local event
       description: |-
         Timed (`startsAt` + optional `endsAt`) or all-day (`allDay: true`, `startDate` + optional exclusive `endDate`). Optional RRULE and `reminderOffsets` (minutes before: pushes are scheduled automatically).
+
+        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar.
 
         **Actors:** user, API token with `write`.
       security:
@@ -6505,6 +7480,12 @@ paths:
             schema:
               $ref: "#/components/schemas/EventCreate"
       responses:
+        "200":
+          description: "Same `clientId` as an earlier create: that item, updated with the fields sent (no duplicate)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
         "201":
           description: Created.
           content:
@@ -6522,12 +7503,14 @@ paths:
                     endsAt: 2026-11-18T11:00:00.000-03:00
                     startDate: null
                     endDate: null
+                    whenText: miércoles 18 de noviembre, 10:00–11:00
                     timezone: America/Buenos_Aires
                     rrule: null
                     reminderOffsets:
                       - 60
                       - 15
                     source: user
+                    url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-00000000003c
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6544,10 +7527,12 @@ paths:
                     endsAt: null
                     startDate: 2026-11-20
                     endDate: 2026-11-21
+                    whenText: viernes 20 de noviembre (todo el día)
                     timezone: America/Buenos_Aires
                     rrule: FREQ=YEARLY
                     reminderOffsets: []
                     source: user
+                    url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-00000000003d
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6573,7 +7558,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          description: "`CONFLICT`: the clientId belonged to a deleted event. `IDEMPOTENCY_IN_PROGRESS`."
           content:
             application/json:
               schema:
@@ -6590,13 +7575,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/events/{id}:
     get:
       operationId: getEvent
       tags:
         - Events
+        - sunday
       summary: One local event
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        Fetch one of Lemy's own events by id.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -6628,12 +7628,14 @@ paths:
                     endsAt: 2026-11-18T11:00:00.000-03:00
                     startDate: null
                     endDate: null
+                    whenText: miércoles 18 de noviembre, 10:00–11:00
                     timezone: America/Buenos_Aires
                     rrule: null
                     reminderOffsets:
                       - 60
                       - 15
                     source: user
+                    url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-00000000003c
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6664,13 +7666,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       operationId: updateEvent
       tags:
         - Events
+        - sunday
       summary: Change a local event
       description: |-
         Edits apply to the whole series. Google/iCal events answer 409 `READ_ONLY_EVENT`.
+
+        Move or edit one of Lemy's own events (the whole series if it repeats). A Google Calendar event answers READ_ONLY_EVENT: tell Lemy to change it in Google Calendar.
 
         **Actors:** user, API token with `write`.
       security:
@@ -6723,12 +7739,14 @@ paths:
                     endsAt: 2026-11-18T12:00:00.000-03:00
                     startDate: null
                     endDate: null
+                    whenText: miércoles 18 de noviembre, 10:00–11:00
                     timezone: America/Buenos_Aires
                     rrule: null
                     reminderOffsets:
                       - 60
                       - 15
                     source: user
+                    url: https://agenda.lemydev.com/calendario?event=019a0a6e-1c00-7000-8000-00000000003c
                     version: 2
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6785,13 +7803,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteEvent
       tags:
         - Events
+        - sunday
       summary: Delete a local event
       description: |-
         Its pending reminders go too. Google/iCal events answer 409 `READ_ONLY_EVENT`.
+
+        Delete one of Lemy's own events. Google Calendar events can't be deleted here.
 
         **Actors:** user, API token with `write`.
       security:
@@ -6840,14 +7872,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/external-events/{id}/remind:
     post:
       operationId: remindExternalEvent
       tags:
         - Events
+        - sunday
       summary: "Recordarme: a reminder for a Google/iCal event"
       description: |-
         `minutesBefore` (timed events: follows the event if it moves, goes if it's cancelled) or a fixed `at`. One per offset and event.
+
+        'Avisame 15 minutos antes de la daily': a reminder for a Google Calendar event (its `externalEventId` from getAgendaOverview or listEvents).
 
         **Actors:** user, API token with `write`.
       security:
@@ -6888,6 +7934,7 @@ paths:
                     title: Daily
                     body: A las 09:30
                     fireAt: 2026-11-18T09:20:00.000-03:00
+                    whenText: miércoles 18 de noviembre, 09:20
                     rrule: null
                     status: scheduled
                     urgent: false
@@ -6897,6 +7944,7 @@ paths:
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
+                    url: https://agenda.lemydev.com/recordatorios?reminder=019a0a6e-1c00-7000-8000-000000000050
                     version: 1
                     createdAt: 2026-11-16T08:12:00.000-03:00
                     updatedAt: 2026-11-16T08:12:00.000-03:00
@@ -6941,6 +7989,17 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -7501,9 +8560,12 @@ paths:
       operationId: listHabits
       tags:
         - Habits
+        - sunday
       summary: Habits with today's status and streaks
       description: |-
         Active habits (archived ones with `includeArchived=true`), each with its streak, the period's progress and the day's log.
+
+        Habits with today's check, the week's progress and streaks ('¿cómo vengo con el gym?').
 
         **Actors:** user, API token with `read`.
       security:
@@ -7624,6 +8686,17 @@ paths:
                 $ref: "#/components/schemas/Error"
         "403":
           description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -7906,9 +8979,12 @@ paths:
       operationId: logHabit
       tags:
         - Habits
+        - sunday
       summary: Check (or uncheck) a habit for a date
       description: |-
         Yes/no: `done` (default true). Numeric: `value` (0 clears). Date defaults to today; never in the future.
+
+        'Fui al gym', 'leí 20 páginas': `{habit}` is the slug (gym, lectura) or the id; listHabits shows them. Yes/no habits take nothing (or `done: false` to uncheck); numeric ones take `value`. Back-date with `date`.
 
         **Actors:** user, API token with `write`.
       security:
@@ -8085,13 +9161,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/habits/{habit}/logs:
     get:
       operationId: listHabitLogs
       tags:
         - Habits
+        - sunday
       summary: A habit's check-ins in a date range
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        A habit's history over a range.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -8110,13 +9201,17 @@ paths:
           name: habit
           in: path
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: from
           in: query
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: to
@@ -8175,13 +9270,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/sleep:
     get:
       operationId: listSleep
       tags:
         - Sleep
+        - sunday
       summary: Nights in a date range (by wake-up date)
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        Nights over a range ('¿cómo dormí esta semana?'). Each night belongs to the date Lemy woke up.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -8191,13 +9301,17 @@ paths:
         - API token with `read`
       parameters:
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: from
           in: query
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: to
@@ -8252,13 +9366,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/sleep/events:
     post:
       operationId: logSleepEvent
       tags:
         - Sleep
+        - sunday
       summary: '"Me voy a dormir" / "Me levanté"'
-      description: "**Actors:** user, API token with `write`."
+      description: |-
+        'Me voy a dormir' → `type: bed`; 'me levanté' → `type: wake`. Now by default, or `at` ('me dormí a las 0:30').
+
+        **Actors:** user, API token with `write`.
       security:
         - session: []
         - apiToken:
@@ -8364,20 +9493,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/sleep/{date}:
     put:
       operationId: upsertSleep
       tags:
         - Sleep
+        - sunday
       summary: Load or correct a night by hand
-      description: "**Actors:** user."
+      description: |-
+        Load or fix a whole night at once, with `quality` 1–5. `{date}` is the wake-up date.
+
+        **Actors:** user, API token with `write`.
       security:
         - session: []
+        - apiToken:
+            - write
       x-actors:
         - user
+        - API token with `write`
       parameters:
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: date
@@ -8437,7 +9586,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
           content:
             application/json:
               schema:
@@ -8460,6 +9609,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteSleep
       tags:
@@ -8472,7 +9632,9 @@ paths:
         - user
       parameters:
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: date
@@ -8509,8 +9671,12 @@ paths:
       operationId: getDayReview
       tags:
         - Review
+        - sunday
       summary: The day's review (Cierre del día)
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        The day's closing review if Lemy already did it.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -8520,7 +9686,9 @@ paths:
         - API token with `read`
       parameters:
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: date
@@ -8575,22 +9743,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     put:
       operationId: saveDayReview
       tags:
         - Review
+        - sunday
       summary: "Close the day: mood, note, highlights, pending tasks sorted out"
       description: |-
         `moves`: each pending task to tomorrow, the Inbox or dropped (cancelled). Saving again edits the review.
 
-        **Actors:** user.
+        Close the day with Lemy: mood 1–5, up to 3 highlights, a note, and `moves` for each pending task (tomorrow, inbox or drop = cancel). Get the pending ones from getDaySummary first.
+
+        **Actors:** user, API token with `write`.
       security:
         - session: []
+        - apiToken:
+            - write
       x-actors:
         - user
+        - API token with `write`
       parameters:
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: true
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: date
@@ -8656,7 +9843,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
           content:
             application/json:
               schema:
@@ -8679,14 +9866,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/summary/day:
     get:
       operationId: getDaySummary
       tags:
         - Review
+        - sunday
       summary: Done and pending tasks, habits, sleep and review for a day
       description: |-
         For the evening review automation. Default today.
+
+        Everything about one day (tasks done and pending, habits, sleep, review): the base for an evening review.
 
         **Actors:** user, API token with `read`.
       security:
@@ -8698,7 +9899,9 @@ paths:
         - API token with `read`
       parameters:
         - schema:
-            $ref: "#/components/schemas/LocalDate"
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           required: false
           description: Calendar date in the user's timezone, `YYYY-MM-DD`.
           name: date
@@ -8799,17 +10002,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/history:
     get:
       operationId: getHistory
       tags:
         - Review
+        - sunday
       summary: "Historial: each day of a month"
-      description: "**Actors:** user."
+      description: |-
+        Per-day numbers for a month (tasks done, habits met, sleep, mood).
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
+        - apiToken:
+            - read
       x-actors:
         - user
+        - API token with `read`
       parameters:
         - schema:
             type: string
@@ -8852,7 +10073,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -8862,8 +10094,12 @@ paths:
       operationId: getMetrics
       tags:
         - Review
+        - sunday
       summary: Métricas for a week, month or year
-      description: "**Actors:** user, API token with `read`."
+      description: |-
+        Trends for a week, month or year: completion, punctuality, habit consistency, sleep and mood averages.
+
+        **Actors:** user, API token with `read`.
       security:
         - session: []
         - apiToken:
@@ -8966,6 +10202,17 @@ paths:
                 $ref: "#/components/schemas/Error"
         "403":
           description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:

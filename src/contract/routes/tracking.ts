@@ -305,6 +305,7 @@ export const sleepRoutes: RouteDef[] = [
     tag: "Sleep",
     summary: "Load or correct a night by hand",
     access: "user",
+    token: "write",
     ifMatch: true,
     params: dateParam,
     body: SleepUpsert,
@@ -361,6 +362,7 @@ export const reviewRoutes: RouteDef[] = [
     summary: "Close the day: mood, note, highlights, pending tasks sorted out",
     description: "`moves`: each pending task to tomorrow, the Inbox or dropped (cancelled). Saving again edits the review.",
     access: "user",
+    token: "write",
     params: dateParam,
     body: DayReviewInput,
     responses: {
@@ -414,6 +416,7 @@ export const reviewRoutes: RouteDef[] = [
     tag: "Review",
     summary: "Historial: each day of a month",
     access: "user",
+    token: "read",
     query: z.strictObject({
       month: z
         .string()
