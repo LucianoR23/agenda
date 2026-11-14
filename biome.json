@@ -7,7 +7,16 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/design", "!**/drizzle/meta", "!**/public/icons.svg", "!**/public/icons", "!**/next-env.d.ts", "!**/*.md"]
+    "includes": [
+      "**",
+      "!**/design",
+      "!**/drizzle/meta",
+      "!**/public/icons.svg",
+      "!**/public/icons",
+      "!**/next-env.d.ts",
+      "!**/*.md",
+      "!**/.claude"
+    ]
   },
   "formatter": {
     "enabled": true,
