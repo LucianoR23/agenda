@@ -77,6 +77,7 @@ pnpm typecheck && pnpm check && pnpm test && pnpm build
 |---|---|
 | `pnpm test:unit` | Pure logic only, no database needed |
 | `pnpm test` | Unit + integration (router + Postgres `agenda_test`, migrated fresh each run; responses checked against `openapi.yaml`) |
+| `pnpm test:e2e` | Playwright on the production standalone build (Android viewport, `agenda_e2e_test`); first run: `pnpm exec playwright install chromium`. Screenshots land in `test-results/screens/` |
 | `pnpm check` / `pnpm fix` | Biome lint + format (check / apply) |
 | `pnpm openapi:gen` / `openapi:check` / `openapi:lint` | Regenerate `openapi.yaml` from `src/contract` / drift check / Redocly |
 | `pnpm db:generate --name x` | New migration from the Drizzle schema. `0000` is pure drizzle-kit output; hand-written SQL goes in custom migrations (`--custom`) |
@@ -87,16 +88,12 @@ pnpm typecheck && pnpm check && pnpm test && pnpm build
 ## 6. Where the work is
 
 - **Branch:** `v2` (v1 is the tag `v1`; never push to `main`, never force-push).
-- **Status:** phases 0–3 done (tooling, schema, auth & security, API tokens, settings, CSP). See
-  [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist and the decisions recorded per phase.
-- **Next:** phase 4 (tasks, first screens, first deploy). A plan was proposed and is **waiting for approval** on these
-  open questions:
-  1. Recurrence library: `rrule-temporal` pinned at 2.2.8 (the `rrule` package is unmaintained since 2023).
-  2. Completing an overdue recurring task: next occurrence skips the missed ones (first ≥ today) vs. strictly the next
-     after the old due date.
-  3. Quick-add grammar: "mañana 9 …", "el jueves a las 18 …", "todos los lunes 8:30 …", "15/12 …", `#lista`,
-     `!alta|!media|!baja`, `+tag`.
-  4. Deploy: Coolify app on branch `v2` needs the `agenda` database on postgres-core (provisioned by the sunday repo).
+- **Status:** phases 0–4 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
+  tasks API + Hoy/Inbox/Tareas screens). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
+  and the decisions recorded per phase.
+- **Blocked:** the first deploy waits for the `agenda` database on postgres-core; follow
+  [`runbooks/deploy.md`](runbooks/deploy.md) when it exists.
+- **Next:** phase 5 (reminders and push) — starts with a plan for approval.
 - **Working agreement:** read [`CLAUDE.md`](../../CLAUDE.md) first (plan → approval → implement → gate → tick → summary).
 
 ## Troubleshooting
