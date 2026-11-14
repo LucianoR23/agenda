@@ -22,6 +22,7 @@ export function reminderOut(r: Row, ctx: Pick<Ctx, "tz">) {
     urgent: r.urgent,
     taskId: r.taskId,
     eventId: r.eventId,
+    externalEventId: r.externalEventId,
     snoozedFrom: r.snoozedFrom ? formatInstant(r.snoozedFrom, ctx.tz) : null,
     lastFiredAt: r.lastFiredAt ? formatInstant(r.lastFiredAt, ctx.tz) : null,
     source: r.source,

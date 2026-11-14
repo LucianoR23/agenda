@@ -16,6 +16,7 @@ export const DEFAULT_MESSAGES: Record<ErrorCodeT, string> = {
   METHOD_NOT_ALLOWED: "Ese método no está permitido en esta ruta.",
   VERSION_CONFLICT: "Cambió en el servidor mientras lo editabas. `details.current` tiene la versión actual.",
   CONFLICT: "Ya existe algo igual.",
+  READ_ONLY_EVENT: "Ese evento viene de Google Calendar (o iCal) y es de solo lectura: cambialo en Google Calendar.",
   IDEMPOTENCY_KEY_REUSE: "Esa Idempotency-Key ya se usó con otro pedido.",
   IDEMPOTENCY_IN_PROGRESS: "Un pedido con esa Idempotency-Key todavía se está procesando.",
   RATE_LIMITED: "Demasiados pedidos. Esperá `details.retryAfterSeconds` segundos.",

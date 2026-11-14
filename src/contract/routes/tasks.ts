@@ -339,7 +339,7 @@ const taskRoutes: RouteDef[] = [
     path: "/api/search",
     tag: "Tasks",
     summary: "Find items by text (accent-insensitive)",
-    description: "Use it to get an id before updating or deleting. Tasks first, then reminders (events join in phase 6).",
+    description: "Use it to get an id before updating or deleting. Tasks first, then reminders, then local events.",
     access: "user",
     token: "read",
     query: z.strictObject({

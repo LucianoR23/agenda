@@ -50,6 +50,7 @@ export function useReminderActions() {
         urgent: input.urgent ?? false,
         taskId: input.taskId ?? null,
         eventId: null,
+        externalEventId: null,
         snoozedFrom: null,
         lastFiredAt: null,
         source: "user",

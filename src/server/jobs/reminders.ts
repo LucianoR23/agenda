@@ -87,7 +87,7 @@ export async function dispatchReminders(db: Db, now: Temporal.Instant): Promise<
           id: r.id,
           title: late ? `Atrasado: ${r.title}` : r.title,
           body: r.body ?? "",
-          url: "/recordatorios",
+          url: r.eventId || r.externalEventId ? "/calendario" : "/recordatorios",
           tag: `reminder-${r.id}`,
           actions: [
             { action: "done", title: "Listo" },

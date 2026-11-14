@@ -142,3 +142,50 @@ export function nextReminderFire(
   }
   return { fireAt: next.toInstant(), rrule: join(p) };
 }
+
+/** Frequencies an event may use (daily or longer, like tasks). */
+const EVENT_FREQS = TASK_FREQS;
+
+/** Validates and normalizes an event RRULE (anchored at the event's start in its timezone). */
+export function normalizeEventRrule(input: string, dtstart: Temporal.ZonedDateTime): string {
+  const body = input.trim().replace(/^RRULE:/i, "");
+  if (/DTSTART/i.test(body)) throw invalid("La regla de repetición no lleva DTSTART: el inicio del evento es el inicio.");
+  const p = parts(body);
+  const freq = p.get("FREQ");
+  if (!freq || !EVENT_FREQS.has(freq))
+    throw invalid("La repetición tiene que ser diaria, semanal, mensual o anual (FREQ=DAILY|WEEKLY|MONTHLY|YEARLY).");
+  const normalized = join(p);
+  try {
+    ruleAt(normalized, dtstart).next();
+  } catch {
+    throw invalid(`No entendí la regla de repetición "${input}".`);
+  }
+  return normalized;
+}
+
+/**
+ * Starts of a recurring event's occurrences that overlap [from, to): those starting before `to` and ending after
+ * `from` (an occurrence lasts `durationMs`). The first occurrence is DTSTART itself.
+ */
+export function eventOccurrences(
+  rrule: string,
+  dtstart: Temporal.ZonedDateTime,
+  durationMs: number,
+  from: Temporal.Instant,
+  to: Temporal.Instant,
+  max = 500,
+): Temporal.ZonedDateTime[] {
+  const r = ruleAt(rrule, dtstart);
+  const after = from.subtract({ milliseconds: durationMs }).toZonedDateTimeISO(dtstart.timeZoneId);
+  const before = to.toZonedDateTimeISO(dtstart.timeZoneId);
+  if (Temporal.ZonedDateTime.compare(before, dtstart) <= 0) return [];
+  return r
+    .between(after, before, true)
+    .filter(
+      (z) =>
+        Temporal.Instant.compare(z.toInstant(), to) < 0 &&
+        (Temporal.Instant.compare(z.toInstant(), from) >= 0 ||
+          Temporal.Instant.compare(z.toInstant().add({ milliseconds: durationMs }), from) > 0),
+    )
+    .slice(0, max);
+}

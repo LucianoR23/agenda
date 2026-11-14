@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, pgEnum, pgTable, smallint, text, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { at, id, itemSourceEnum, syncable } from "./common";
-import { event } from "./events";
+import { event, externalEvent } from "./events";
 import { task } from "./tasks";
 
 export const reminderStatusEnum = pgEnum("reminder_status", ["scheduled", "sent", "done", "cancelled", "missed"]);
@@ -23,7 +23,9 @@ export const reminder = pgTable(
     urgent: boolean().notNull().default(false),
     taskId: uuid().references(() => task.id, { onDelete: "set null" }),
     eventId: uuid().references(() => event.id, { onDelete: "cascade" }),
-    /** Minutes before the event, when generated from `event.reminder_offsets`. */
+    /** A Google/iCal event instance ("Recordarme" or the calendar's automatic notice); gone with the event. */
+    externalEventId: uuid().references(() => externalEvent.id, { onDelete: "cascade" }),
+    /** Minutes before the event, when generated from `event.reminder_offsets` or a calendar's `reminder_minutes`. */
     offsetMinutes: integer(),
     /** The event occurrence this reminder belongs to: with event_id + offset it makes materialization idempotent. */
     eventOccurrenceAt: at(),
@@ -40,8 +42,15 @@ export const reminder = pgTable(
     uniqueIndex("reminder_event_offset_uq")
       .on(t.eventId, t.offsetMinutes, t.eventOccurrenceAt)
       .where(sql`${t.eventId} IS NOT NULL AND ${t.deletedAt} IS NULL`),
+    uniqueIndex("reminder_external_offset_uq")
+      .on(t.externalEventId, t.offsetMinutes, t.eventOccurrenceAt)
+      .where(sql`${t.externalEventId} IS NOT NULL AND ${t.deletedAt} IS NULL`),
     index("reminder_updated_idx").on(t.updatedAt),
-    check("reminder_offset_needs_event", sql`(${t.offsetMinutes} IS NULL AND ${t.eventOccurrenceAt} IS NULL) OR ${t.eventId} IS NOT NULL`),
+    check(
+      "reminder_offset_needs_event",
+      sql`(${t.offsetMinutes} IS NULL AND ${t.eventOccurrenceAt} IS NULL) OR ${t.eventId} IS NOT NULL OR ${t.externalEventId} IS NOT NULL`,
+    ),
+    check("reminder_one_event", sql`${t.eventId} IS NULL OR ${t.externalEventId} IS NULL`),
     check("reminder_offset_range", sql`${t.offsetMinutes} IS NULL OR ${t.offsetMinutes} BETWEEN 0 AND 40320`),
     check("reminder_title_length", sql`char_length(${t.title}) BETWEEN 1 AND 500`),
     check("reminder_client_id_length", sql`${t.clientId} IS NULL OR char_length(${t.clientId}) BETWEEN 1 AND 100`),

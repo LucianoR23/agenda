@@ -16,4 +16,8 @@ Object.assign(process.env, {
   DEVICE_TRUST_DAYS: "90",
   ARGON2_MEMORY_KIB: "1024",
   APP_VERSION: "test",
+  // fake values: Google is faked with setGoogleFetch, the key only encrypts test data
+  ENCRYPTION_KEY: Buffer.from("0123456789abcdef0123456789abcdef").toString("base64"),
+  GOOGLE_CLIENT_ID: "test-client.apps.googleusercontent.com",
+  GOOGLE_CLIENT_SECRET: "test-client-secret",
 });

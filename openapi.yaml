@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Tasks
   - name: Reminders
+  - name: Events
+  - name: Calendars
   - name: Auth
   - name: Settings
   - name: Tokens
@@ -33,6 +35,97 @@ components:
       scheme: bearer
       description: "Named API token `agd_…` (Ajustes → Tokens de API). Scopes: `read`, `write`, `notify`. Actor = `sunday`."
   schemas:
+    AgendaEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique per occurrence (a recurring local event repeats its eventId).
+        eventId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: "Local event: use it with updateEvent/deleteEvent."
+        externalEventId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: "Google/iCal event: use it with remindExternalEvent."
+        source:
+          $ref: "#/components/schemas/EventKind"
+        readOnly:
+          type: boolean
+          description: Google/iCal events can't be changed here.
+        title:
+          type: string
+        notes:
+          type:
+            - string
+            - "null"
+        location:
+          type:
+            - string
+            - "null"
+        allDay:
+          type: boolean
+        startsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        endsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        startDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+        endDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+        recurring:
+          type: boolean
+        rrule:
+          type:
+            - string
+            - "null"
+        reminderOffsets:
+          type: array
+          items:
+            type: integer
+        tentative:
+          type: boolean
+        htmlLink:
+          type:
+            - string
+            - "null"
+          description: Open in Google Calendar.
+        calendar:
+          anyOf:
+            - $ref: "#/components/schemas/CalendarRef"
+            - type: "null"
+      required:
+        - id
+        - eventId
+        - externalEventId
+        - source
+        - readOnly
+        - title
+        - notes
+        - location
+        - allDay
+        - startsAt
+        - endsAt
+        - startDate
+        - endDate
+        - recurring
+        - rrule
+        - reminderOffsets
+        - tentative
+        - htmlLink
+        - calendar
+      additionalProperties: false
     ApiToken:
       type: object
       properties:
@@ -71,6 +164,116 @@ components:
         - lastUsedIp
         - expiresAt
         - createdAt
+      additionalProperties: false
+    CalendarPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        enabled:
+          type: boolean
+        reminderMinutes:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          maximum: 1440
+      additionalProperties: false
+    CalendarRef:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        color:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - name
+        - color
+      additionalProperties: false
+      description: The Google/iCal calendar an external event comes from.
+    CalendarSource:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum:
+            - google
+            - ical
+        name:
+          type: string
+        color:
+          type:
+            - string
+            - "null"
+        enabled:
+          type: boolean
+        reminderMinutes:
+          type:
+            - integer
+            - "null"
+          description: Automatic push N minutes before each timed event; null = off.
+        lastSyncedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        lastError:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - kind
+        - name
+        - color
+        - enabled
+        - reminderMinutes
+        - lastSyncedAt
+        - lastError
+      additionalProperties: false
+    CalendarStatus:
+      type: object
+      properties:
+        google:
+          type: object
+          properties:
+            configured:
+              type: boolean
+              description: The server has Google OAuth credentials.
+            connected:
+              type: boolean
+            needsReconnect:
+              type: boolean
+              description: "Google rejected the stored grant: connect again."
+            accountHint:
+              type:
+                - string
+                - "null"
+          required:
+            - configured
+            - connected
+            - needsReconnect
+            - accountHint
+          additionalProperties: false
+        canAddIcal:
+          type: boolean
+          description: ENCRYPTION_KEY is set (iCal URLs are stored encrypted).
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarSource"
+      required:
+        - google
+        - canAddIcal
+        - sources
       additionalProperties: false
     ChangePinInput:
       type: object
@@ -190,6 +393,7 @@ components:
         - METHOD_NOT_ALLOWED
         - VERSION_CONFLICT
         - CONFLICT
+        - READ_ONLY_EVENT
         - IDEMPOTENCY_KEY_REUSE
         - IDEMPOTENCY_IN_PROGRESS
         - RATE_LIMITED
@@ -197,6 +401,218 @@ components:
         - INVALID_CREDENTIALS
         - INTERNAL_ERROR
         - SERVICE_UNAVAILABLE
+    Event:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        notes:
+          type:
+            - string
+            - "null"
+        location:
+          type:
+            - string
+            - "null"
+        allDay:
+          type: boolean
+        startsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: Timed events.
+        endsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        startDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+          description: All-day events.
+        endDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+          description: "All-day events: exclusive (a one-day event ends the next day)."
+        timezone:
+          type: string
+          description: IANA zone the event lives in (recurrence expansion).
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the event's start is), daily or longer. Edits apply to the whole series.
+          example: FREQ=WEEKLY;BYDAY=TU,TH
+        reminderOffsets:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 40320
+          maxItems: 5
+          description: Minutes before each occurrence to push a reminder (0 = at the start). Up to 5, max 4 weeks.
+          example:
+            - 30
+            - 10
+        source:
+          $ref: "#/components/schemas/ItemSource"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - id
+        - title
+        - notes
+        - location
+        - allDay
+        - startsAt
+        - endsAt
+        - startDate
+        - endDate
+        - timezone
+        - rrule
+        - reminderOffsets
+        - source
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    EventCreate:
+      type: object
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/Uuid"
+            - description: Client-generated id (offline creates).
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 10000
+        location:
+          type: string
+          maxLength: 500
+        allDay:
+          type: boolean
+          description: true → `startDate` (+ `endDate`); otherwise `startsAt` (+ `endsAt`).
+        startsAt:
+          $ref: "#/components/schemas/Timestamp"
+        endsAt:
+          $ref: "#/components/schemas/Timestamp"
+        startDate:
+          $ref: "#/components/schemas/LocalDate"
+        endDate:
+          allOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - description: Exclusive; default the day after `startDate`.
+        rrule:
+          type: string
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the event's start is), daily or longer. Edits apply to the whole series.
+          example: FREQ=WEEKLY;BYDAY=TU,TH
+        reminderOffsets:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 40320
+          maxItems: 5
+          description: Minutes before each occurrence to push a reminder (0 = at the start). Up to 5, max 4 weeks.
+          example:
+            - 30
+            - 10
+      required:
+        - title
+      additionalProperties: false
+    EventKind:
+      type: string
+      enum:
+        - local
+        - google
+        - ical
+    EventPatch:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 10000
+        location:
+          type:
+            - string
+            - "null"
+          maxLength: 500
+        allDay:
+          type: boolean
+        startsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        endsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        startDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+        endDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the event's start is), daily or longer. Edits apply to the whole series.
+          example: FREQ=WEEKLY;BYDAY=TU,TH
+        reminderOffsets:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 40320
+          maxItems: 5
+          description: Minutes before each occurrence to push a reminder (0 = at the start). Up to 5, max 4 weeks.
+          example:
+            - 30
+            - 10
+        version:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    ExternalRemind:
+      type: object
+      properties:
+        minutesBefore:
+          type: integer
+          minimum: 0
+          maximum: 10080
+          description: "Timed events: N minutes before the start."
+        at:
+          allOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - description: "Any moment (all-day events: e.g. that day 09:00)."
+      additionalProperties: false
     Health:
       type: object
       properties:
@@ -219,6 +635,22 @@ components:
         - db
         - version
         - time
+      additionalProperties: false
+    IcalCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        url:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: The calendar's secret iCal address (https:// or webcal://). Stored encrypted, never shown again.
+      required:
+        - name
+        - url
       additionalProperties: false
     IdempotencyKey:
       type: string
@@ -246,6 +678,41 @@ components:
       pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
       description: Local time in the user's timezone, `HH:mm`, 24 h.
       example: 09:30
+    Overview:
+      type: object
+      properties:
+        from:
+          $ref: "#/components/schemas/LocalDate"
+        to:
+          $ref: "#/components/schemas/LocalDate"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaEvent"
+          description: Local + Google/iCal, chronological (all-day first each day).
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+          description: Open tasks due in the range, by date and time.
+        reminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reminder"
+          description: Reminders firing in the range, chronological.
+        overdue:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+          description: Open tasks due before `from`.
+      required:
+        - from
+        - to
+        - events
+        - tasks
+        - reminders
+        - overdue
+      additionalProperties: false
     PasskeyInfo:
       type: object
       properties:
@@ -447,6 +914,12 @@ components:
           anyOf:
             - $ref: "#/components/schemas/Uuid"
             - type: "null"
+          description: Local event this reminder belongs to ("30 min antes").
+        externalEventId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Google/iCal event this reminder belongs to.
         snoozedFrom:
           anyOf:
             - $ref: "#/components/schemas/Timestamp"
@@ -477,6 +950,7 @@ components:
         - urgent
         - taskId
         - eventId
+        - externalEventId
         - snoozedFrom
         - lastFiredAt
         - source
@@ -604,6 +1078,18 @@ components:
                 required:
                   - type
                   - reminder
+                additionalProperties: false
+              - type: object
+                properties:
+                  type:
+                    type: string
+                    enum:
+                      - event
+                  event:
+                    $ref: "#/components/schemas/Event"
+                required:
+                  - type
+                  - event
                 additionalProperties: false
       required:
         - results
@@ -765,6 +1251,15 @@ components:
           description: "Default: the user's snooze setting."
         until:
           $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
+    SyncInput:
+      type: object
+      properties:
+        ifOlderThanSeconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          description: Only sync when the last sync is older than this (the app sends 120 on open). Omit to force.
       additionalProperties: false
     Task:
       type: object
@@ -4291,7 +4786,7 @@ paths:
         - Tasks
       summary: Find items by text (accent-insensitive)
       description: |-
-        Use it to get an id before updating or deleting. Tasks first, then reminders (events join in phase 6).
+        Use it to get an id before updating or deleting. Tasks first, then reminders, then local events.
 
         **Actors:** user, API token with `read`.
       security:
@@ -4447,6 +4942,7 @@ paths:
                         urgent: false
                         taskId: null
                         eventId: null
+                        externalEventId: null
                         snoozedFrom: null
                         lastFiredAt: null
                         source: user
@@ -4463,6 +4959,7 @@ paths:
                         urgent: false
                         taskId: null
                         eventId: null
+                        externalEventId: null
                         snoozedFrom: null
                         lastFiredAt: null
                         source: user
@@ -4551,6 +5048,7 @@ paths:
                     urgent: false
                     taskId: null
                     eventId: null
+                    externalEventId: null
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
@@ -4646,6 +5144,7 @@ paths:
                     urgent: false
                     taskId: null
                     eventId: null
+                    externalEventId: null
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
@@ -4730,6 +5229,7 @@ paths:
                     urgent: false
                     taskId: null
                     eventId: null
+                    externalEventId: null
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
@@ -4880,6 +5380,7 @@ paths:
                     urgent: false
                     taskId: null
                     eventId: null
+                    externalEventId: null
                     snoozedFrom: 2026-11-17T09:00:00.000-03:00
                     lastFiredAt: null
                     source: user
@@ -4983,6 +5484,7 @@ paths:
                     urgent: false
                     taskId: null
                     eventId: null
+                    externalEventId: null
                     snoozedFrom: null
                     lastFiredAt: null
                     source: user
@@ -5030,6 +5532,1277 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/overview:
+    get:
+      operationId: getAgendaOverview
+      tags:
+        - Events
+      summary: Everything in a date range
+      description: |-
+        Local and Google Calendar events, open tasks due, reminders, plus overdue tasks. Use it for "¿qué tengo hoy/mañana/esta semana?". Default: today. At most 31 days.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Default today.
+          required: false
+          description: Default today.
+          name: from
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Default `from`. At most 31 days after `from`.
+          required: false
+          description: Default `from`. At most 31 days after `from`.
+          name: to
+          in: query
+      responses:
+        "200":
+          description: The range.
+          content:
+            application/json:
+              examples:
+                day:
+                  summary: Wednesday
+                  value:
+                    from: 2026-11-18
+                    to: 2026-11-18
+                    events:
+                      - id: 019a0a6e-1c00-7000-8000-000000000047
+                        eventId: null
+                        externalEventId: 019a0a6e-1c00-7000-8000-000000000047
+                        source: google
+                        readOnly: true
+                        title: Daily
+                        notes: null
+                        location: null
+                        allDay: false
+                        startsAt: 2026-11-18T09:30:00.000-03:00
+                        endsAt: 2026-11-18T09:45:00.000-03:00
+                        startDate: null
+                        endDate: null
+                        recurring: false
+                        rrule: null
+                        reminderOffsets: []
+                        tentative: false
+                        htmlLink: https://www.google.com/calendar/event?eid=ZGFpbHk
+                        calendar:
+                          id: 019a0a6e-1c00-7000-8000-000000000046
+                          name: Trabajo
+                          color: "#4285f4"
+                      - id: 019a0a6e-1c00-7000-8000-00000000003c
+                        eventId: 019a0a6e-1c00-7000-8000-00000000003c
+                        externalEventId: null
+                        source: local
+                        readOnly: false
+                        title: Dentista
+                        notes: null
+                        location: Av. Santa Fe 1234
+                        allDay: false
+                        startsAt: 2026-11-18T10:00:00.000-03:00
+                        endsAt: 2026-11-18T11:00:00.000-03:00
+                        startDate: null
+                        endDate: null
+                        recurring: false
+                        rrule: null
+                        reminderOffsets:
+                          - 60
+                          - 15
+                        tentative: false
+                        htmlLink: null
+                        calendar: null
+                    tasks: []
+                    reminders: []
+                    overdue: []
+              schema:
+                $ref: "#/components/schemas/Overview"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/events:
+    get:
+      operationId: listEvents
+      tags:
+        - Events
+      summary: Events in a date range
+      description: |-
+        Local events (recurring ones expanded) and, unless `includeExternal=false`, Google/iCal events (`readOnly: true`). Chronological; at most 92 days.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: First day (user's timezone).
+          required: true
+          description: First day (user's timezone).
+          name: from
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/LocalDate"
+              - description: Last day, inclusive. At most 92 days after `from`.
+          required: true
+          description: Last day, inclusive. At most 92 days after `from`.
+          name: to
+          in: query
+        - schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+            description: Google/iCal events too (default true).
+          required: false
+          description: Google/iCal events too (default true).
+          name: includeExternal
+          in: query
+      responses:
+        "200":
+          description: Occurrences.
+          content:
+            application/json:
+              examples:
+                week:
+                  summary: A week
+                  value:
+                    events:
+                      - id: 019a0a6e-1c00-7000-8000-000000000047
+                        eventId: null
+                        externalEventId: 019a0a6e-1c00-7000-8000-000000000047
+                        source: google
+                        readOnly: true
+                        title: Daily
+                        notes: null
+                        location: null
+                        allDay: false
+                        startsAt: 2026-11-18T09:30:00.000-03:00
+                        endsAt: 2026-11-18T09:45:00.000-03:00
+                        startDate: null
+                        endDate: null
+                        recurring: false
+                        rrule: null
+                        reminderOffsets: []
+                        tentative: false
+                        htmlLink: https://www.google.com/calendar/event?eid=ZGFpbHk
+                        calendar:
+                          id: 019a0a6e-1c00-7000-8000-000000000046
+                          name: Trabajo
+                          color: "#4285f4"
+                      - id: 019a0a6e-1c00-7000-8000-00000000003c
+                        eventId: 019a0a6e-1c00-7000-8000-00000000003c
+                        externalEventId: null
+                        source: local
+                        readOnly: false
+                        title: Dentista
+                        notes: null
+                        location: Av. Santa Fe 1234
+                        allDay: false
+                        startsAt: 2026-11-18T10:00:00.000-03:00
+                        endsAt: 2026-11-18T11:00:00.000-03:00
+                        startDate: null
+                        endDate: null
+                        recurring: false
+                        rrule: null
+                        reminderOffsets:
+                          - 60
+                          - 15
+                        tentative: false
+                        htmlLink: null
+                        calendar: null
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgendaEvent"
+                required:
+                  - events
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createEvent
+      tags:
+        - Events
+      summary: Create a local event
+      description: |-
+        Timed (`startsAt` + optional `endsAt`) or all-day (`allDay: true`, `startDate` + optional exclusive `endDate`). Optional RRULE and `reminderOffsets` (minutes before: pushes are scheduled automatically).
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              create:
+                summary: Dentist on Wednesday 10:00, remind 1 h and 15 min before
+                value:
+                  title: Dentista
+                  location: Av. Santa Fe 1234
+                  startsAt: 2026-11-18T10:00:00-03:00
+                  endsAt: 2026-11-18T11:00:00-03:00
+                  reminderOffsets:
+                    - 60
+                    - 15
+              allDay:
+                summary: All-day
+                value:
+                  title: Cumple de mamá
+                  allDay: true
+                  startDate: 2026-11-20
+                  rrule: FREQ=YEARLY
+            schema:
+              $ref: "#/components/schemas/EventCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                create:
+                  summary: Dentist on Wednesday 10:00, remind 1 h and 15 min before
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000003c
+                    title: Dentista
+                    notes: null
+                    location: Av. Santa Fe 1234
+                    allDay: false
+                    startsAt: 2026-11-18T10:00:00.000-03:00
+                    endsAt: 2026-11-18T11:00:00.000-03:00
+                    startDate: null
+                    endDate: null
+                    timezone: America/Buenos_Aires
+                    rrule: null
+                    reminderOffsets:
+                      - 60
+                      - 15
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+                allDay:
+                  summary: All-day
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000003d
+                    title: Cumple de mamá
+                    notes: null
+                    location: null
+                    allDay: true
+                    startsAt: null
+                    endsAt: null
+                    startDate: 2026-11-20
+                    endDate: 2026-11-21
+                    timezone: America/Buenos_Aires
+                    rrule: FREQ=YEARLY
+                    reminderOffsets: []
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/events/{id}:
+    get:
+      operationId: getEvent
+      tags:
+        - Events
+      summary: One local event
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Event.
+          content:
+            application/json:
+              examples:
+                get:
+                  summary: The event
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000003c
+                    title: Dentista
+                    notes: null
+                    location: Av. Santa Fe 1234
+                    allDay: false
+                    startsAt: 2026-11-18T10:00:00.000-03:00
+                    endsAt: 2026-11-18T11:00:00.000-03:00
+                    startDate: null
+                    endDate: null
+                    timezone: America/Buenos_Aires
+                    rrule: null
+                    reminderOffsets:
+                      - 60
+                      - 15
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateEvent
+      tags:
+        - Events
+      summary: Change a local event
+      description: |-
+        Edits apply to the whole series. Google/iCal events answer 409 `READ_ONLY_EVENT`.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              move:
+                summary: Move to 11:00
+                value:
+                  startsAt: 2026-11-18T11:00:00-03:00
+                  endsAt: 2026-11-18T12:00:00-03:00
+                  version: 1
+              google:
+                summary: A Google event
+                value:
+                  title: Otra cosa
+            schema:
+              $ref: "#/components/schemas/EventPatch"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                move:
+                  summary: Move to 11:00
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000003c
+                    title: Dentista
+                    notes: null
+                    location: Av. Santa Fe 1234
+                    allDay: false
+                    startsAt: 2026-11-18T11:00:00.000-03:00
+                    endsAt: 2026-11-18T12:00:00.000-03:00
+                    startDate: null
+                    endDate: null
+                    timezone: America/Buenos_Aires
+                    rrule: null
+                    reminderOffsets:
+                      - 60
+                      - 15
+                    source: user
+                    version: 2
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT` or `READ_ONLY_EVENT`. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              examples:
+                google:
+                  summary: A Google event
+                  value:
+                    error:
+                      code: READ_ONLY_EVENT
+                      message: "Ese evento viene de Google Calendar (o iCal) y es de solo lectura: cambialo en Google Calendar."
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteEvent
+      tags:
+        - Events
+      summary: Delete a local event
+      description: |-
+        Its pending reminders go too. Google/iCal events answer 409 `READ_ONLY_EVENT`.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`READ_ONLY_EVENT`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/external-events/{id}/remind:
+    post:
+      operationId: remindExternalEvent
+      tags:
+        - Events
+      summary: "Recordarme: a reminder for a Google/iCal event"
+      description: |-
+        `minutesBefore` (timed events: follows the event if it moves, goes if it's cancelled) or a fixed `at`. One per offset and event.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              tenBefore:
+                summary: 10 min before
+                value:
+                  minutesBefore: 10
+            schema:
+              $ref: "#/components/schemas/ExternalRemind"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                tenBefore:
+                  summary: 10 min before
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000050
+                    title: Daily
+                    body: A las 09:30
+                    fireAt: 2026-11-18T09:20:00.000-03:00
+                    rrule: null
+                    status: scheduled
+                    urgent: false
+                    taskId: null
+                    eventId: null
+                    externalEventId: 019a0a6e-1c00-7000-8000-000000000047
+                    snoozedFrom: null
+                    lastFiredAt: null
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Reminder"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/calendars:
+    get:
+      operationId: getCalendars
+      tags:
+        - Calendars
+      summary: Google connection and calendars
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      responses:
+        "200":
+          description: Status.
+          content:
+            application/json:
+              examples:
+                status:
+                  summary: Connected
+                  value:
+                    google:
+                      configured: true
+                      connected: true
+                      needsReconnect: false
+                      accountHint: l…@empresa.com
+                    canAddIcal: true
+                    sources:
+                      - id: 019a0a6e-1c00-7000-8000-000000000046
+                        kind: google
+                        name: Trabajo
+                        color: "#4285f4"
+                        enabled: true
+                        reminderMinutes: null
+                        lastSyncedAt: 2026-11-16T08:10:00.000-03:00
+                        lastError: null
+              schema:
+                $ref: "#/components/schemas/CalendarStatus"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/calendars/{id}:
+    patch:
+      operationId: updateCalendar
+      tags:
+        - Calendars
+      summary: Show/hide a calendar, rename it, or set its automatic reminder
+      description: "**Actors:** user."
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              remind:
+                summary: Notify 30 min before
+                value:
+                  reminderMinutes: 30
+            schema:
+              $ref: "#/components/schemas/CalendarPatch"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                remind:
+                  summary: Notify 30 min before
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000046
+                    kind: google
+                    name: Trabajo
+                    color: "#4285f4"
+                    enabled: true
+                    reminderMinutes: 30
+                    lastSyncedAt: 2026-11-16T08:10:00.000-03:00
+                    lastError: null
+              schema:
+                $ref: "#/components/schemas/CalendarSource"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteCalendar
+      tags:
+        - Calendars
+      summary: Remove an iCal calendar
+      description: |-
+        Google calendars can only be hidden (or the whole account disconnected).
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Removed.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: a Google calendar."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/calendars/ical:
+    post:
+      operationId: addIcalCalendar
+      tags:
+        - Calendars
+      summary: Add a calendar by its secret iCal address
+      description: |-
+        Plan B when the Workspace admin blocks the Google connection. The address is checked, stored encrypted and never returned.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              add:
+                summary: Personal
+                value:
+                  name: Personal
+                  url: https://calendar.google.com/calendar/ical/abc%40gmail.com/private-1234/basic.ics
+              http:
+                summary: Not https
+                value:
+                  name: Personal
+                  url: http://example.com/cal.ics
+            schema:
+              $ref: "#/components/schemas/IcalCreate"
+      responses:
+        "201":
+          description: Added (and synced once).
+          content:
+            application/json:
+              examples:
+                add:
+                  summary: Personal
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000048
+                    kind: ical
+                    name: Personal
+                    color: null
+                    enabled: true
+                    reminderMinutes: null
+                    lastSyncedAt: 2026-11-16T08:10:00.000-03:00
+                    lastError: null
+              schema:
+                $ref: "#/components/schemas/CalendarSource"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              examples:
+                http:
+                  summary: Not https
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La dirección iCal tiene que empezar con https://.
+                      details:
+                        fields:
+                          - path: /url
+                            message: Invalid iCal address
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "`SERVICE_UNAVAILABLE`: ENCRYPTION_KEY missing."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/calendars/sync:
+    post:
+      operationId: syncCalendars
+      tags:
+        - Calendars
+      summary: Sincronizar now
+      description: |-
+        Without `ifOlderThanSeconds`: every enabled calendar, now. The app sends 120 when it opens.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              sync:
+                summary: Sincronizar
+                value: {}
+            schema:
+              $ref: "#/components/schemas/SyncInput"
+      responses:
+        "200":
+          description: Status after the sync.
+          content:
+            application/json:
+              examples:
+                sync:
+                  summary: Sincronizar
+                  value:
+                    google:
+                      configured: true
+                      connected: true
+                      needsReconnect: false
+                      accountHint: l…@empresa.com
+                    canAddIcal: true
+                    sources:
+                      - id: 019a0a6e-1c00-7000-8000-000000000046
+                        kind: google
+                        name: Trabajo
+                        color: "#4285f4"
+                        enabled: true
+                        reminderMinutes: null
+                        lastSyncedAt: 2026-11-16T08:10:00.000-03:00
+                        lastError: null
+              schema:
+                $ref: "#/components/schemas/CalendarStatus"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/google/connect:
+    get:
+      operationId: googleConnect
+      tags:
+        - Calendars
+      summary: Start connecting Google Calendar (browser navigation)
+      description: |-
+        Redirects to Google's consent screen (read-only scope, PKCE, signed state cookie).
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      responses:
+        "302":
+          description: To Google.
+          headers:
+            Location:
+              description: Where the browser goes next.
+              schema:
+                type: string
+            Set-Cookie:
+              description: "`agenda_session` (httpOnly, Secure, SameSite=Lax)."
+              schema:
+                type: string
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "`SERVICE_UNAVAILABLE`: Google isn't configured on the server."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/google/callback:
+    get:
+      operationId: googleCallback
+      tags:
+        - Calendars
+      summary: Google's redirect back (browser navigation)
+      description: |-
+        Checks the state, exchanges the code, stores the refresh token encrypted, lists the calendars and syncs. Always redirects to Ajustes → Google Calendar with `?google=connected` or `?google=<error>`.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            type: string
+            maxLength: 2000
+          required: false
+          name: code
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+          required: false
+          name: state
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+          required: false
+          name: error
+          in: query
+        - schema:
+            type: string
+            maxLength: 2000
+          required: false
+          name: scope
+          in: query
+        - schema:
+            type: string
+            maxLength: 10
+          required: false
+          name: authuser
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+          required: false
+          name: hd
+          in: query
+        - schema:
+            type: string
+            maxLength: 50
+          required: false
+          name: prompt
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+          required: false
+          name: iss
+          in: query
+      responses:
+        "302":
+          description: Back to the app.
+          headers:
+            Location:
+              description: Where the browser goes next.
+              schema:
+                type: string
+            Set-Cookie:
+              description: "`agenda_session` (httpOnly, Secure, SameSite=Lax)."
+              schema:
+                type: string
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/google:
+    delete:
+      operationId: googleDisconnect
+      tags:
+        - Calendars
+      summary: Disconnect Google Calendar
+      description: |-
+        Revokes the grant at Google and deletes the credential, the Google calendars and their events.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      responses:
+        "204":
+          description: Disconnected.
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
           content:
             application/json:
               schema:

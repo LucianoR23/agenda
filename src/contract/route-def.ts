@@ -28,7 +28,7 @@ export interface ResponseDef {
   description: string;
   /** Defaults to the `Error` body for status >= 400; omit for empty bodies (204). */
   schema?: ZodType;
-  headers?: Array<"ETag" | "Retry-After" | "Set-Cookie">;
+  headers?: Array<"ETag" | "Retry-After" | "Set-Cookie" | "Location">;
 }
 
 export interface RouteDef {

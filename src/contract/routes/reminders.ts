@@ -16,6 +16,7 @@ const contador = {
   urgent: false,
   taskId: null,
   eventId: null,
+  externalEventId: null,
   snoozedFrom: null,
   lastFiredAt: null,
   source: "user" as const,

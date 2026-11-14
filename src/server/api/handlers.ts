@@ -3,9 +3,12 @@ import { generateOpenApiDocument, withoutExamples } from "@/contract/openapi";
 import { audit } from "../auth/audit";
 import * as auth from "../auth/auth";
 import * as tokens from "../auth/tokens";
+import * as calendars from "../calendar/service";
 import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
+import * as events from "../domain/events";
+import { overview } from "../domain/overview";
 import { applyPushAction } from "../domain/push-actions";
 import * as reminders from "../domain/reminders";
 import { getSettings, updateSettings } from "../domain/settings";
@@ -124,10 +127,12 @@ export const handlers: Record<string, Handler> = {
     const includeDone = query.includeDone === "true";
     const foundTasks = await tasks.searchTasks(ctx, query.q, includeDone, query.limit);
     const foundReminders = await reminders.searchReminders(ctx, query.q, includeDone, query.limit);
+    const foundEvents = await events.searchEvents(ctx, query.q, query.limit);
     return json(200, {
       results: [
         ...foundTasks.map((task) => ({ type: "task", task })),
         ...foundReminders.map((reminder) => ({ type: "reminder", reminder })),
+        ...foundEvents.map((event) => ({ type: "event", event })),
       ].slice(0, query.limit ?? 20),
     });
   },
@@ -141,6 +146,34 @@ export const handlers: Record<string, Handler> = {
   doneReminder: async (ctx, { params }) => json(200, await reminders.doneReminder(ctx, params.id)),
   deleteReminder: async (ctx, { params }) => {
     await reminders.deleteReminder(ctx, params.id);
+    return { status: 204 };
+  },
+
+  // ---------- events ----------
+  getAgendaOverview: async (ctx, { query }) => json(200, await overview(ctx, query)),
+  listEvents: async (ctx, { query }) => json(200, { events: await events.listEvents(ctx, query) }),
+  getEvent: async (ctx, { params }) => json(200, await events.getEvent(ctx, params.id)),
+  createEvent: async (ctx, { body }) => json(201, await events.createEvent(ctx, body)),
+  updateEvent: async (ctx, { params, body }) => json(200, await events.updateEvent(ctx, params.id, body)),
+  deleteEvent: async (ctx, { params }) => {
+    await events.deleteEvent(ctx, params.id);
+    return { status: 204 };
+  },
+  remindExternalEvent: async (ctx, { params, body }) => json(201, await calendars.remindExternal(ctx, params.id, body)),
+
+  // ---------- calendars ----------
+  getCalendars: async (ctx) => json(200, await calendars.calendarStatus(ctx)),
+  updateCalendar: async (ctx, { params, body }) => json(200, await calendars.updateCalendar(ctx, params.id, body)),
+  deleteCalendar: async (ctx, { params }) => {
+    await calendars.deleteCalendar(ctx, params.id);
+    return { status: 204 };
+  },
+  addIcalCalendar: async (ctx, { body }) => json(201, await calendars.addIcal(ctx, body)),
+  syncCalendars: async (ctx, { body }) => json(200, await calendars.syncNow(ctx, body)),
+  googleConnect: async (ctx) => calendars.googleConnect(ctx),
+  googleCallback: async (ctx, { query }) => calendars.googleCallback(ctx, query),
+  googleDisconnect: async (ctx) => {
+    await calendars.googleDisconnect(ctx);
     return { status: 204 };
   },
 

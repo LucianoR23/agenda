@@ -1,11 +1,23 @@
 import { and, isNotNull, lt, sql } from "drizzle-orm";
 import type { DbLike } from "../db/client";
-import { auditEvent, authAttempt, event, habit, habitLog, notificationLog, reminder, sleepLog, task, taskList } from "../db/schema";
+import {
+  auditEvent,
+  authAttempt,
+  event,
+  externalEvent,
+  habit,
+  habitLog,
+  notificationLog,
+  reminder,
+  sleepLog,
+  task,
+  taskList,
+} from "../db/schema";
 import { toDate } from "../domain/time";
 import { purgeExpired } from "../http/idempotency";
 
 /** Retention (docs/v2/05 + 07). */
-export const RETENTION = { softDeletedDays: 30, authDays: 90, notificationDays: 180 } as const;
+export const RETENTION = { softDeletedDays: 30, authDays: 90, notificationDays: 180, externalEventDays: 30 } as const;
 
 /**
  * Daily cleanup: soft-deleted rows past 30 days (tombstones offline clients no longer need), auth attempts and audit
@@ -49,6 +61,15 @@ export async function prune(db: DbLike, now: Temporal.Instant) {
         .delete(notificationLog)
         .where(lt(notificationLog.createdAt, before(RETENTION.notificationDays)))
         .returning({ id: notificationLog.id }),
+    ),
+    // synced Google/iCal events that ended a month ago (the sync window only covers the last 7 days)
+    externalEvent: await gone(
+      db
+        .delete(externalEvent)
+        .where(
+          sql`coalesce(${externalEvent.endsAt}, ${externalEvent.startsAt}, ${externalEvent.endDate}::timestamptz, ${externalEvent.startDate}::timestamptz) < ${before(RETENTION.externalEventDays).toISOString()}::timestamptz`,
+        )
+        .returning({ id: externalEvent.id }),
     ),
     idempotencyKey: await purgeExpired(db, now),
   };

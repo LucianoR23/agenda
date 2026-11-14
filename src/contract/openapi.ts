@@ -2,6 +2,7 @@ import { OpenAPIRegistry, OpenApiGeneratorV31, type RouteConfig } from "@asteaso
 import type { ZodType } from "zod";
 import { ErrorBody } from "./common";
 import type { Exchange, ResponseDef, RouteDef } from "./route-def";
+import { calendarRoutes, eventRoutes } from "./routes/events";
 import { pushRoutes, reminderRoutes } from "./routes/reminders";
 import { systemRoutes } from "./routes/system";
 import { taskRoutesAll } from "./routes/tasks";
@@ -9,7 +10,7 @@ import { z } from "./zod";
 
 export const API_VERSION = "2.0.0-alpha";
 
-export const routes: RouteDef[] = [...systemRoutes, ...pushRoutes, ...taskRoutesAll, ...reminderRoutes];
+export const routes: RouteDef[] = [...systemRoutes, ...pushRoutes, ...taskRoutesAll, ...reminderRoutes, ...eventRoutes, ...calendarRoutes];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
@@ -27,6 +28,7 @@ const HEADER_DOCS = {
   ETag: { description: 'Current `version` as a strong ETag, e.g. `"7"`.', schema: { type: "string" as const } },
   "Retry-After": { description: "Seconds to wait.", schema: { type: "integer" as const } },
   "Set-Cookie": { description: "`agenda_session` (httpOnly, Secure, SameSite=Lax).", schema: { type: "string" as const } },
+  Location: { description: "Where the browser goes next.", schema: { type: "string" as const } },
 };
 
 const append = (base: ResponseDef | undefined, description: string, extra?: Partial<ResponseDef>): ResponseDef =>
@@ -188,6 +190,8 @@ export function generateOpenApiDocument() {
     tags: [
       { name: "Tasks" },
       { name: "Reminders" },
+      { name: "Events" },
+      { name: "Calendars" },
       { name: "Auth" },
       { name: "Settings" },
       { name: "Tokens" },

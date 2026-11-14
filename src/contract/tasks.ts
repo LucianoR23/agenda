@@ -1,4 +1,5 @@
 import { ExpectedVersion, ItemSource, LocalDate, LocalTime, Mutable, orNull, Timestamp, Uuid } from "./common";
+import { Event } from "./events";
 import { Reminder } from "./reminders";
 import { z } from "./zod";
 
@@ -142,6 +143,7 @@ export const SearchResult = z
       z.discriminatedUnion("type", [
         z.strictObject({ type: z.literal("task"), task: Task }),
         z.strictObject({ type: z.literal("reminder"), reminder: Reminder }),
+        z.strictObject({ type: z.literal("event"), event: Event }),
       ]),
     ),
   })

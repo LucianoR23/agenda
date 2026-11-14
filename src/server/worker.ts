@@ -1,18 +1,31 @@
+import { syncCalendars } from "./calendar/sync";
 import { getDb } from "./db/client";
+import { materializeEventReminders } from "./domain/event-reminders";
 import { userTimeZone } from "./domain/settings";
 import { clock } from "./domain/time";
 import { prune } from "./jobs/prune";
 import { dispatchReminders } from "./jobs/reminders";
-import { dailyAt, type Job, Scheduler } from "./jobs/scheduler";
+import { dailyAt, every, type Job, Scheduler } from "./jobs/scheduler";
 import { log } from "./log";
 
 /** docs/v2/05: reminders are checked every 15 s. */
 const TICK_MS = 15_000;
 
-/** Jobs of the in-process worker (single replica). Event offsets (phase 6) and calendar sync join later. */
+/** Jobs of the in-process worker (single replica). */
 export const JOBS: Job[] = [
   // every tick; the first one at boot is the catch-up for anything that came due while the server was down
   { name: "reminders", due: () => true, run: (now) => dispatchReminders(getDb(), now) },
+  // "30 min antes" reminders for the next 48 h (writes also materialize right away)
+  { name: "event-reminders", due: every(5), run: (now) => materializeEventReminders(getDb(), now) },
+  // each calendar decides if it's due (Google 5 min, iCal 15 min, backoff after errors); detached so a slow Google
+  // never delays a reminder tick (syncCalendars never overlaps itself)
+  {
+    name: "calendar-sync",
+    due: every(1),
+    run: async (now) => {
+      void syncCalendars(getDb(), now).catch((err) => log.error("calendar sync failed", { err }));
+    },
+  },
   { name: "prune", due: dailyAt("04:00"), run: (now) => prune(getDb(), now) },
 ];
 

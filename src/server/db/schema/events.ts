@@ -57,6 +57,8 @@ export const calendarSource = pgTable(
     name: text().notNull(),
     color: text(),
     enabled: boolean().notNull().default(true),
+    /** Automatic push N minutes before each timed event of this calendar; null = off (Google already notifies). */
+    reminderMinutes: integer(),
     icalUrlEnc: bytea(),
     syncToken: text(),
     lastSyncedAt: at(),
@@ -68,6 +70,7 @@ export const calendarSource = pgTable(
     unique("calendar_source_external_uq").on(t.kind, t.externalCalendarId),
     check("calendar_source_kind", sql`${t.kind} <> 'local'`),
     check("calendar_source_ical_url", sql`(${t.kind} = 'ical') = (${t.icalUrlEnc} IS NOT NULL)`),
+    check("calendar_source_reminder_minutes", sql`${t.reminderMinutes} IS NULL OR ${t.reminderMinutes} BETWEEN 0 AND 1440`),
   ],
 );
 
@@ -81,6 +84,8 @@ export const googleCredential = pgTable(
     scopes: text().array().notNull(),
     /** Display only ("l…@gmail.com"). */
     accountHint: text(),
+    /** Google rejected the refresh token (`invalid_grant`): connect again. */
+    invalidAt: at(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
