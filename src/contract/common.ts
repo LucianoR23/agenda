@@ -15,7 +15,7 @@ export const LocalDate = z
     return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(s);
   }, "Invalid calendar date")
   .openapi("LocalDate", {
-    description: "Local date in America/Buenos_Aires, `YYYY-MM-DD`.",
+    description: "Calendar date in the user's timezone, `YYYY-MM-DD`.",
     example: "2026-10-19",
   });
 
@@ -23,7 +23,7 @@ export const LocalTime = z
   .string()
   .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "Expected HH:mm (00:00–23:59)")
   .openapi("LocalTime", {
-    description: "Local time in America/Buenos_Aires, `HH:mm`, 24 h.",
+    description: "Local time in the user's timezone, `HH:mm`, 24 h.",
     example: "09:30",
   });
 
@@ -34,7 +34,8 @@ export const Timestamp = z.iso.datetime({ offset: true }).openapi("Timestamp", {
 
 export const Uuid = z.uuid().openapi("Uuid", { example: "019a0a6e-5c3e-7b2a-9d41-3f0c8a1b2c3d" });
 
-export const Actor = z.enum(["agent", "user", "system"]).openapi("Actor");
+/** Who created or last changed something: Lemy in the app, an API token (Sunday), or the app itself. */
+export const ItemSource = z.enum(["user", "sunday", "system"]).openapi("ItemSource");
 
 /** Optimistic-concurrency field accepted in write bodies as an alternative to `If-Match`. */
 export const ExpectedVersion = z.int().min(1).optional().openapi({
@@ -45,7 +46,7 @@ export const Mutable = {
   version: z.int().min(1),
   createdAt: Timestamp,
   updatedAt: Timestamp,
-  updatedBy: Actor,
+  updatedBy: ItemSource,
 };
 
 export const ErrorCode = z

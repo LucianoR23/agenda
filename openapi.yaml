@@ -14,6 +14,7 @@ servers:
   - url: https://agenda.lemydev.com
   - url: http://localhost:3000
 tags:
+  - name: Tasks
   - name: Auth
   - name: Settings
   - name: Tokens
@@ -80,6 +81,27 @@ components:
       required:
         - currentPin
         - newPin
+      additionalProperties: false
+    CompleteInput:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    CompleteResult:
+      type: object
+      properties:
+        task:
+          $ref: "#/components/schemas/Task"
+        next:
+          anyOf:
+            - $ref: "#/components/schemas/Task"
+            - type: "null"
+          description: The next occurrence, when the task repeats.
+      required:
+        - task
+        - next
       additionalProperties: false
     Device:
       type: object
@@ -199,6 +221,26 @@ components:
       maxLength: 200
       description: Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.
       example: 019a0a6e-1c00-7000-8000-000000000001
+    IfMatch:
+      type: string
+      description: Expected `version` as ETag (`"7"`). Mismatch → 409 `VERSION_CONFLICT` with the current resource.
+      example: '"7"'
+    ItemSource:
+      type: string
+      enum:
+        - user
+        - sunday
+        - system
+    LocalDate:
+      type: string
+      pattern: ^\d{4}-\d{2}-\d{2}$
+      description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+      example: 2026-10-19
+    LocalTime:
+      type: string
+      pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+      description: Local time in the user's timezone, `HH:mm`, 24 h.
+      example: 09:30
     PasskeyInfo:
       type: object
       properties:
@@ -238,6 +280,11 @@ components:
       required:
         - pin
       additionalProperties: false
+    Priority:
+      type: integer
+      minimum: 0
+      maximum: 3
+      description: 0 none · 1 low · 2 medium · 3 high.
     PushSubscribeInput:
       type: object
       properties:
@@ -342,6 +389,45 @@ components:
           description: Shown once. Single use each.
       required:
         - recoveryCodes
+      additionalProperties: false
+    ReopenInput:
+      type: object
+      properties:
+        nextId:
+          $ref: "#/components/schemas/Uuid"
+      additionalProperties: false
+    ReorderInput:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/Uuid"
+          minItems: 1
+          maxItems: 500
+      required:
+        - ids
+      additionalProperties: false
+    SearchResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                  - task
+              task:
+                $ref: "#/components/schemas/Task"
+            required:
+              - type
+              - task
+            additionalProperties: false
+      required:
+        - results
       additionalProperties: false
     SessionState:
       type: object
@@ -482,6 +568,293 @@ components:
         - device
         - recoveryCodes
       additionalProperties: false
+    Task:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        listId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        notes:
+          type:
+            - string
+            - "null"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        priority:
+          $ref: "#/components/schemas/Priority"
+        dueDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+        dueTime:
+          anyOf:
+            - $ref: "#/components/schemas/LocalTime"
+            - type: "null"
+          description: Local time in the user's timezone; only with dueDate.
+        dueAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: dueDate + dueTime as an instant (null without a time).
+        overdue:
+          type: boolean
+          description: Open and due before today (user's timezone).
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the due date is the start).
+          example: FREQ=WEEKLY;BYDAY=MO
+        seriesId:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Shared by every occurrence of a recurring task.
+        completedAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        sortOrder:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          $ref: "#/components/schemas/ItemSource"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - id
+        - listId
+        - title
+        - notes
+        - status
+        - priority
+        - dueDate
+        - dueTime
+        - dueAt
+        - overdue
+        - rrule
+        - seriesId
+        - completedAt
+        - sortOrder
+        - tags
+        - source
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    TaskCreate:
+      type: object
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/Uuid"
+            - description: Client-generated id (offline creates). Reusing an existing id is a 409.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 10000
+        listId:
+          allOf:
+            - $ref: "#/components/schemas/Uuid"
+            - description: "Default: Inbox."
+        priority:
+          $ref: "#/components/schemas/Priority"
+        dueDate:
+          $ref: "#/components/schemas/LocalDate"
+        dueTime:
+          $ref: "#/components/schemas/LocalTime"
+        rrule:
+          type: string
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the due date is the start).
+          example: FREQ=WEEKLY;BYDAY=MO
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+            pattern: ^[^\s#]+$
+          maxItems: 20
+      required:
+        - title
+      additionalProperties: false
+    TaskList:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        color:
+          type:
+            - string
+            - "null"
+        icon:
+          type:
+            - string
+            - "null"
+        sortOrder:
+          type: integer
+        isInbox:
+          type: boolean
+          description: The default list. Exactly one; can't be deleted.
+        openCount:
+          type: integer
+          description: Open tasks in the list.
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+      required:
+        - id
+        - name
+        - color
+        - icon
+        - sortOrder
+        - isInbox
+        - openCount
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+      additionalProperties: false
+    TaskListCreate:
+      type: object
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/Uuid"
+            - description: Client-generated id (offline creates).
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+          example: "#7ccfa5"
+        icon:
+          type: string
+          maxLength: 40
+      required:
+        - name
+      additionalProperties: false
+    TaskListPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type:
+            - string
+            - "null"
+          pattern: ^#[0-9a-fA-F]{6}$
+          example: "#7ccfa5"
+        icon:
+          type:
+            - string
+            - "null"
+          maxLength: 40
+        sortOrder:
+          type: integer
+        version:
+          type: integer
+          minimum: 1
+          description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.
+      additionalProperties: false
+    TaskPatch:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 10000
+        listId:
+          $ref: "#/components/schemas/Uuid"
+        priority:
+          $ref: "#/components/schemas/Priority"
+        dueDate:
+          anyOf:
+            - $ref: "#/components/schemas/LocalDate"
+            - type: "null"
+          description: null removes the date (and the time and recurrence).
+        dueTime:
+          anyOf:
+            - $ref: "#/components/schemas/LocalTime"
+            - type: "null"
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the due date is the start).
+          example: FREQ=WEEKLY;BYDAY=MO
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+            pattern: ^[^\s#]+$
+          maxItems: 20
+        status:
+          type: string
+          enum:
+            - open
+            - cancelled
+          description: Use completeTask to mark done.
+        version:
+          type: integer
+          minimum: 1
+          description: Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.
+      additionalProperties: false
+    TaskStatus:
+      type: string
+      enum:
+        - open
+        - done
+        - cancelled
+    TaskView:
+      type: string
+      enum:
+        - inbox
+        - today
+        - upcoming
+        - overdue
+        - done
+        - all
+      description: "`inbox`: open, no date, in the Inbox. `today`: open, due today. `upcoming`: open, due after today. `overdue`: open, due before today. `done`: completed, newest first. `all`: no view filter."
     Timestamp:
       type: string
       format: date-time
@@ -590,6 +963,13 @@ components:
       required: false
       description: Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.
       name: Idempotency-Key
+      in: header
+    IfMatch:
+      schema:
+        $ref: "#/components/schemas/IfMatch"
+      required: false
+      description: Expected `version` as ETag (`"7"`). Mismatch → 409 `VERSION_CONFLICT` with the current resource.
+      name: If-Match
       in: header
 paths:
   /api/health:
@@ -2320,6 +2700,1251 @@ paths:
                 $ref: "#/components/schemas/Error"
         "415":
           description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/lists:
+    get:
+      operationId: listTaskLists
+      tags:
+        - Tasks
+      summary: Task lists (Inbox first) with their open counts
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      responses:
+        "200":
+          description: Lists.
+          content:
+            application/json:
+              examples:
+                lists:
+                  summary: Inbox and Casa
+                  value:
+                    lists:
+                      - id: 019a0a6e-1c00-7000-8000-000000000001
+                        name: Inbox
+                        color: null
+                        icon: null
+                        sortOrder: 0
+                        isInbox: true
+                        openCount: 3
+                        version: 1
+                        createdAt: 2026-11-16T08:12:00.000-03:00
+                        updatedAt: 2026-11-16T08:12:00.000-03:00
+                        updatedBy: system
+                      - id: 019a0a6e-1c00-7000-8000-000000000002
+                        name: Casa
+                        color: "#7ccfa5"
+                        icon: home
+                        sortOrder: 1
+                        isInbox: false
+                        openCount: 1
+                        version: 1
+                        createdAt: 2026-11-16T08:12:00.000-03:00
+                        updatedAt: 2026-11-16T08:12:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaskList"
+                required:
+                  - lists
+                additionalProperties: false
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createTaskList
+      tags:
+        - Tasks
+      summary: Create a list
+      description: |-
+        Names are unique (case-insensitive) among active lists.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              create:
+                summary: Casa
+                value:
+                  name: Casa
+                  color: "#7ccfa5"
+                  icon: home
+            schema:
+              $ref: "#/components/schemas/TaskListCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                create:
+                  summary: Casa
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000002
+                    name: Casa
+                    color: "#7ccfa5"
+                    icon: home
+                    sortOrder: 1
+                    isInbox: false
+                    openCount: 0
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/TaskList"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: a list with that name exists. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/lists/{id}:
+    patch:
+      operationId: updateTaskList
+      tags:
+        - Tasks
+      summary: Rename, recolor or reorder a list
+      description: "**Actors:** user, API token with `write`."
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              rename:
+                summary: Rename
+                value:
+                  name: Hogar
+                  version: 1
+            schema:
+              $ref: "#/components/schemas/TaskListPatch"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                rename:
+                  summary: Rename
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-000000000002
+                    name: Hogar
+                    color: "#7ccfa5"
+                    icon: home
+                    sortOrder: 1
+                    isInbox: false
+                    openCount: 1
+                    version: 2
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/TaskList"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT`. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTaskList
+      tags:
+        - Tasks
+      summary: Delete a list (its tasks move to the Inbox)
+      description: |-
+        The Inbox can't be deleted (409 `CONFLICT`).
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              examples:
+                delete:
+                  summary: Delete Casa
+                  value:
+                    movedToInbox: 1
+              schema:
+                type: object
+                properties:
+                  movedToInbox:
+                    type: integer
+                required:
+                  - movedToInbox
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: the Inbox."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tasks:
+    get:
+      operationId: listTasks
+      tags:
+        - Tasks
+      summary: List tasks by view and filters
+      description: |-
+        Views: `today` (open, due today), `overdue`, `upcoming`, `inbox` (undated, in the Inbox), `done`. Filters combine (list, tag, status, due range, text). Dates are in the user's timezone.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/TaskView"
+          required: false
+          description: "`inbox`: open, no date, in the Inbox. `today`: open, due today. `upcoming`: open, due after today. `overdue`: open, due before today. `done`: completed, newest first. `all`: no view filter."
+          name: view
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: false
+          name: listId
+          in: query
+        - schema:
+            type: string
+            maxLength: 40
+          required: false
+          name: tag
+          in: query
+        - schema:
+            $ref: "#/components/schemas/TaskStatus"
+          required: false
+          name: status
+          in: query
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: false
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: dueFrom
+          in: query
+        - schema:
+            $ref: "#/components/schemas/LocalDate"
+          required: false
+          description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+          name: dueTo
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+            description: Text search over title and notes (accent-insensitive).
+          required: false
+          description: Text search over title and notes (accent-insensitive).
+          name: q
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Tasks.
+          content:
+            application/json:
+              examples:
+                today:
+                  summary: Today
+                  value:
+                    tasks:
+                      - id: 019a0a6e-1c00-7000-8000-00000000000b
+                        listId: 019a0a6e-1c00-7000-8000-000000000002
+                        title: Sacar la basura
+                        notes: null
+                        status: open
+                        priority: 0
+                        dueDate: 2026-11-16
+                        dueTime: 08:30
+                        dueAt: 2026-11-16T08:30:00.000-03:00
+                        overdue: false
+                        rrule: FREQ=WEEKLY;BYDAY=MO
+                        seriesId: 019a0a6e-1c00-7000-8000-00000000000b
+                        completedAt: null
+                        sortOrder: 1
+                        tags:
+                          - casa
+                        source: user
+                        version: 1
+                        createdAt: 2026-11-16T08:12:00.000-03:00
+                        updatedAt: 2026-11-16T08:12:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Task"
+                required:
+                  - tasks
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createTask
+      tags:
+        - Tasks
+      summary: Create a task (without a list → Inbox)
+      description: |-
+        A time needs a date; a recurrence (RRULE body, e.g. `FREQ=WEEKLY;BYDAY=MO`) needs a date too.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              create:
+                summary: "Tomorrow 9: call the accountant"
+                value:
+                  title: Llamar al contador
+                  dueDate: 2026-11-17
+                  dueTime: 09:00
+                  priority: 2
+              timeWithoutDate:
+                summary: Time without a date
+                value:
+                  title: Algo
+                  dueTime: 09:00
+            schema:
+              $ref: "#/components/schemas/TaskCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              examples:
+                create:
+                  summary: "Tomorrow 9: call the accountant"
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000000a
+                    listId: 019a0a6e-1c00-7000-8000-000000000001
+                    title: Llamar al contador
+                    notes: null
+                    status: open
+                    priority: 2
+                    dueDate: 2026-11-17
+                    dueTime: 09:00
+                    dueAt: 2026-11-17T09:00:00.000-03:00
+                    overdue: false
+                    rrule: null
+                    seriesId: null
+                    completedAt: null
+                    sortOrder: 1
+                    tags: []
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              examples:
+                timeWithoutDate:
+                  summary: Time without a date
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Una hora o una repetición necesitan una fecha.
+                      details:
+                        fields:
+                          - path: /dueDate
+                            message: Required with dueTime or rrule
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: that id already exists. `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tasks/{id}:
+    get:
+      operationId: getTask
+      tags:
+        - Tasks
+      summary: One task
+      description: "**Actors:** user, API token with `read`."
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Task.
+          content:
+            application/json:
+              examples:
+                get:
+                  summary: The task
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000000a
+                    listId: 019a0a6e-1c00-7000-8000-000000000001
+                    title: Llamar al contador
+                    notes: null
+                    status: open
+                    priority: 2
+                    dueDate: 2026-11-17
+                    dueTime: 09:00
+                    dueAt: 2026-11-17T09:00:00.000-03:00
+                    overdue: false
+                    rrule: null
+                    seriesId: null
+                    completedAt: null
+                    sortOrder: 1
+                    tags: []
+                    source: user
+                    version: 1
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              examples:
+                missing:
+                  summary: Unknown id
+                  value:
+                    error:
+                      code: NOT_FOUND
+                      message: No encontré la tarea con ese id. Usá searchAgenda para buscarla por título.
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateTask
+      tags:
+        - Tasks
+      summary: Change a task (reschedule, rename, move, cancel)
+      description: |-
+        `dueDate: null` removes the date, time and recurrence. Send `version` (or If-Match) to detect concurrent edits.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              reschedule:
+                summary: Move to Thursday 10:00
+                value:
+                  dueDate: 2026-11-19
+                  dueTime: 10:00
+                  version: 1
+            schema:
+              $ref: "#/components/schemas/TaskPatch"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              examples:
+                reschedule:
+                  summary: Move to Thursday 10:00
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000000a
+                    listId: 019a0a6e-1c00-7000-8000-000000000001
+                    title: Llamar al contador
+                    notes: null
+                    status: open
+                    priority: 2
+                    dueDate: 2026-11-19
+                    dueTime: 10:00
+                    dueAt: 2026-11-19T10:00:00.000-03:00
+                    overdue: false
+                    rrule: null
+                    seriesId: null
+                    completedAt: null
+                    sortOrder: 1
+                    tags: []
+                    source: user
+                    version: 2
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`VERSION_CONFLICT` (details.current). `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTask
+      tags:
+        - Tasks
+      summary: Delete a task
+      description: |-
+        Soft delete. If it was done, prefer completeTask.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tasks/{id}/complete:
+    post:
+      operationId: completeTask
+      tags:
+        - Tasks
+      summary: Mark done (a recurring task spawns its next occurrence)
+      description: |-
+        Missed occurrences are skipped and completing counts for today. Completing a done task changes nothing.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              recurring:
+                summary: Weekly task done
+                value: {}
+            schema:
+              $ref: "#/components/schemas/CompleteInput"
+      responses:
+        "200":
+          description: Done (+ next occurrence).
+          content:
+            application/json:
+              examples:
+                recurring:
+                  summary: Weekly task done
+                  value:
+                    task:
+                      id: 019a0a6e-1c00-7000-8000-00000000000b
+                      listId: 019a0a6e-1c00-7000-8000-000000000002
+                      title: Sacar la basura
+                      notes: null
+                      status: done
+                      priority: 0
+                      dueDate: 2026-11-16
+                      dueTime: 08:30
+                      dueAt: 2026-11-16T08:30:00.000-03:00
+                      overdue: false
+                      rrule: FREQ=WEEKLY;BYDAY=MO
+                      seriesId: 019a0a6e-1c00-7000-8000-00000000000b
+                      completedAt: 2026-11-16T08:12:00.000-03:00
+                      sortOrder: 1
+                      tags:
+                        - casa
+                      source: user
+                      version: 2
+                      createdAt: 2026-11-16T08:12:00.000-03:00
+                      updatedAt: 2026-11-16T08:12:00.000-03:00
+                      updatedBy: user
+                    next:
+                      id: 019a0a6e-1c00-7000-8000-00000000000c
+                      listId: 019a0a6e-1c00-7000-8000-000000000002
+                      title: Sacar la basura
+                      notes: null
+                      status: open
+                      priority: 0
+                      dueDate: 2026-11-23
+                      dueTime: 08:30
+                      dueAt: 2026-11-23T08:30:00.000-03:00
+                      overdue: false
+                      rrule: FREQ=WEEKLY;BYDAY=MO
+                      seriesId: 019a0a6e-1c00-7000-8000-00000000000b
+                      completedAt: null
+                      sortOrder: 1
+                      tags:
+                        - casa
+                      source: user
+                      version: 1
+                      createdAt: 2026-11-16T08:12:00.000-03:00
+                      updatedAt: 2026-11-16T08:12:00.000-03:00
+                      updatedBy: user
+              schema:
+                $ref: "#/components/schemas/CompleteResult"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tasks/{id}/reopen:
+    post:
+      operationId: reopenTask
+      tags:
+        - Tasks
+      summary: Back to open (undo a completion)
+      description: |-
+        Pass `nextId` (from completeTask) to remove the occurrence that completing created.
+
+        **Actors:** user, API token with `write`.
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Uuid"
+          required: true
+          name: id
+          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              undo:
+                summary: Undo
+                value:
+                  nextId: 019a0a6e-1c00-7000-8000-00000000000c
+            schema:
+              $ref: "#/components/schemas/ReopenInput"
+      responses:
+        "200":
+          description: Open again.
+          content:
+            application/json:
+              examples:
+                undo:
+                  summary: Undo
+                  value:
+                    id: 019a0a6e-1c00-7000-8000-00000000000b
+                    listId: 019a0a6e-1c00-7000-8000-000000000002
+                    title: Sacar la basura
+                    notes: null
+                    status: open
+                    priority: 0
+                    dueDate: 2026-11-16
+                    dueTime: 08:30
+                    dueAt: 2026-11-16T08:30:00.000-03:00
+                    overdue: false
+                    rrule: FREQ=WEEKLY;BYDAY=MO
+                    seriesId: 019a0a6e-1c00-7000-8000-00000000000b
+                    completedAt: null
+                    sortOrder: 1
+                    tags:
+                      - casa
+                    source: user
+                    version: 3
+                    createdAt: 2026-11-16T08:12:00.000-03:00
+                    updatedAt: 2026-11-16T08:12:00.000-03:00
+                    updatedBy: user
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/tasks/reorder:
+    post:
+      operationId: reorderTasks
+      tags:
+        - Tasks
+      summary: Set the order of tasks within one list
+      description: "**Actors:** user, API token with `write`."
+      security:
+        - session: []
+        - apiToken:
+            - write
+      x-actors:
+        - user
+        - API token with `write`
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              reorder:
+                summary: Drag in the Inbox
+                value:
+                  ids:
+                    - 019a0a6e-1c00-7000-8000-00000000000a
+            schema:
+              $ref: "#/components/schemas/ReorderInput"
+      responses:
+        "200":
+          description: The list's open tasks in the new order.
+          content:
+            application/json:
+              examples:
+                reorder:
+                  summary: Drag in the Inbox
+                  value:
+                    tasks:
+                      - id: 019a0a6e-1c00-7000-8000-00000000000a
+                        listId: 019a0a6e-1c00-7000-8000-000000000001
+                        title: Llamar al contador
+                        notes: null
+                        status: open
+                        priority: 2
+                        dueDate: 2026-11-17
+                        dueTime: 09:00
+                        dueAt: 2026-11-17T09:00:00.000-03:00
+                        overdue: false
+                        rrule: null
+                        seriesId: null
+                        completedAt: null
+                        sortOrder: 1
+                        tags: []
+                        source: user
+                        version: 1
+                        createdAt: 2026-11-16T08:12:00.000-03:00
+                        updatedAt: 2026-11-16T08:12:00.000-03:00
+                        updatedBy: user
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Task"
+                required:
+                  - tasks
+                additionalProperties: false
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/search:
+    get:
+      operationId: searchAgenda
+      tags:
+        - Tasks
+      summary: Find items by text (accent-insensitive)
+      description: |-
+        Use it to get an id before updating or deleting. Tasks for now; reminders and events join later.
+
+        **Actors:** user, API token with `read`.
+      security:
+        - session: []
+        - apiToken:
+            - read
+      x-actors:
+        - user
+        - API token with `read`
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          required: true
+          name: q
+          in: query
+        - schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+          required: false
+          name: includeDone
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Matches, best first.
+          content:
+            application/json:
+              examples:
+                search:
+                  summary: contador
+                  value:
+                    results:
+                      - type: task
+                        task:
+                          id: 019a0a6e-1c00-7000-8000-00000000000a
+                          listId: 019a0a6e-1c00-7000-8000-000000000001
+                          title: Llamar al contador
+                          notes: null
+                          status: open
+                          priority: 2
+                          dueDate: 2026-11-17
+                          dueTime: 09:00
+                          dueAt: 2026-11-17T09:00:00.000-03:00
+                          overdue: false
+                          rrule: null
+                          seriesId: null
+                          completedAt: null
+                          sortOrder: 1
+                          tags: []
+                          source: user
+                          version: 1
+                          createdAt: 2026-11-16T08:12:00.000-03:00
+                          updatedAt: 2026-11-16T08:12:00.000-03:00
+                          updatedBy: user
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
           content:
             application/json:
               schema:

@@ -7,6 +7,7 @@ import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
 import { getSettings, updateSettings } from "../domain/settings";
+import * as tasks from "../domain/tasks";
 import { formatInstant } from "../domain/time";
 import { env } from "../env";
 import { type Handler, json, requireDevice } from "../http/context";
@@ -98,6 +99,27 @@ export const handlers: Record<string, Handler> = {
     const next = await updateSettings(ctx.db, body);
     await audit(ctx, "settings_changed", { before, after: next });
     return json(200, next);
+  },
+
+  // ---------- tasks ----------
+  listTaskLists: async (ctx) => json(200, { lists: await tasks.listLists(ctx) }),
+  createTaskList: async (ctx, { body }) => json(201, await tasks.createList(ctx, body)),
+  updateTaskList: async (ctx, { params, body }) => json(200, await tasks.updateList(ctx, params.id, body)),
+  deleteTaskList: async (ctx, { params }) => json(200, await tasks.deleteList(ctx, params.id)),
+  listTasks: async (ctx, { query }) => json(200, { tasks: await tasks.listTasks(ctx, query) }),
+  getTask: async (ctx, { params }) => json(200, await tasks.getTask(ctx, params.id)),
+  createTask: async (ctx, { body }) => json(201, await tasks.createTask(ctx, body)),
+  updateTask: async (ctx, { params, body }) => json(200, await tasks.updateTask(ctx, params.id, body)),
+  completeTask: async (ctx, { params, body }) => json(200, await tasks.completeTask(ctx, params.id, body.version)),
+  reopenTask: async (ctx, { params, body }) => json(200, await tasks.reopenTask(ctx, params.id, body.nextId)),
+  deleteTask: async (ctx, { params }) => {
+    await tasks.deleteTask(ctx, params.id);
+    return { status: 204 };
+  },
+  reorderTasks: async (ctx, { body }) => json(200, { tasks: await tasks.reorderTasks(ctx, body.ids) }),
+  searchAgenda: async (ctx, { query }) => {
+    const found = await tasks.searchTasks(ctx, query.q, query.includeDone === "true", query.limit);
+    return json(200, { results: found.map((task) => ({ type: "task", task })) });
   },
 
   // ---------- API tokens ----------
