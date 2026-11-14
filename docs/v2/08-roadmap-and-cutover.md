@@ -24,16 +24,18 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 ## Phase 2 — Schema 0000
 - [x] Drizzle schema per `02`, triggers, indexes, seeds (Inbox)
 - [x] Re-enable API tests (`tests/api`) in `pnpm test`
-- [ ] Wire `app_user.timezone` into `formatInstant` / `userTimeZone()` (moved to phase 3, with the auth rewrite that reads `app_user`)
+- [x] Wire `app_user.timezone` into `formatInstant` / `userTimeZone()` (done in phase 3)
 - [x] Migration applies cleanly on empty DB; `uuidv7()` defaults work
 
 > **Decisions (Phase 2, 2026-11-13):** `0000_init.sql` is pure drizzle-kit output (regenerate freely until the first deploy); `0001_db_logic.sql` (`drizzle-kit generate --custom`) holds extensions, search functions/indexes, triggers and the Inbox seed. `item_source` (`user`/`sunday`/`system`) is the actor everywhere; `change_log`/`audit_event`/`notification_log` also store `token_id`. `sleep_log.date` = wake-up date (bed after noon counts for the next day). Additions over `02`: `reminder.event_occurrence_at` (idempotent event offsets), `reminder_delivery.action/action_at` (single-use action tokens), `push_subscription.last_error`, `version`/`updated_by` on `day_review`, `api_token`/`audit_event` checks, `auth_lockout` scope `ip`. **Search:** `f_search(title, notes, …)` (lowercase + unaccent) with trigram GIN indexes on task, reminder, event and external_event; query with the same expression (`f_search(cols) LIKE '%' || f_search($1) || '%'`, or `%` for fuzzy). Functions are schema-qualified because PG17+ builds indexes with a restricted search_path.
 
 ## Phase 3 — Auth and security
-- [ ] Setup flow, PIN, sessions, devices, WebAuthn, recovery/reset codes ported
-- [ ] Origin check, headers/CSP, IP handling, new lockout, pruning
-- [ ] Error envelope per `03`; auth/session/lockout/idempotency time math moved from `Date` to Temporal (`ctx.now` is still a `Date`)
-- [ ] API tokens (create/revoke/list, scopes, re-auth) + Ajustes UI
+- [x] Setup flow, PIN, sessions, devices, WebAuthn, recovery/reset codes ported
+- [x] Origin check, headers/CSP, IP handling, new lockout, pruning
+- [x] Error envelope per `03`; auth/session/lockout/idempotency time math moved from `Date` to Temporal
+- [x] API tokens (create/revoke/list, scopes, re-auth) + Ajustes UI
+
+> **Decisions (Phase 3, 2026-11-14):** Errors are `{ "error": { "code", "message", "details"?, "requestId" } }`, UPPER_SNAKE codes, Spanish messages. CSP uses a per-request nonce from `src/proxy.ts`, so `cacheComponents`/PPR are off (Next: nonces need dynamic rendering); `style-src` allows inline (React style attributes). Static security headers come from `next.config.ts`. Cookie writes require `Origin` = `APP_ORIGIN` (or `Sec-Fetch-Site: same-origin`); bodies must be JSON. Client IP: `CF-Connecting-IP` only with `TRUST_CF`, else the last `X-Forwarded-For` hop. Lockout: device + IP scopes, 5 failures → 15 min × 2ⁿ (≤ 24 h); the global counter never locks (1 s delay + one push alert per hour over 20 failures/h). Token create/revoke needs PIN/fingerprint within 5 min (`POST /api/auth/reauth`). Routes opt into tokens with `token: <scope>`. Settings (timezone etc.) via `/api/settings`, cached in memory. Worker runs a small scheduler; daily prune at 04:00 local. New Calma component `TextField`. Vitest has `unit` (no DB) and `integration` projects. CORS and per-token rate limits stay in phase 8.
 
 ## Phase 4 — Tasks
 - [ ] Contract + endpoints + domain (lists, recurrence, search); pick `rrule` vs `rrule-temporal` and add RRULE helpers to `domain/time.ts`

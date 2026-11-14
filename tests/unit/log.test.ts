@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { log, REDACTED, redact } from "@/server/log";
 
 describe("logger redaction", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
 
   it("redacts secret keys at any depth, keeps the rest", () => {
     const out = redact({
@@ -34,6 +37,7 @@ describe("logger redaction", () => {
     const a: Record<string, unknown> = { name: "a" };
     a.self = a;
     expect((redact(a) as Record<string, unknown>).self).toBe("[Circular]");
+    vi.stubEnv("LOG_LEVEL", "info");
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     log.info("hello", { cookie: "agenda_session=abc", n: 1 });
     const line = String(write.mock.calls[0]?.[0]);

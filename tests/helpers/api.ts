@@ -49,7 +49,7 @@ export function client(_as: As, jar = new Map<string, string>()): Client {
     };
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
     const body = opts.raw ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body));
-    if (body !== undefined) headers["content-type"] = "application/json";
+    if (body !== undefined) headers["content-type"] ??= "application/json";
     const res = await handle(
       new Request(`https://agenda.lemydev.com${path}`, { method, headers, ...(body === undefined ? {} : { body }) }),
     );
