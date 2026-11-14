@@ -7,9 +7,10 @@ import { todayLocal } from "@/ui/time";
 import { ApiProblem, api } from "./api";
 import { idb, type Optimistic, type OutboxItem } from "./db";
 import { putEvent } from "./event-cache";
+import { applyHabitLog } from "./habit-cache";
 import { putReminder } from "./reminder-cache";
 import { putTask, removeTask } from "./task-cache";
-import type { AgendaEvent, EventQuery, Reminder, ReminderQuery, Task, TaskList, TaskQuery } from "./types";
+import type { AgendaEvent, EventQuery, HabitProgress, HabitQuery, Reminder, ReminderQuery, Task, TaskList, TaskQuery } from "./types";
 
 // ---------- status store ----------
 
@@ -82,12 +83,17 @@ function applyToEvents(data: EventListData, query: EventQuery, o: Optimistic): E
   return { events: putEvent(data.events, o.event, query) };
 }
 
-type Kind = "tasks" | "reminders" | "events";
-const kindOf = (o: Optimistic): Kind => (o.kind.startsWith("reminder") ? "reminders" : o.kind.startsWith("event") ? "events" : "tasks");
+type Kind = "tasks" | "reminders" | "events" | "habits";
+const kindOf = (o: Optimistic): Kind =>
+  o.kind.startsWith("reminder") ? "reminders" : o.kind.startsWith("event") ? "events" : o.kind.startsWith("habit") ? "habits" : "tasks";
 
 function applyTo(qc: QueryClient, kind: Kind, data: unknown, query: unknown, o: Optimistic): unknown {
   if (kind === "reminders") return applyToReminders(data as ReminderListData, query as ReminderQuery, o);
   if (kind === "events") return applyToEvents(data as EventListData, query as EventQuery, o);
+  if (kind === "habits")
+    return o.kind === "habit-log"
+      ? { habits: applyHabitLog((data as { habits: HabitProgress[] }).habits, query as HabitQuery, o, todayLocal()) }
+      : data;
   return applyToTasks(qc, data as TaskListData, query as TaskQuery, o);
 }
 
@@ -106,7 +112,7 @@ let pendingQc: QueryClient | null = null;
 /** Queued (not yet sent) edits applied to freshly fetched data, so a refetch never "undoes" them. */
 export async function withPending<T>(key: unknown[], data: T): Promise<T> {
   const kind = key[0];
-  if ((kind !== "tasks" && kind !== "reminders" && kind !== "events") || !pendingQc) return data;
+  if ((kind !== "tasks" && kind !== "reminders" && kind !== "events" && kind !== "habits") || !pendingQc) return data;
   const items = (await idb().outbox.orderBy("createdAt").toArray()).filter((i) => i.state === "pending" && i.optimistic);
   let out: unknown = data;
   for (const i of items) {

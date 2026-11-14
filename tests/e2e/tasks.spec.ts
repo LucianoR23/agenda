@@ -162,3 +162,52 @@ test("events: Calendario agenda and week, editor with a reminder, shown on Hoy",
   await expect(page.getByRole("heading", { name: "Google Calendar" })).toBeVisible();
   await shot(page, "15-ajustes-google");
 });
+
+test("habits, cierre del día, historial y métricas", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Ingresá tu PIN" })).toBeVisible();
+  await typePin(page, E2E.pin);
+  await expect(page.getByRole("heading", { name: "Hoy" })).toBeVisible();
+
+  // create a weekly habit linked to +gym tasks
+  await page.getByRole("button", { name: "Más", exact: true }).click();
+  await page.getByRole("link", { name: /Hábitos/ }).click();
+  await expect(page.getByText("Sin hábitos")).toBeVisible();
+  await page.getByRole("button", { name: "Crear hábito" }).click();
+  await page.getByRole("textbox", { name: "Nombre" }).fill("Gym");
+  await page.getByRole("textbox", { name: "Meta" }).fill("3");
+  await page.getByRole("radio", { name: "Por semana" }).click();
+  await page.getByRole("textbox", { name: /Etiqueta de tarea/ }).fill("gym");
+  await shot(page, "16-habit-editor");
+  await page.getByRole("dialog", { name: "Hábito" }).getByRole("button", { name: "Crear hábito" }).click();
+  await expect(page.getByRole("region", { name: "Gym" })).toBeVisible();
+  await shot(page, "17-habitos");
+
+  // check it on Hoy
+  await page.getByRole("link", { name: /Hoy/ }).first().click();
+  const habits = page.getByRole("region", { name: "Hábitos" });
+  await expect(habits.getByText("0/3 esta semana")).toBeVisible();
+  await habits.getByRole("button", { name: /Gym/ }).click();
+  await expect(habits.getByText("1/3 esta semana")).toBeVisible();
+  await shot(page, "18-hoy-habitos");
+
+  // close the day
+  await page.goto("/cierre");
+  await expect(page.getByRole("heading", { name: "Cierre del día" })).toBeVisible();
+  await page.getByRole("radio", { name: "Ánimo 4 de 5" }).click();
+  await page.getByRole("textbox", { name: "Algo bueno 1" }).fill("Fui al gym");
+  await shot(page, "19-cierre");
+  await page.getByRole("button", { name: "Cerrar el día" }).click();
+  await expect(page.getByText("Día cerrado. Buenas noches.")).toBeVisible();
+
+  // Historial and Métricas
+  await page.goto("/historial");
+  await expect(page.getByRole("heading", { name: "Historial", exact: true })).toBeVisible();
+  await expect(page.getByText("Días cerrados")).toBeVisible();
+  await shot(page, "20-historial");
+  await page.getByRole("radio", { name: "Métricas" }).click();
+  await expect(page.getByText("Constancia de hábitos")).toBeVisible();
+  await shot(page, "21-metricas");
+  await page.goto("/metricas");
+  await expect(page.getByText("Constancia de hábitos")).toBeVisible();
+});

@@ -1,5 +1,6 @@
-import { PlaceholderScreen } from "@/ui/screens/placeholder";
+import { redirect } from "next/navigation";
 
+/** Historial y métricas are one screen (docs/v2/01). */
 export default function Page() {
-  return <PlaceholderScreen title="Métricas" icon="insights" body="Las métricas, hábitos y sueño llegan en la fase 7." />;
+  redirect("/historial?tab=metricas");
 }

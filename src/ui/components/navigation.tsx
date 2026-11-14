@@ -15,7 +15,8 @@ export const TABS: Array<{ key: string; label: string; icon: IconName; href: str
   { key: "tasks", label: "Tareas", icon: "checklist", href: "/tareas" },
   { key: "calendar", label: "Calendario", icon: "calendar_month", href: "/calendario" },
   { key: "reminders", label: "Recordatorios", icon: "notifications", href: "/recordatorios" },
-  // Historial y métricas become one screen in phase 7 (/metricas stays reachable from there)
+  { key: "habits", label: "Hábitos", icon: "local_fire_department", href: "/habitos" },
+  // Historial y métricas: one screen with two tabs (/metricas redirects to it)
   { key: "history", label: "Historial", icon: "insights", href: "/historial" },
   { key: "settings", label: "Ajustes", icon: "settings", href: "/ajustes" },
 ];

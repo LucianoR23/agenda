@@ -34,7 +34,9 @@ export type Optimistic =
   | { kind: "reminder-remove"; id: string }
   /** A local event as one occurrence (a recurring one shows its first until the server expands it). */
   | { kind: "event-put"; event: AgendaEvent }
-  | { kind: "event-remove"; eventId: string };
+  | { kind: "event-remove"; eventId: string }
+  /** A habit checked/unchecked (or its value) for a date. */
+  | { kind: "habit-log"; habitId: string; date: string; done: boolean; value: number | null };
 
 class AgendaDb extends Dexie {
   cache!: EntityTable<CacheEntry, "key">;

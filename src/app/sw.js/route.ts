@@ -24,7 +24,7 @@ function serviceWorker(version: string) {
 const VERSION = "agenda-${version}";
 const SHELL = VERSION + "-shell";
 const STATIC = VERSION + "-static";
-const SHELL_URLS = ["/", "/inbox", "/tareas", "/calendario", "/recordatorios", "/ajustes", "/icons.svg", "/icons/icon-192.png", "/manifest.webmanifest"];
+const SHELL_URLS = ["/", "/inbox", "/tareas", "/calendario", "/recordatorios", "/habitos", "/historial", "/cierre", "/ajustes", "/icons.svg", "/icons/icon-192.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => Promise.all(SHELL_URLS.map((u) => c.add(u).catch(() => undefined)))));

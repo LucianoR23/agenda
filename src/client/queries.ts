@@ -8,11 +8,17 @@ import type {
   AgendaEvent,
   ApiToken,
   CalendarStatus,
+  DayReview,
+  DaySummary,
   Device,
+  HabitProgress,
+  History,
+  Metrics,
   Reminder,
   ReminderQuery,
   SessionState,
   Settings,
+  SleepLog,
   Task,
   TaskList,
   TaskQuery,
@@ -20,7 +26,7 @@ import type {
 
 const CACHE_DAYS = 14;
 /** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -84,6 +90,21 @@ export function useReminders(query: ReminderQuery) {
 /** Local + Google/iCal events overlapping [from, to] (dates in the user's zone); the range is the cache key. */
 export const useEvents = (from: string, to: string) =>
   useCached<{ events: AgendaEvent[] }>(["events", { from, to }], `/api/events?from=${from}&to=${to}`);
+
+/** Habits with streaks and the period's progress as of `date` (default today). */
+export function useHabits(date?: string, includeArchived = false) {
+  const query = { ...(date ? { date } : {}), ...(includeArchived ? { includeArchived: "true" as const } : {}) };
+  return useCached<{ habits: HabitProgress[] }>(["habits", query], `/api/habits?${new URLSearchParams(query)}`);
+}
+
+export const useSleep = (from: string, to: string) =>
+  useCached<{ logs: SleepLog[] }>(["sleep", { from, to }], `/api/sleep?from=${from}&to=${to}`);
+export const useReview = (date: string) => useCached<{ review: DayReview | null }>(["review", date], `/api/reviews/${date}`);
+export const useDaySummary = (date: string | null) =>
+  useCached<DaySummary>(["summary", date], date === null ? null : `/api/summary/day?date=${date}`);
+export const useHistory = (month: string) => useCached<History>(["history", month], `/api/history?month=${month}`);
+export const useMetrics = (range: "week" | "month" | "year", date: string) =>
+  useCached<Metrics>(["metrics", { range, date }], `/api/metrics?range=${range}&date=${date}`);
 
 export const useCalendars = () => useCached<CalendarStatus>(["calendars"], "/api/calendars");
 

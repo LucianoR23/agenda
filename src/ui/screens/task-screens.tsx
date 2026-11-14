@@ -16,7 +16,9 @@ import { EmptyState, TimelineSkeleton } from "../components/surfaces";
 import { SwipeRow, TaskRow } from "../components/task-row";
 import { dayLabel, todayLocal, userTimeZone } from "../time";
 import { useEventUi } from "./calendar-screens";
+import { HabitsSection, SleepCard } from "./habit-screens";
 import { RemindersScreen, useReminderUi } from "./reminder-screens";
+import { CloseDayCard } from "./review-screens";
 import { QuickAddSheet, RescheduleSheet, TaskEditor } from "./task-sheets";
 
 type Sheet = { kind: "add" } | { kind: "edit"; task: Task } | { kind: "move"; task: Task } | null;
@@ -124,6 +126,8 @@ export function TodayScreen() {
   return (
     <div className="flex flex-col gap-4">
       <PageTitle title="Hoy" subtitle={dayLabel(today, today).replace("Hoy · ", "")} />
+      <SleepCard />
+      <CloseDayCard />
       {loading ? (
         <Loading />
       ) : late.length + all.length + reminders.length + events.length === 0 ? (
@@ -167,6 +171,7 @@ export function TodayScreen() {
           )}
         </>
       )}
+      <HabitsSection date={today} />
       {ui.fab}
       {ui.sheets}
       {reminderUi.sheets}
