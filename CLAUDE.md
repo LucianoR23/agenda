@@ -26,7 +26,7 @@ Also read `AGENTS.md`: **this is Next.js 16 — APIs and conventions differ from
 - If a doc is ambiguous or conflicts with the code/reality, stop and ask.
 
 ## Stack (v2)
-Next.js 16 (App Router, standalone output, Turbopack) · React 19 with **React Compiler** · TypeScript strict · Tailwind CSS 4 (CSS-first `@theme`) · **Biome** (lint + format; ESLint removed) · pnpm · Node 26 (LTS, native Temporal) · PostgreSQL 18 · Drizzle ORM + postgres.js · Zod 4 + `@asteasolutions/zod-to-openapi` (OpenAPI 3.1 is generated from the contract) · Temporal for dates (native on Node 26; `temporal-polyfill` loaded on the client only when a browser lacks it) · TanStack Query + Dexie (offline) · web-push · @node-rs/argon2 · @simplewebauthn · googleapis (Calendar read-only) · Vitest, Playwright, ajv.
+Next.js 16 (App Router, standalone output, Turbopack) · React 19 with **React Compiler** · TypeScript strict · Tailwind CSS 4 (CSS-first `@theme`) · **Biome** (lint + format; ESLint removed) · pnpm · Node 26 (LTS, native Temporal) · PostgreSQL 18 · Drizzle ORM + postgres.js · Zod 4 + `@asteasolutions/zod-to-openapi` (OpenAPI 3.1 is generated from the contract) · Temporal for dates (native on Node 26; `temporal-polyfill` loaded on the client only when a browser lacks it) · TanStack Query + Dexie (offline) · web-push · @node-rs/argon2 · @simplewebauthn · Google Calendar read-only over plain `fetch` (no googleapis) + node-ical (iCal fallback) · Vitest, Playwright, ajv.
 
 ## Conventions (short; details in 03)
 - Contract-first: Zod schemas in `src/contract` are the single source for validation, types and OpenAPI.

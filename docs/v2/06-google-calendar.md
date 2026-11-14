@@ -1,11 +1,14 @@
 # 06 — Google Calendar (read-only)
 
+> **Implemented in phase 6** with plain `fetch` (no `googleapis`: ~246 MB for six endpoints) — `src/server/calendar/`
+> (`google.ts` OAuth/API with Zod-validated responses, `ical.ts`, `sync.ts`, `service.ts`, `secretbox.ts`).
+
 ## Situation
 Lemy has a work Google Workspace account and a personal calendar. The work account only allowed sharing free/busy, so he shared his **personal** calendar **into** the work account with full details. Therefore **one OAuth login with the work account sees both calendars**.
 
 Risk: the Workspace admin may block third-party OAuth apps. Plan B is the secret iCal address of each calendar (no OAuth). Build both; OAuth is primary.
 
-## OAuth setup (Lemy does the Google Cloud part; write the steps for him in `docs/v2/runbooks/google-oauth.md`)
+## OAuth setup (Lemy does the Google Cloud part: [`runbooks/google-oauth.md`](runbooks/google-oauth.md))
 1. Google Cloud project (under the Workspace org if he's allowed; otherwise a personal project).
 2. Enable **Google Calendar API**.
 3. OAuth consent screen: user type **Internal** if the project belongs to the Workspace org (no verification, tokens don't expire). If **External**, publish the app to **In production** (unverified is fine for one user; he'll see a warning). Don't leave it in *Testing*: refresh tokens expire after 7 days there.
@@ -31,9 +34,9 @@ Windowed polling (simple and robust for one user):
 
 ## Exposure
 - Overview, Calendario and `listEvents` merge local `event` and `external_event`; external ones are flagged `source: "google" | "ical"`, `read_only: true`, with `html_link`.
-- Reminders for Google events: optional setting "avisarme N min antes de eventos de Google" (default off) → materialized like local event offsets.
+- Reminders for Google events (decided in phase 6): **per calendar** `calendar_source.reminder_minutes` (default off: Google already notifies), materialized like local event offsets; plus **"Recordarme"** on a single event (`POST /api/external-events/{id}/remind`, `minutesBefore` follows the event when it moves, or a fixed `at` for all-day events).
 
 ## Tests
-- Mock googleapis: initial sync, update, deletion/cancel, pagination, invalid_grant, 403.
+- Fake Google transport (`setGoogleFetch`): initial sync, update, deletion/cancel, pagination, invalid_grant, 403.
 - iCal parser with recurring event + exception fixture.
 - Encryption round-trip; token never appears in logs or responses.

@@ -1,6 +1,6 @@
 # Runbook — deploy agenda v2 on Coolify
 
-First deploy runs from branch **`v2`**; at cutover (phase 9) the app switches to `main`. One container, **one
+First deploy runs from branch **`v2`** (any time before phase 9, or as part of it); at cutover (phase 9) the app switches to `main`. One container, **one
 replica** (the worker and the rate limits live in memory).
 
 ## 0. Prerequisites
@@ -52,8 +52,8 @@ Mark every secret as **secret** in Coolify. Never paste them anywhere else.
 | `SESSION_SECRET` | 32+ random bytes | `openssl rand -base64 32` |
 | `SETUP_CODE` | 8+ chars, typed once on the first-run screen | `openssl rand -hex 8` |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | required for reminders (all three or none) | `npx web-push generate-vapid-keys`; subject `mailto:…`. New keys = every device subscribes again (Ajustes → Notificaciones) |
-| `ENCRYPTION_KEY` | phase 6 | `openssl rand -base64 32` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | phase 6 | Google Cloud console (see `06`) |
+| `ENCRYPTION_KEY` | required for Google Calendar and iCal (encrypts the refresh token and iCal addresses; changing it means reconnecting) | `openssl rand -base64 32` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional (Google Calendar); both or neither | [`google-oauth.md`](google-oauth.md) |
 | `CORS_ALLOWED_ORIGINS` | `https://sunday.lemydev.com` | phase 8 |
 | `TRUST_CF` | `true` if the domain is proxied by Cloudflare (orange cloud), else `false` | client IP for lockout/audit |
 | `PIN_REAUTH_DAYS` / `DEVICE_TRUST_DAYS` | `7` / `90` | defaults |
@@ -64,7 +64,7 @@ the container at boot with a message naming the variable (never its value): chec
 
 ## 4. Deploy
 
-Deploy from Coolify. The entrypoint applies migrations (`0000` schema, `0001` search/triggers/Inbox seed), then starts
+Deploy from Coolify. The entrypoint applies migrations (`0000` schema, `0001` search/triggers/Inbox seed, `0002`–`0003` settings and calendars), then starts
 Next. Logs are JSON lines; the first ones should be `migrations applied` and `agenda starting`.
 
 ## 5. Verify

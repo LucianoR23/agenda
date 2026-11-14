@@ -49,15 +49,16 @@ Fill at least these (never commit `.env`; never paste secrets into chats or logs
 | `SETUP_CODE` | any string of 8+ chars; you type it once on the first-run screen |
 
 For push locally, add VAPID keys (`npx web-push generate-vapid-keys`, all three `VAPID_*`); the service worker only
-registers in a production build (`pnpm build` + the standalone server, see Troubleshooting). Google and
-`ENCRYPTION_KEY` are for phase 6. The server validates the
+registers in a production build (`pnpm build` + the standalone server, see Troubleshooting). Google Calendar needs
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (see [`runbooks/google-oauth.md`](runbooks/google-oauth.md)) and
+`ENCRYPTION_KEY` (`openssl rand -base64 32`, also needed for iCal addresses). The server validates the
 environment at boot and exits naming the variable that is wrong (never its value).
 
 ## 4. Database
 
 ```bash
 pnpm db:up        # Postgres on 127.0.0.1:5433 with agenda_dev, agenda_test, agenda_e2e_test
-pnpm db:migrate   # applies drizzle/0000_init.sql + 0001_db_logic.sql to agenda_dev
+pnpm db:migrate   # applies every drizzle/*.sql migration to agenda_dev
 ```
 
 The init script that creates the three databases only runs when the Docker volume is new. If you reuse an old volume
@@ -90,12 +91,12 @@ pnpm typecheck && pnpm check && pnpm test && pnpm build
 ## 6. Where the work is
 
 - **Branch:** `v2` (v1 is the tag `v1`; never push to `main`, never force-push).
-- **Status:** phases 0–5 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
-  tasks, reminders + push + service worker). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
+- **Status:** phases 0–6 done except the first deploy (tooling, schema, auth & security, API tokens, settings, CSP,
+  tasks, reminders + push + service worker, events + Google Calendar/iCal). See [`08-roadmap-and-cutover.md`](08-roadmap-and-cutover.md) for the checklist
   and the decisions recorded per phase.
-- **Blocked:** the first deploy waits for the `agenda` database on postgres-core; follow
-  [`runbooks/deploy.md`](runbooks/deploy.md) when it exists.
-- **Next:** phase 6 (events and Google Calendar) — starts with a plan for approval.
+- **Deploy:** Lemy does it before phase 9 or as part of it (the `agenda` database on postgres-core doesn't exist yet);
+  [`runbooks/deploy.md`](runbooks/deploy.md), then [`runbooks/google-oauth.md`](runbooks/google-oauth.md).
+- **Next:** phase 7 (habits, sleep, review, metrics) — starts with a plan for approval.
 - **Working agreement:** read [`CLAUDE.md`](../../CLAUDE.md) first (plan → approval → implement → gate → tick → summary).
 
 ## Troubleshooting
