@@ -1,5 +1,9 @@
 # Agenda
 
+> **v2 rewrite in progress on branch `v2`.** This README still describes v1 (Agenbot era) and is rewritten at cutover
+> (phase 9). To set up and work on v2, follow **[docs/v2/dev-setup.md](docs/v2/dev-setup.md)**; specs live in
+> [docs/v2/](docs/v2/) and the plan in [08-roadmap-and-cutover.md](docs/v2/08-roadmap-and-cutover.md).
+
 Personal, single-user, mobile-first PWA to run my day. My AI assistant **Agenbot** reads my Google Calendars every
 morning and loads the day plan through an HTTP API (two or more options, calls with lead context, the WhatsApp
 checklist, gym/reading/dogs/sleep…). I choose an option, track it from my phone, and every change I make goes back to
