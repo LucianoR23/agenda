@@ -1,15 +1,16 @@
+import { env } from "@/server/env";
+
 /**
  * The service worker, served from a route so it carries the app version: every deploy is a byte-different script,
  * so browsers see the update, and the cache name (`agenda-<version>`) changes with it (docs/v2/07).
  */
 export function GET() {
-  return swResponse(process.env.APP_VERSION, process.env.BUILD_STAMP);
+  return swResponse(env().APP_VERSION);
 }
 
-/** APP_VERSION when the deploy sets one; otherwise the build stamp (a new one on every build). */
-function swResponse(appVersion: string | undefined, buildStamp: string | undefined) {
-  const raw = appVersion && appVersion !== "dev" ? appVersion : buildStamp ? `build-${buildStamp}` : "dev";
-  const version = raw.replace(/[^\w.-]/g, "");
+/** APP_VERSION when the deploy sets one, otherwise the build version (new on every build): src/server/version.ts. */
+function swResponse(raw: string) {
+  const version = raw.replace(/[^\w.+-]/g, "");
   return new Response(serviceWorker(version), {
     headers: {
       "Content-Type": "application/javascript; charset=utf-8",

@@ -23,6 +23,29 @@ describe("env", () => {
     expect(e.ENCRYPTION_KEY).toBeUndefined();
   });
 
+  it("trims values and strips one pair of quotes", () => {
+    const e = parseEnv({ ...base, TRUST_CF: ' "true" ', DISABLE_WORKER: "'1'", LOG_LEVEL: " warn ", APP_VERSION: '""' });
+    expect(e.TRUST_CF).toBe(true);
+    expect(e.DISABLE_WORKER).toBe(true);
+    expect(e.LOG_LEVEL).toBe("warn");
+    expect(e.APP_VERSION).toBe("dev"); // quoted empty = unset → build version ("dev" outside a Next build)
+  });
+
+  it("names unresolved Coolify references without echoing them", () => {
+    let message = "";
+    try {
+      parseEnv({ ...base, DATABASE_URL: "{{environment.AGENDA_DATABASE_URL}}", APP_VERSION: "{{project.V}}" });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/DATABASE_URL: looks like an unresolved Coolify reference/);
+    expect(message).toMatch(/APP_VERSION: looks like an unresolved Coolify reference/);
+    expect(message).not.toContain("AGENDA_DATABASE_URL");
+    expect(message.match(/DATABASE_URL/g)).toHaveLength(1); // not also reported as an invalid URL
+    // variables the app doesn't read are left alone
+    expect(() => parseEnv({ ...base, SOMETHING_ELSE: "{{x}}" })).not.toThrow();
+  });
+
   it("reports problems by name without echoing secret values", () => {
     const secret = "postgres://agenda:hunter2-very-secret@db/agenda";
     let message = "";

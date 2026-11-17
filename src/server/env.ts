@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { buildVersion } from "./version";
 
 /** `"true"` / `"false"` (also 1/0, yes/no) → boolean. Absent → `fallback`. */
 const flag = (fallback: boolean) => z.stringbool().default(fallback);
@@ -51,7 +52,8 @@ const Env = z
     /** Argon2id memory cost; lowered only in tests. */
     ARGON2_MEMORY_KIB: z.coerce.number().int().min(1024).default(19_456),
 
-    APP_VERSION: z.string().default("dev"),
+    /** Set by the deploy to override the build version (`<package.json version>+<commit>`, src/server/version.ts). */
+    APP_VERSION: z.string().default(buildVersion),
     DISABLE_WORKER: flag(false),
     SKIP_MIGRATIONS: flag(false),
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
@@ -81,14 +83,36 @@ export type AppEnv = z.infer<typeof Env>;
  * (Zod's messages don't echo the input).
  */
 export function parseEnv(source: Record<string, string | undefined>): AppEnv {
-  // `KEY=` in a .env file means "not set"
-  const present = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== undefined && v.trim() !== ""));
+  const present: Record<string, string> = {};
+  const unresolved: string[] = [];
+  for (const [key, raw] of Object.entries(source)) {
+    if (raw === undefined) continue;
+    const value = normalize(raw);
+    // `KEY=` in a .env file (or an empty field in Coolify) means "not set"
+    if (value === "") continue;
+    if (key in Env.shape && /\{\{.*\}\}/.test(value)) unresolved.push(key);
+    present[key] = value;
+  }
+  const lines = unresolved.map(
+    (key) =>
+      `  - ${key}: looks like an unresolved Coolify reference ({{…}}): the shared variable doesn't exist in this app's environment; set the value directly or fix the reference`,
+  );
   const parsed = Env.safeParse(present);
   if (!parsed.success) {
-    const lines = parsed.error.issues.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`);
-    throw new Error(`Invalid environment:\n${lines.join("\n")}`);
+    for (const i of parsed.error.issues) {
+      const key = i.path.join(".") || "(root)";
+      if (!unresolved.includes(key)) lines.push(`  - ${key}: ${i.message}`);
+    }
   }
+  if (!parsed.success || lines.length > 0) throw new Error(`Invalid environment:\n${lines.join("\n")}`);
   return parsed.data;
+}
+
+/** Trims, then drops one pair of matching quotes around the value (`"true"` pasted into a UI field). */
+function normalize(raw: string): string {
+  const value = raw.trim();
+  const quoted = /^(["'])([\s\S]*)\1$/.exec(value);
+  return quoted ? (quoted[2] ?? "").trim() : value;
 }
 
 let cached: AppEnv | null = null;

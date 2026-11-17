@@ -147,15 +147,21 @@ After creating it, in the resource's tabs:
 - **Resource limits:** memory limit `768m` (512 MB minimum).
 - **Replicas / scaling:** leave **1**.
 - **Automatic deployment** on push: **on** (it's on by default with a GitHub App source).
-- **APP_VERSION (optional):** what Ajustes → Acerca de and `/api/health` show as version. If Coolify offers
-  "Include source commit in build" (Advanced), turn it on and add an environment variable `APP_VERSION` =
-  `$SOURCE_COMMIT` marked as **Build variable**. Without it the version reads `dev`; the service worker still updates
-  on every deploy (it falls back to a per-build stamp).
+- **Include Source Commit in Build:** **on** (General → Build, or Advanced, depending on the Coolify version). The
+  build then gets `SOURCE_COMMIT` and the app's version becomes `<package.json version>+<short commit>` (e.g.
+  `2.0.0+a9c942f`), shown in Ajustes → Acerca de and `/api/health`. Off, it's `2.0.0+build-<timestamp>`. Either
+  way every deploy is a new version, so the service worker updates. Don't set `APP_VERSION` by hand: a fixed value
+  would keep the service worker from updating between deploys.
 
 ### 4.3 Environment variables
 
 Resource → **Environment Variables** → add each one (Developer view / "Normal view" → + Add). Turn **Is Secret on**
-for every secret. None is a build variable except the optional `APP_VERSION`.
+for every secret. None is a build variable.
+
+Paste values bare: no quotes, no spaces around them (the app strips one pair of quotes and outer spaces, but keep
+it clean). Leave optional variables out instead of empty. A Coolify shared-variable reference
+(`{{environment.X}}`, `{{project.X}}`, `{{team.X}}`) only resolves if that shared variable exists at that level for
+this app; otherwise the app receives the literal text and refuses to start, naming the variable.
 
 | Variable | Value | Secret |
 |---|---|---|
@@ -218,6 +224,8 @@ curl -s https://agenda.lemydev.com/api/openapi.sunday.json | head -c 120
 | Symptom | Cause / fix |
 |---|---|
 | Container stops at boot with `Invalid environment:` and a list of variables | That variable is missing or malformed (the message names it, never the value). Fix it in §4.3 and redeploy. |
+| `Invalid environment:` … `looks like an unresolved Coolify reference ({{…}})` | The shared variable that value points to doesn't exist in this app's environment (e.g. it was created in Sunday's). Create it where the reference says, or paste the value directly, and redeploy. |
+| `Invalid option: expected one of "true"\|"1"\|…` | A flag (`TRUST_CF`, `DISABLE_WORKER`, …) has something other than true/false: check for stray characters, or delete it to use the default. |
 | `ECONNREFUSED`, `getaddrinfo ENOTFOUND` or timeout on the database | `DATABASE_URL` host isn't `postgres-core`'s internal container name, or the app is on another Destination/network than `postgres-core` (§1.1, §4.2). |
 | `password authentication failed for user "agenda"` | The password in `DATABASE_URL` differs from the role's: reset it with `ALTER ROLE agenda PASSWORD '…';` (§1.2) and update the variable. |
 | `permission denied to create extension` | Run the two `CREATE EXTENSION` lines of §1.2 as `postgres` in the `agenda` database, then redeploy. |

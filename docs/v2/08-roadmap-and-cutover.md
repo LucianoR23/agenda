@@ -73,7 +73,7 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 
 ## Phase 9 — Release (v2 → main, first deploy, Sunday)
 
-> **Decision (Phase 9, 2026-11-17):** nothing was deployed yet (v1 isn't live), so there is no cutover: v2 goes to `main` and gets its first deploy. Split in 9a (now) and 9b (Sunday, a separate repo that's already built). From here on `main` is the trunk: short branches + PR + green CI, Lemy merges (`CLAUDE.md`); `v2` is deleted after the merge. `postgres-core` already exists in the Coolify project `agenda` (Ampere, arm64). Scheduled backups: decided later. The service worker version falls back to a per-build stamp, so deploys update clients even without `APP_VERSION`.
+> **Decision (Phase 9, 2026-11-17):** nothing was deployed yet (v1 isn't live), so there is no cutover: v2 goes to `main` and gets its first deploy. Split in 9a (now) and 9b (Sunday, a separate repo that's already built). From here on `main` is the trunk: short branches + PR + green CI, Lemy merges (`CLAUDE.md`); `v2` is deleted after the merge. `postgres-core` already exists in the Coolify project `agenda` (Ampere, arm64). Scheduled backups: decided later. The app version is stamped at build (`<package.json version>+<commit>` with Coolify's "Include Source Commit in Build", else `+build-<timestamp>`), so every deploy updates the service worker without setting `APP_VERSION`. Env values are trimmed, one pair of quotes is stripped, and unresolved `{{…}}` Coolify references stop the boot with a clear message.
 
 ### 9a — main + first deploy
 - [x] README describes v2; v1 leftovers in docs cleaned

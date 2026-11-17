@@ -132,6 +132,13 @@ function InstallCard({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** `2.0.0+a9c942f` → "v 2.0.0 · a9c942f"; `2.0.0+build-…` → "v 2.0.0"; a bare commit hash → its first 7 chars. */
+function versionLabel(version: string) {
+  if (/^[0-9a-f]{40}$/.test(version)) return `v ${version.slice(0, 7)}`;
+  const [base, build = ""] = version.split("+");
+  return /^[0-9a-f]{7}$/.test(build) ? `v ${base} · ${build}` : `v ${base}`;
+}
+
 function About() {
   const toast = useToast();
   const version = useQuery({
@@ -161,7 +168,7 @@ function About() {
         <span className="flex flex-1 flex-col">
           <span className="text-[15px] text-text">Agenda</span>
           <span className="font-mono text-mono text-muted">
-            {version ? `v ${version.slice(0, 7)}` : "…"} · {installed ? "instalada" : "en el navegador"}
+            {version ? versionLabel(version) : "…"} · {installed ? "instalada" : "en el navegador"}
           </span>
         </span>
       </div>
