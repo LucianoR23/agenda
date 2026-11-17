@@ -67,15 +67,27 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 - [x] `openapi.sunday.json` with the operations in `04`, LLM-quality descriptions
 - [x] CORS, rate limits, `client_id` upserts, `when_text`, `/api/notify`
 - [x] Contract + integration tests for Sunday flows
-- [ ] Token "sunday" created ⟶ sunday: phase 4 (register tool server) — after the deploy (`runbooks/sunday-tool-server.md`)
+- [ ] Token "sunday" created ⟶ sunday: phase 4 (register tool server) — moved to phase 9b
 
 > **Decisions (Phase 8, 2026-11-14):** Fields stay **camelCase** (`clientId`, `whenText`), like the rest of the contract; `04` updated. Sunday's spec has **37 operations**: the 20 of the first draft plus `getNow`, `reopenTask`, `getTask`, `listTaskLists`, `createTaskList`, `getReminder`, `doneReminder`, `getEvent`, `remindExternalEvent`, `listHabitLogs`, `listSleep`, `logSleepEvent`, `upsertSleep`, `getDayReview`, `saveDayReview`, `getHistory`, `getMetrics` (token scopes added to `upsertSleep`, `saveDayReview`, `getHistory`). It has no header parameters (Open WebUI would offer them to the model) and each description gets a usage note (`SUNDAY_GUIDE`). Tasks take `list` **by name**; an unknown one is a 400 listing the lists (never created, to avoid duplicates from typos). `dueDate` takes a date-time; date-times without offset are local. `clientId` = upsert (200); reused after a delete = 409. `url` deep-links open the item's sheet in the app. `/api/notify` counts its 20/24 h in `notification_log` (survives restarts); token limits (60/min, 1,000/day) are in memory. A write with no body counts as `{}` when every field is optional. `CORS_ALLOWED_ORIGINS` defaults to Sunday's origin.
 
-## Phase 9 — Cutover
-- [ ] Merge `v2` → `main` (PR), Coolify app switched to `main`
-- [ ] On each device: clear site data, open app, setup/PIN, passkey, subscribe push
+## Phase 9 — Release (v2 → main, first deploy, Sunday)
+
+> **Decision (Phase 9, 2026-11-17):** nothing was deployed yet (v1 isn't live), so there is no cutover: v2 goes to `main` and gets its first deploy. Split in 9a (now) and 9b (Sunday, a separate repo that's already built). From here on `main` is the trunk: short branches + PR + green CI, Lemy merges (`CLAUDE.md`); `v2` is deleted after the merge. `postgres-core` already exists in the Coolify project `agenda` (Ampere, arm64). Scheduled backups: decided later. The service worker version falls back to a per-build stamp, so deploys update clients even without `APP_VERSION`.
+
+### 9a — main + first deploy
+- [x] README describes v2; v1 leftovers in docs cleaned
+- [x] Deploy runbook complete from zero (`runbooks/deploy.md`) + `pnpm secrets:gen`
+- [x] Sunday integration guide for the sunday repo (`sunday-integration.md`)
+- [ ] PR `v2` → `main` merged by Lemy; `v2` branch deleted
+- [ ] Coolify app from `main` deployed and verified (health, headers, specs)
+- [ ] Devices: setup/PIN, recovery codes saved, passkey, push test, PWA installed; laptop paired
+- [ ] Scheduled backups of `postgres-core` (to decide)
+
+### 9b — Sunday
+- [ ] Token "sunday" created; tool server registered in Open WebUI (`runbooks/sunday-tool-server.md`)
+- [ ] Sunday repo updated with `sunday-integration.md` (camelCase, rules, 21:30 automation)
 - [ ] Smoke test: create by voice from Sunday → push arrives → "Listo" from the notification
-- [ ] Remove anything temporary; update README to describe v2
 
 ## Later (stage 2, don't start)
 `/sunday` screen with chat/voice/orb over Open WebUI's API; wake word in the PWA; Android APK.

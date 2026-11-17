@@ -1,85 +1,273 @@
-# Runbook — deploy agenda v2 on Coolify
+# Runbook — first deploy of agenda on Coolify
 
-First deploy runs from branch **`v2`** (any time before phase 9, or as part of it); at cutover (phase 9) the app switches to `main`. One container, **one
-replica** (the worker and the rate limits live in memory).
+Everything from zero, in order. Nothing here is assumed done: each step says how to check it and what to do if it's
+missing. Deploys come from branch **`main`** (after the phase 9 merge). One container, **one replica** (the worker and
+the token rate limits live in memory).
 
-## 0. Prerequisites
+Time: about an hour the first time, plus DNS propagation.
 
-- `postgres-core` is running in the Coolify project `core` (image `pgvector/pgvector:pg18-trixie`, provisioned by the
-  sunday repo).
-- Docker image builds for `linux/arm64` (CI checks it on every push).
+What you need at hand: access to the Coolify dashboard, the Cloudflare dashboard for `lemydev.com`, GitHub
+(`LucianoR23/agenda`), and this repo cloned on your machine with `pnpm install` done (for `pnpm secrets:gen`).
 
-## 1. Database `agenda` (once)
+---
 
-Run on `postgres-core` as its admin user (Coolify → `postgres-core` → Terminal → `psql -U postgres`). Generate the
-password on your machine and paste it only here and in the app's `DATABASE_URL`:
+## 0. Check the ground
 
-```sql
-CREATE ROLE agenda LOGIN PASSWORD '<generated password>';
-CREATE DATABASE agenda OWNER agenda;
-\c agenda
--- the app's migration creates pg_trgm and unaccent; both are "trusted", so the owner can, but be explicit:
-GRANT CREATE ON DATABASE agenda TO agenda;
+| Check | How | If not |
+|---|---|---|
+| The v2 merge is on `main` | GitHub → `LucianoR23/agenda` → branch `main` shows `docs/v2/` and `openapi.sunday.yaml`; the last CI run on `main` is green | Merge the phase 9 PR first |
+| The server is arm64 | Coolify → Servers → your server → Terminal: `uname -m` → `aarch64` | `x86_64` works too (the image builds for both); nothing changes below |
+| The server has room | same terminal: `free -h` (≥ 1 GB available), `df -h /` (≥ 5 GB free) | Free space (`docker system prune` removes unused images) |
+| Coolify can pull from GitHub | Coolify → **Sources**: a GitHub App connected to your account with access to `agenda` | §4.1 |
+| `postgres-core` exists and runs | Coolify → project **agenda** → resource `postgres-core`, status **Running** (green) | §1.1 |
+
+---
+
+## 1. Postgres
+
+### 1.1 `postgres-core` (already in the project `agenda`: check, don't recreate)
+
+Open Coolify → project **agenda** → `postgres-core` and check, without changing anything:
+
+- **Image:** `pgvector/pgvector:pg18-trixie` (General tab). The same instance will host Sunday's database later.
+- **Status:** Running. If it's stopped: **Start** and wait for green.
+- **Make it publicly available:** **off**. The app reaches it through Docker's internal network; it must not be
+  exposed on the internet.
+- **Postgres URL (internal):** shown on the General tab, like `postgres://postgres:…@<container-name>:5432/postgres`.
+  Note the **host part** (`<container-name>`, a long id): it goes into `DATABASE_URL`. Don't copy the password
+  anywhere; you won't need the admin password in the app.
+- **Destination / network** (General → "Destination", or the Network section): note it (usually the server's default
+  network `coolify`). The app must be on the same one (§4.2).
+
+Only if it doesn't exist at all: project **agenda** → **+ New** → **Database** → **PostgreSQL** → image
+`pgvector/pgvector:pg18-trixie`, name `postgres-core`, public access off → **Start**.
+
+### 1.2 The `agenda` database and role (once)
+
+First generate the secrets for the whole deploy, on your machine, in the repo:
+
+```sh
+pnpm secrets:gen
 ```
 
-Generate the password with `openssl rand -base64 24 | tr -d '/+='` (URL-safe, so it can go straight into the URL).
+It prints `AGENDA_DB_PASSWORD` plus the app secrets of §5. Keep that terminal open while you deploy; don't save the
+output to a file, a note or a chat. (Running it again gives new values: use only one set.)
 
-## 2. Application
+Then Coolify → `postgres-core` → **Terminal** → connect:
 
-Coolify → project **agenda** → New resource → **Public/Private GitHub repository** `LucianoR23/agenda`:
+```sh
+psql -U postgres
+```
+
+(If Coolify set another admin user, it's on the General tab as "Username".) Run, pasting the generated
+`AGENDA_DB_PASSWORD` in place of `<password>`:
+
+```sql
+CREATE ROLE agenda LOGIN PASSWORD '<password>';
+CREATE DATABASE agenda OWNER agenda;
+\c agenda
+GRANT CREATE ON DATABASE agenda TO agenda;
+-- the app's first migration creates these two; creating them here as admin avoids any permission surprise
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+\q
+```
+
+Check it:
+
+```sh
+psql -U agenda -d agenda -h 127.0.0.1 -c "select current_user, current_database();"
+```
+
+It asks for the password and answers `agenda | agenda`. If it says the role or database already exists, they were
+created before: run only the `\c agenda` block and check that you know the role's password (if not:
+`ALTER ROLE agenda PASSWORD '<password>';`).
+
+---
+
+## 2. DNS (Cloudflare)
+
+Cloudflare → `lemydev.com` → **DNS → Records**:
+
+1. Is there an `agenda` record already? If it points somewhere old, edit it; otherwise **Add record**.
+2. Type **A** (or AAAA for IPv6), name `agenda`, content = the **server's public IP** (Coolify → Servers → your server
+   → IP; or `curl -4 ifconfig.me` in the server terminal).
+3. **Proxy status:**
+   - **Proxied (orange cloud)** — recommended: hides the server IP. Then set `TRUST_CF=true` (§5) and check
+     **SSL/TLS → Overview → mode = Full (strict)**. With "Flexible" you get an endless redirect loop.
+   - **DNS only (grey cloud)**: then `TRUST_CF=false`.
+
+Check from your machine: `nslookup agenda.lemydev.com` returns an IP (Cloudflare's if proxied, the server's if not).
+
+---
+
+## 3. Secrets (from `pnpm secrets:gen`)
+
+| Variable | From |
+|---|---|
+| `SESSION_SECRET` | printed |
+| `SETUP_CODE` | printed — you'll type it once on the phone (§8) |
+| `ENCRYPTION_KEY` | printed — needed for Google Calendar/iCal; changing it later means reconnecting them |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | printed — new keys later = every device subscribes again |
+| `AGENDA_DB_PASSWORD` | printed — used in §1.2 and inside `DATABASE_URL`, not as a variable of its own |
+
+---
+
+## 4. The application in Coolify
+
+### 4.1 GitHub access (once)
+
+Coolify → **Sources** → is there a GitHub App with access to `agenda`?
+
+- **No:** **+ Add** → GitHub App → follow Coolify's flow (it creates the app on GitHub; choose your account, install it
+  on **only** the `agenda` repository, or all if you'll deploy more repos). Back in Coolify the source shows as
+  connected.
+- This gives automatic deploys on every push/merge to `main`. (The repo is public, so "Public Repository" also works,
+  but without the GitHub App you'd have to deploy by hand or set up a webhook.)
+
+### 4.2 Create the resource
+
+Coolify → project **agenda** → **+ New** → **Private Repository (with GitHub App)** → pick the source and
+`LucianoR23/agenda`:
 
 | Setting | Value |
 |---|---|
-| Branch | `v2` |
-| Build pack | **Dockerfile** (repo root) |
-| Port | `3000` |
-| Domain | `https://agenda.lemydev.com` (Cloudflare DNS → the VPS; Traefik issues the certificate) |
-| Healthcheck | path `/api/health`, port `3000` (the image also has a Docker HEALTHCHECK) |
-| Replicas | **1** — write "single replica: in-process worker + in-memory rate limits" in the resource description |
-| Memory limit | 512 MB – 1 GB |
-| Build args | `APP_VERSION` = the commit SHA (Coolify's `SOURCE_COMMIT`), shown in Ajustes → Acerca de |
+| Branch | `main` |
+| Build pack | **Dockerfile** (`/Dockerfile` at the repo root) |
+| Name | `agenda` |
+| Ports exposes | `3000` |
+| Domains | `https://agenda.lemydev.com` (Coolify's proxy, Traefik, gets the certificate from Let's Encrypt) |
+| Destination | the **same** one as `postgres-core` (§1.1) |
 
-## 3. Environment variables
+After creating it, in the resource's tabs:
 
-Mark every secret as **secret** in Coolify. Never paste them anywhere else.
+- **General → Description:** `Single replica: in-process worker + in-memory rate limits.`
+- **Advanced / Healthcheck:** enabled, path `/api/health`, port `3000`, method GET. (The image also has its own Docker
+  HEALTHCHECK.)
+- **Resource limits:** memory limit `768m` (512 MB minimum).
+- **Replicas / scaling:** leave **1**.
+- **Automatic deployment** on push: **on** (it's on by default with a GitHub App source).
+- **APP_VERSION (optional):** what Ajustes → Acerca de and `/api/health` show as version. If Coolify offers
+  "Include source commit in build" (Advanced), turn it on and add an environment variable `APP_VERSION` =
+  `$SOURCE_COMMIT` marked as **Build variable**. Without it the version reads `dev`; the service worker still updates
+  on every deploy (it falls back to a per-build stamp).
 
-| Variable | Value | How |
+### 4.3 Environment variables
+
+Resource → **Environment Variables** → add each one (Developer view / "Normal view" → + Add). Turn **Is Secret on**
+for every secret. None is a build variable except the optional `APP_VERSION`.
+
+| Variable | Value | Secret |
 |---|---|---|
-| `DATABASE_URL` | `postgres://agenda:<password>@postgres-core:5432/agenda` | internal hostname of postgres-core |
-| `APP_ORIGIN` | `https://agenda.lemydev.com` | must be https in production |
-| `WEBAUTHN_RP_ID` | `agenda.lemydev.com` | passkeys are bound to it |
-| `TZ` | `America/Buenos_Aires` | process zone (the user's zone is a setting in the app) |
-| `SESSION_SECRET` | 32+ random bytes | `openssl rand -base64 32` |
-| `SETUP_CODE` | 8+ chars, typed once on the first-run screen | `openssl rand -hex 8` |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | required for reminders (all three or none) | `npx web-push generate-vapid-keys`; subject `mailto:…`. New keys = every device subscribes again (Ajustes → Notificaciones) |
-| `ENCRYPTION_KEY` | required for Google Calendar and iCal (encrypts the refresh token and iCal addresses; changing it means reconnecting) | `openssl rand -base64 32` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional (Google Calendar); both or neither | [`google-oauth.md`](google-oauth.md) |
-| `CORS_ALLOWED_ORIGINS` | `https://sunday.lemydev.com` | phase 8 |
-| `TRUST_CF` | `true` if the domain is proxied by Cloudflare (orange cloud), else `false` | client IP for lockout/audit |
-| `PIN_REAUTH_DAYS` / `DEVICE_TRUST_DAYS` | `7` / `90` | defaults |
-| `LOG_LEVEL` | `info` | |
+| `DATABASE_URL` | `postgres://agenda:<AGENDA_DB_PASSWORD>@<container-name>:5432/agenda` (host from §1.1) | yes |
+| `APP_ORIGIN` | `https://agenda.lemydev.com` | no |
+| `WEBAUTHN_RP_ID` | `agenda.lemydev.com` (passkeys are bound to it: don't change it later) | no |
+| `TZ` | `America/Buenos_Aires` | no |
+| `SESSION_SECRET` | from §3 | yes |
+| `SETUP_CODE` | from §3 | yes |
+| `VAPID_PUBLIC_KEY` | from §3 | yes |
+| `VAPID_PRIVATE_KEY` | from §3 | yes |
+| `VAPID_SUBJECT` | `mailto:` + your email (push services contact address) | no |
+| `ENCRYPTION_KEY` | from §3 | yes |
+| `CORS_ALLOWED_ORIGINS` | `https://sunday.lemydev.com` | no |
+| `TRUST_CF` | `true` if the DNS record is proxied (orange), else `false` | no |
+| `PIN_REAUTH_DAYS` | `7` | no |
+| `DEVICE_TRUST_DAYS` | `90` | no |
+| `LOG_LEVEL` | `info` | no |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | leave out for now; add them with [`google-oauth.md`](google-oauth.md) (§9) | yes |
 
-`APP_VERSION`, `DISABLE_WORKER` and `SKIP_MIGRATIONS` stay unset (defaults). A missing or malformed variable stops
-the container at boot with a message naming the variable (never its value): check the deployment logs.
+Don't set `NODE_ENV`, `PORT`, `HOSTNAME`, `DISABLE_WORKER` or `SKIP_MIGRATIONS` (the image sets the right defaults).
+`TEST_DATABASE_URL` never goes in production.
 
-## 4. Deploy
+---
 
-Deploy from Coolify. The entrypoint applies migrations (`0000` schema, `0001` search/triggers/Inbox seed, `0002`–`0003` settings and calendars), then starts
-Next. Logs are JSON lines; the first ones should be `migrations applied` and `agenda starting`.
+## 5. Deploy
 
-## 5. Verify
+Resource → **Deploy**. The first build takes a few minutes (it compiles Next and the native Argon2 addon for arm64).
 
-```bash
-curl -s https://agenda.lemydev.com/api/health            # {"status":"ok","db":"ok","version":"<sha>",…}
-curl -sI https://agenda.lemydev.com/ | grep -i -E "content-security-policy|strict-transport|x-frame"
+In **Logs** / the deployment log, the build ends with the image tagged; then the container starts and its logs (JSON
+lines) should show, in order:
+
+1. `migrations applied` — `0000` schema, `0001` search/triggers/Inbox, `0002` settings, `0003` calendars, `0004` habit
+   task tags.
+2. `agenda starting` with `"worker": true`.
+
+The resource turns **Running (healthy)** once `/api/health` answers.
+
+---
+
+## 6. Verify
+
+From your machine:
+
+```sh
+curl -s https://agenda.lemydev.com/api/health
+# {"status":"ok","db":"ok","version":"…","time":"…-03:00"}
+
+curl -sI https://agenda.lemydev.com/ | grep -i -E "content-security-policy|strict-transport|x-frame|x-content-type"
+# the four headers present
+
+curl -s https://agenda.lemydev.com/api/openapi.sunday.json | head -c 120
+# {"openapi":"3.1.0","info":{"title":"Agenda de Lemy",…
 ```
 
-Then on the phone: open `https://agenda.lemydev.com` → Configurar Agenda (the `SETUP_CODE`) → PIN → **save the 10
-recovery codes** → Ajustes → Seguridad → huella → Ajustes → Notificaciones → activar → **Probar notificación**. Install
-the PWA (Chrome menu → Instalar app) so notifications and their Listo / Posponer buttons work in the background. Do
-the same on the laptop with the PIN (new device).
+---
 
-## 6. Rollback
+## 7. If something fails
 
-Coolify → Deployments → redeploy the previous one. Migrations are forward-only; before phase 9 the database holds only
-v2 data, so restoring the latest backup is the fallback (see `restore.md`).
+| Symptom | Cause / fix |
+|---|---|
+| Container stops at boot with `Invalid environment:` and a list of variables | That variable is missing or malformed (the message names it, never the value). Fix it in §4.3 and redeploy. |
+| `ECONNREFUSED`, `getaddrinfo ENOTFOUND` or timeout on the database | `DATABASE_URL` host isn't `postgres-core`'s internal container name, or the app is on another Destination/network than `postgres-core` (§1.1, §4.2). |
+| `password authentication failed for user "agenda"` | The password in `DATABASE_URL` differs from the role's: reset it with `ALTER ROLE agenda PASSWORD '…';` (§1.2) and update the variable. |
+| `permission denied to create extension` | Run the two `CREATE EXTENSION` lines of §1.2 as `postgres` in the `agenda` database, then redeploy. |
+| Browser: "too many redirects" | Cloudflare SSL mode is Flexible: set **Full (strict)** (§2). |
+| 502 / 503 / "no available server" | The container isn't healthy yet or crashed: check its logs. Also check **Ports exposes = 3000**. |
+| Certificate error right after creating the domain | Let's Encrypt needs the DNS record to resolve first; wait a few minutes and redeploy. With the orange cloud, Cloudflare serves its own certificate in front. |
+| Build fails at `pnpm install` / Argon2 | Retry once (network); if it persists, copy the build log for debugging. |
+
+---
+
+## 8. First run on your devices
+
+**Phone (Android, Chrome):**
+
+1. If you ever opened an older agenda at this address: Chrome → ⋮ → Settings → Site settings → All sites →
+   `agenda.lemydev.com` → **Clear & reset** (removes old caches and the old service worker).
+2. Open `https://agenda.lemydev.com` → **Configurar Agenda** → type the `SETUP_CODE` → choose a 6-digit PIN → repeat.
+3. **Save the 10 recovery codes** (password manager or paper). They are the way back if you lose the PIN and the
+   fingerprint; they're shown once.
+4. Chrome → ⋮ → **Install app** (needed so notifications and their Listo / Posponer buttons work in the background).
+5. In the installed app: **Ajustes → Seguridad → Desbloquear con huella** (passkey); **Ajustes → Notificaciones en este
+   dispositivo** → on → allow → **Probar notificación**: it must arrive.
+6. Quick check: create a reminder for 2 minutes from now and wait for it, with the app closed.
+
+**Laptop:** open the address → it's a new device → PIN (and optionally passkey/notifications there too). Ajustes →
+Seguridad lists both devices.
+
+Once both are set up you no longer need `SETUP_CODE` (setup only works once), but keep it in Coolify.
+
+---
+
+## 9. Google Calendar (optional, any time)
+
+Follow [`google-oauth.md`](google-oauth.md): create the OAuth client, add `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` (§4.3), redeploy, then Ajustes → Calendario → Conectar Google. Plan B without Google Cloud:
+the secret iCal address of each calendar (same runbook, §5).
+
+## 10. Sunday
+
+When the deploy is verified: [`sunday-tool-server.md`](sunday-tool-server.md) (token + register the tool server), and
+hand [`../sunday-integration.md`](../sunday-integration.md) to the Sunday repo.
+
+## 11. Rollback
+
+Coolify → resource → **Deployments** → pick the previous successful one → **Redeploy**. Migrations are forward-only:
+if a deploy applied a migration and the old code can't live with it, restore the database (see
+[`restore.md`](restore.md)) from a dump taken before the deploy. Until scheduled backups are configured (pending),
+take a manual dump before risky deploys (`restore.md` → "Take a dump").
+
+## Pending
+
+- **Scheduled backups** of `postgres-core` (Coolify → `postgres-core` → Backups). To decide: frequency, retention and
+  whether they also go to S3/R2.

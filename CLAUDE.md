@@ -1,6 +1,6 @@
 # CLAUDE.md — agenda v2
 
-You are working in the **agenda** repo. It is being rewritten as **v2** on branch `v2` (v1 is preserved as tag `v1`). Agenda v2 is Lemy's personal PWA at `https://agenda.lemydev.com` and the hub for tasks, reminders and events that **Sunday** (his AI assistant, Open WebUI at `https://sunday.lemydev.com`, separate repo) reads and writes through an OpenAPI API. Google Calendar is read-only. Agenbot/Grok is gone.
+You are working in the **agenda** repo. **v2** (the rewrite, built on branch `v2`) is merged into `main` in phase 9; v1 is preserved as tag `v1`. Agenda v2 is Lemy's personal PWA at `https://agenda.lemydev.com` and the hub for tasks, reminders and events that **Sunday** (his AI assistant, Open WebUI at `https://sunday.lemydev.com`, separate repo) reads and writes through an OpenAPI API. Google Calendar is read-only. Agenbot/Grok is gone.
 
 ## Read first, in this order
 1. `docs/v2/00-start-here.md` — what changes from v1, what to keep, what to delete
@@ -19,7 +19,7 @@ Also read `AGENTS.md`: **this is Next.js 16 — APIs and conventions differ from
 ## Working agreement
 - **Language with Lemy:** all replies, plans, summaries and questions addressed to Lemy are in Spanish (Rioplatense). Code, identifiers, commit messages and docs stay in English.
 - **Plan first.** At the start of each phase, write the plan (files, migrations, commands) and **stop for Lemy's approval**. Then execute, verify (typecheck, Biome, tests, build), tick the checklist in `08-roadmap-and-cutover.md` and summarize.
-- Small, focused commits on `v2` with clear messages (English, conventional commits). Never push to `main`, never force-push, never move or delete the `v1` tag.
+- **Branches (from phase 9 on):** `main` is the trunk and what Coolify deploys. Work on a short-lived branch per change (`feat/…`, `fix/…`, `docs/…`, `chore/…`), small focused commits (English, conventional commits), push it, open a PR to `main` with `gh pr create`, wait for CI to be green, and **Lemy merges** (merge commit). Delete the branch after the merge. Never push to `main` directly, never force-push, never move or delete the `v1` tag. The `v2` branch is deleted once it's merged.
 - **Tests never run against a non-test database.** The test setup must refuse to start unless the database name ends in `_test`.
 - **Secrets:** never print, log or commit them. Only `.env.example` with empty values.
 - Don't add dependencies without saying why; prefer what's already in the stack.

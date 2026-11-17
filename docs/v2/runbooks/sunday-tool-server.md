@@ -39,6 +39,9 @@ Save, then check that the tools list shows names like `getNow`, `createTask`, `g
 A **user-level** tool server (in the user's own settings) also works: then the browser calls agenda directly, which
 is what CORS (`CORS_ALLOWED_ORIGINS=https://sunday.lemydev.com`) is for.
 
+For the Sunday side (prompts, automations, what each tool does), hand [`../sunday-integration.md`](../sunday-integration.md)
+to the sunday repo.
+
 ## 4. Smoke test (from a Sunday chat)
 
 1. "¿Qué día es hoy?" → `getNow`.

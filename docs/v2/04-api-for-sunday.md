@@ -10,7 +10,7 @@ Sunday (Open WebUI) registers agenda as an **OpenAPI tool server**. Open WebUI t
 
 ## Auth
 - `Authorization: Bearer agd_...` → `api_token` lookup by sha256, not revoked, not expired; scopes checked per operation (`read`, `write`, `notify`). `last_used_at`/`last_used_ip` written at most once a minute.
-- The token "sunday" is created in Ajustes → Tokens de API (shown once). Registering it: `runbooks/sunday-tool-server.md`.
+- The token "sunday" is created in Ajustes → Tokens de API (shown once). Registering it: `runbooks/sunday-tool-server.md`. Guide to hand to the sunday repo: `sunday-integration.md`.
 - Session-cookie users can also call these endpoints (the UI uses the same routes).
 
 ## Cross-cutting rules
@@ -30,7 +30,7 @@ Full descriptions live in the contract (they become the tool descriptions).
 |---|---|---|---|
 | `getNow` | GET `/api/now` | read | Date, time, weekday, timezone, offset, tomorrow and this week (Mon–Sun). Before resolving relative dates. |
 | `getAgendaOverview` | GET `/api/overview?from&to` | read | Everything in a range (default today, ≤ 31 days): local + Google events, tasks due, reminders, overdue tasks. |
-| `searchAgenda` | GET `/api/search?q&types&includeDone` | read | Find tasks, reminders and local events by text, to get an id. |
+| `searchAgenda` | GET `/api/search?q&includeDone&limit` | read | Find tasks, reminders and local events by text, to get an id. |
 | `listTasks` / `getTask` | GET `/api/tasks`, `/api/tasks/{id}` | read | Views (today, overdue, upcoming, inbox, done) and filters. |
 | `createTask` | POST `/api/tasks` | write | title, notes, dueDate (date or date-time), dueTime, priority, `list` (name) or listId, tags, rrule, `reminderAt`, `clientId`. Returns the task (+ `reminder`). |
 | `updateTask` | PATCH `/api/tasks/{id}` | write | Reschedule, rename, move (`list`), cancel. |
