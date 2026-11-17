@@ -9,3 +9,11 @@ allowBuilds:
 overrides:
   fast-uri: ">=3.1.9"
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+
+# Advisories with no patched release yet, dev-only (absent from the production image; `pnpm audit --prod` is clean).
+# Remove each entry once the fix ships and the lockfile picks it up.
+# - picomatch <=4.0.7 (via vitest > vite > tinyglobby): ReDoS on attacker-controlled globs, GHSA-fc5q-39xc-vjpf;
+#   our globs are our own config. Fixed in 4.0.8, not published as of 2026-11-17. Accepted by Lemy on 2026-11-17.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf
