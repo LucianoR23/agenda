@@ -10,6 +10,7 @@ import { localToIso } from "@/client/reminder-actions";
 import type { AgendaEvent, Event } from "@/client/types";
 import { Button, Fab, FilterChip, Segmented, TextArea, TextField, Toggle } from "../components/controls";
 import { DatePicker, TimePicker } from "../components/date-picker";
+import { Banner } from "../components/feedback";
 import { Icon } from "../components/icon";
 import { BottomSheet, useToast } from "../components/overlay";
 import { PageTitle, SectionLabel } from "../components/page";
@@ -123,6 +124,18 @@ function moveEnd(oldStart: string | null, oldEnd: string | null, next: string): 
   return fromMinutes(Math.min(minutesOf(next) + length, 23 * 60 + 59));
 }
 
+/** Timed events overlapping a slot, the same rule as the API's `conflicts` (a slot without an end is a moment). */
+function clashes(list: AgendaEvent[], startsAt: string, endsAt: string | null, eventId: string | null): AgendaEvent[] {
+  const s = Temporal.Instant.from(startsAt);
+  const e = endsAt ? Temporal.Instant.from(endsAt) : s;
+  return list.filter((o) => {
+    if (o.allDay || !o.startsAt || (eventId && o.eventId === eventId)) return false;
+    const os = Temporal.Instant.from(o.startsAt);
+    const oe = o.endsAt ? Temporal.Instant.from(o.endsAt) : os;
+    return (Temporal.Instant.compare(s, oe) < 0 && Temporal.Instant.compare(os, e) < 0) || s.equals(os);
+  });
+}
+
 const plusHour = (t: string) => {
   const h = Number(t.slice(0, 2));
   return h >= 23 ? "23:59" : `${String(h + 1).padStart(2, "0")}${t.slice(2)}`;
@@ -205,8 +218,16 @@ function EventForm({
     reminderOffsets: offsets,
   });
 
+  // what the slot overlaps, from the cached day (works offline; the API checks again on save). Once saved, the new
+  // event is in that cache too: stop checking, or it would overlap itself while the sheet closes.
+  const [saved, setSaved] = useState(false);
+  const dayEvents = useEvents(date, endBeforeStart ? addDays(date, 1) : date).data?.events ?? [];
+  const slot = allDay || !start || saved ? null : input();
+  const overlap = slot?.startsAt ? clashes(dayEvents, slot.startsAt, slot.endsAt ?? null, eventId) : [];
+
   const save = () => {
     if (!title.trim()) return;
+    setSaved(true);
     if (eventId) actions.update(eventId, input());
     else {
       actions.create(input());
@@ -254,6 +275,11 @@ function EventForm({
           </>
         )}
       </RowGroup>
+      {overlap.length > 0 && (
+        <Banner kind="info" title="Se superpone con">
+          {overlap.map((o) => `${o.title} (${timeRange(o)})`).join(" · ")}
+        </Banner>
+      )}
       {open === "date" && (
         <DatePicker
           value={date}

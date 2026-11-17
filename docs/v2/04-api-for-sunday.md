@@ -23,7 +23,7 @@ Sunday (Open WebUI) registers agenda as an **OpenAPI tool server**. Open WebUI t
 - **Errors:** `{"error":{"code","message"}}` where `message` tells the model what to do ("No encontré la tarea con ese id. Usá searchAgenda para buscarla por título.").
 - **Source:** items created with a token are stored with `source = 'sunday'`.
 
-## Operations (`openapi.sunday.json`, 37)
+## Operations (`openapi.sunday.json`, 38)
 Full descriptions live in the contract (they become the tool descriptions).
 
 | operationId | Method / path | Scope | For the model |
@@ -41,7 +41,8 @@ Full descriptions live in the contract (they become the tool descriptions).
 | `createReminder` | POST `/api/reminders` | write | title, body, fireAt, rrule, urgent, taskId, `clientId`. |
 | `updateReminder` / `snoozeReminder` / `doneReminder` / `deleteReminder` | `/api/reminders/{id}[/snooze\|/done]` | write | Move, postpone (minutes or until), Listo, cancel. |
 | `listEvents` / `getEvent` | GET `/api/events?from&to&includeExternal`, `/api/events/{id}` | read | Local + Google (≤ 92 days); Google ones `readOnly: true`. |
-| `createEvent` / `updateEvent` / `deleteEvent` | `/api/events[/{id}]` | write | Local events only; Google → 409 `READ_ONLY_EVENT`. `clientId` on create. |
+| `checkAvailability` | GET `/api/availability?from&to` | read | Is a slot free: `free`, `busy` (timed, Google included), `allDay` as context. ≤ 31 days. |
+| `createEvent` / `updateEvent` / `deleteEvent` | `/api/events[/{id}]` | write | Local events only; Google → 409 `READ_ONLY_EVENT`. `clientId` on create. Create/update return `conflicts` (timed events overlapping it; never blocks). |
 | `remindExternalEvent` | POST `/api/external-events/{id}/remind` | write | "Recordarme" for a Google event. |
 | `listHabits` / `listHabitLogs` | GET `/api/habits?date`, `/api/habits/{habit}/logs` | read | Status, progress, streaks, history. |
 | `logHabit` | POST `/api/habits/{habit}/log` | write | `{habit}` = id or slug (`gym`); numeric ones take `value`. |
@@ -56,4 +57,4 @@ App-only (not in Sunday's spec): auth, devices, tokens, settings, calendars admi
 ## Acceptance
 - `openapi.sunday.json` validates (redocly) and imports into Open WebUI; tools appear with sensible names. *(Import: phase 9, after the deploy.)*
 - `tests/api/sunday.test.ts`: the spec's shape, getNow, clientId upserts, forgiving inputs, notify (+ limit), rate limit, CORS. Every response in every API test is validated against `openapi.yaml` with ajv.
-- `tests/api/sunday-flows.test.ts`: a day of Sunday calls through the token only (¿qué tengo hoy?, create with retry, search → reschedule, recurring done/undo, reminders, events incl. Google read-only + Recordarme, habits by slug and tag, sleep, evening summary → close the day → push, history, metrics); its last test fails unless all 37 operations were called and matched the contract.
+- `tests/api/sunday-flows.test.ts`: a day of Sunday calls through the token only (¿qué tengo hoy?, create with retry, search → reschedule, recurring done/undo, reminders, events incl. Google read-only + Recordarme, habits by slug and tag, sleep, evening summary → close the day → push, history, metrics); its last test fails unless all 38 operations were called and matched the contract.

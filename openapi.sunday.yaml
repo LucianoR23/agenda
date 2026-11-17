@@ -136,6 +136,33 @@ components:
         - calendar
         - url
       additionalProperties: false
+    Availability:
+      type: object
+      properties:
+        from:
+          $ref: "#/components/schemas/Timestamp"
+        to:
+          $ref: "#/components/schemas/Timestamp"
+        free:
+          type: boolean
+          description: No timed event overlaps the slot (all-day events don't count).
+        busy:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaEvent"
+          description: Timed events overlapping the slot, chronological.
+        allDay:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaEvent"
+          description: "All-day events on those days (a holiday, a trip): context, not busy."
+      required:
+        - from
+        - to
+        - free
+        - busy
+        - allDay
+      additionalProperties: false
     CalendarRef:
       type: object
       properties:
@@ -589,6 +616,116 @@ components:
           type: integer
           minimum: 1
       additionalProperties: false
+    EventSaved:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        notes:
+          type:
+            - string
+            - "null"
+        location:
+          type:
+            - string
+            - "null"
+        allDay:
+          type: boolean
+        startsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+          description: Timed events.
+        endsAt:
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        startDate:
+          anyOf:
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+            - type: "null"
+          description: All-day events.
+        endDate:
+          anyOf:
+            - allOf:
+                - $ref: "#/components/schemas/LocalDate"
+                - description: Calendar date in the user's timezone, `YYYY-MM-DD`.
+            - type: "null"
+          description: "All-day events: exclusive (a one-day event ends the next day)."
+        whenText:
+          type:
+            - string
+            - "null"
+          description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.'
+          example: jueves 14 de noviembre, 09:00
+        timezone:
+          type: string
+          description: IANA zone the event lives in (recurrence expansion).
+        rrule:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+          description: RFC 5545 RRULE body without DTSTART (the event's start is), daily or longer. Edits apply to the whole series.
+          example: FREQ=WEEKLY;BYDAY=TU,TH
+        reminderOffsets:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 40320
+          maxItems: 5
+          description: Minutes before each occurrence to push a reminder (0 = at the start). Up to 5, max 4 weeks.
+          example:
+            - 30
+            - 10
+        source:
+          $ref: "#/components/schemas/ItemSource"
+        url:
+          type: string
+          format: uri
+          description: Opens it in the agenda app.
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedBy:
+          $ref: "#/components/schemas/ItemSource"
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaEvent"
+          description: "Timed events that overlap it (Lemy's own, recurring ones expanded, and Google/iCal): tell Lemy before or after saving. Empty for all-day events; a repeating event is checked on its first occurrence. Never blocks the write."
+      required:
+        - id
+        - title
+        - notes
+        - location
+        - allDay
+        - startsAt
+        - endsAt
+        - startDate
+        - endDate
+        - whenText
+        - timezone
+        - rrule
+        - reminderOffsets
+        - source
+        - url
+        - version
+        - createdAt
+        - updatedAt
+        - updatedBy
+        - conflicts
+      additionalProperties: false
+      description: An Event, plus the events it overlaps (`conflicts`).
     ExternalRemind:
       type: object
       properties:
@@ -1718,6 +1855,11 @@ components:
           $ref: "#/components/schemas/ItemSource"
         reminder:
           $ref: "#/components/schemas/Reminder"
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaEvent"
+          description: "Only for a task with a time (`dueAt`): the timed events happening at that moment. Mention them to Lemy."
       required:
         - id
         - listId
@@ -2248,7 +2390,7 @@ paths:
       description: |-
         A time needs a date; a recurrence (RRULE body, e.g. `FREQ=WEEKLY;BYDAY=MO`) needs a date too.
 
-        A to-do. Without a date it goes to the Inbox. `dueDate` can be a date or a date-time ('mañana a las 9' → `2026-11-15T09:00`). `list` takes the list's name. `reminderAt` also schedules a push. Always send a `clientId`. For a push at a moment with nothing to do afterwards, createReminder fits better; for something with a start and end, createEvent.
+        A to-do. Without a date it goes to the Inbox. `dueDate` can be a date or a date-time ('mañana a las 9' → `2026-11-15T09:00`). `list` takes the list's name. `reminderAt` also schedules a push. Always send a `clientId`. For a push at a moment with nothing to do afterwards, createReminder fits better; for something with a start and end, createEvent. A task with a time returns `conflicts` (events at that moment): mention them.
       security:
         - apiToken:
             - write
@@ -3458,9 +3600,9 @@ paths:
         - Events
       summary: Create a local event
       description: |-
-        Timed (`startsAt` + optional `endsAt`) or all-day (`allDay: true`, `startDate` + optional exclusive `endDate`). Optional RRULE and `reminderOffsets` (minutes before: pushes are scheduled automatically).
+        Timed (`startsAt` + optional `endsAt`) or all-day (`allDay: true`, `startDate` + optional exclusive `endDate`). Optional RRULE and `reminderOffsets` (minutes before: pushes are scheduled automatically). The response lists the events it overlaps in `conflicts`.
 
-        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar.
+        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar. If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.
       security:
         - apiToken:
             - write
@@ -3476,13 +3618,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Event"
+                $ref: "#/components/schemas/EventSaved"
         "201":
           description: Created.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Event"
+                $ref: "#/components/schemas/EventSaved"
         "400":
           description: "`VALIDATION_ERROR` (details.fields)."
           content:
@@ -3515,6 +3657,72 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day."
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/availability:
+    get:
+      operationId: checkAvailability
+      tags:
+        - Events
+      summary: Is a time slot free?
+      description: |-
+        Timed events (Lemy's own and Google/iCal) overlapping [`from`, `to`), plus those days' all-day events as context. `free` is true when nothing timed overlaps. At most 31 days.
+
+        '¿Tengo algo el jueves a las 15?', or before proposing a time: whether a slot is free, and what's there if not. Times can omit the offset.
+      security:
+        - apiToken:
+            - read
+      parameters:
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/DateTimeInput"
+              - description: Start of the slot (without an offset it's Lemy's local time).
+          required: true
+          description: Start of the slot (without an offset it's Lemy's local time).
+          name: from
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/DateTimeInput"
+              - description: End of the slot, exclusive. At most 31 days after `from`.
+          required: true
+          description: End of the slot, exclusive. At most 31 days after `from`.
+          name: to
+          in: query
+      responses:
+        "200":
+          description: The slot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Availability"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
           content:
             application/json:
               schema:
@@ -3597,9 +3805,9 @@ paths:
         - Events
       summary: Change a local event
       description: |-
-        Edits apply to the whole series. Google/iCal events answer 409 `READ_ONLY_EVENT`.
+        Edits apply to the whole series. Google/iCal events answer 409 `READ_ONLY_EVENT`. The response lists the events it now overlaps in `conflicts`.
 
-        Move or edit one of Lemy's own events (the whole series if it repeats). A Google Calendar event answers READ_ONLY_EVENT: tell Lemy to change it in Google Calendar.
+        Move or edit one of Lemy's own events (the whole series if it repeats). A Google Calendar event answers READ_ONLY_EVENT: tell Lemy to change it in Google Calendar. Like createEvent, mention any `conflicts` in the response.
       security:
         - apiToken:
             - write
@@ -3621,7 +3829,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Event"
+                $ref: "#/components/schemas/EventSaved"
         "400":
           description: "`VALIDATION_ERROR` (details.fields)."
           content:

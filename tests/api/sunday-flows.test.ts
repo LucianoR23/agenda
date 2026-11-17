@@ -62,6 +62,20 @@ describe("a day with Sunday", () => {
     expect(day.body.events[0]).toMatchObject({ title: "Daily", readOnly: true, whenText: "lunes 19 de octubre, 09:30–09:45" });
   });
 
+  it("“¿tengo algo hoy de 9 a 10?” and an event over the daily comes back with the overlap", async () => {
+    const slot = await s.get("/api/availability?from=2026-10-19T09:00&to=2026-10-19T10:00");
+    expect(slot.body).toMatchObject({ free: false, busy: [{ title: "Daily", readOnly: true }] });
+    const e = await s.post("/api/events", {
+      title: "Llamar al banco",
+      startsAt: "2026-10-19T09:40",
+      endsAt: "2026-10-19T10:00",
+      clientId: "c-banco",
+    });
+    expect(e.status).toBe(201);
+    expect(e.body.conflicts).toMatchObject([{ title: "Daily", externalEventId: googleId }]);
+    expect((await s.del(`/api/events/${e.body.id}`)).status).toBe(204);
+  });
+
   it("“recordame mañana a las 9 llamar al contador” (retry included) and “anotá comprar pintura”", async () => {
     const body = { title: "Llamar al contador", dueDate: "2026-10-20T09:00", reminderAt: "2026-10-20T09:00", clientId: "c-contador" };
     const first = await s.post("/api/tasks", body);

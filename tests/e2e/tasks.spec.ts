@@ -135,6 +135,15 @@ test("events: Calendario agenda and week, editor with a reminder, shown on Hoy",
   await expect(page.getByText(`${hh}:00–${String(at + 1).padStart(2, "0")}:00`)).toBeVisible();
   await shot(page, "12-calendario-agenda");
 
+  // a second event at the same hour: the editor warns before saving (then it's discarded)
+  await page.getByRole("button", { name: "Nuevo evento", exact: true }).click();
+  await page.getByRole("textbox", { name: "Título" }).fill("Llamada");
+  await page.getByRole("button", { name: /^Empieza/ }).click();
+  await page.getByRole("button", { name: hh, exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Se superpone con" })).toContainText("Cena con Ana");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("textbox", { name: "Título" })).toBeHidden();
+
   // an all-day event from quick add's Evento mode
   await page.getByRole("link", { name: /Hoy/ }).first().click();
   await page.getByRole("button", { name: "Nueva tarea" }).click();

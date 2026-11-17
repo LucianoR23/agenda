@@ -131,7 +131,13 @@ export const handlers: Record<string, Handler> = {
   getTask: async (ctx, { params }) => json(200, await tasks.getTask(ctx, params.id)),
   createTask: async (ctx, { body }) => {
     const r = await tasks.createTask(ctx, body);
-    return json(r.created ? 201 : 200, r.reminder ? { ...r.task, reminder: r.reminder } : r.task);
+    const at = r.task.dueAt ? Temporal.Instant.from(r.task.dueAt) : null;
+    const conflicts = at ? await events.overlapping(ctx, at, null) : null;
+    return json(r.created ? 201 : 200, {
+      ...r.task,
+      ...(r.reminder ? { reminder: r.reminder } : {}),
+      ...(conflicts ? { conflicts } : {}),
+    });
   },
   updateTask: async (ctx, { params, body }) => json(200, await tasks.updateTask(ctx, params.id, body)),
   completeTask: async (ctx, { params, body }) => json(200, await tasks.completeTask(ctx, params.id, body.version)),
@@ -176,9 +182,13 @@ export const handlers: Record<string, Handler> = {
   getEvent: async (ctx, { params }) => json(200, await events.getEvent(ctx, params.id)),
   createEvent: async (ctx, { body }) => {
     const r = await events.createEvent(ctx, body);
-    return json(r.created ? 201 : 200, r.event);
+    return json(r.created ? 201 : 200, { ...r.event, conflicts: await events.conflictsOf(ctx, r.event) });
   },
-  updateEvent: async (ctx, { params, body }) => json(200, await events.updateEvent(ctx, params.id, body)),
+  updateEvent: async (ctx, { params, body }) => {
+    const e = await events.updateEvent(ctx, params.id, body);
+    return json(200, { ...e, conflicts: await events.conflictsOf(ctx, e) });
+  },
+  checkAvailability: async (ctx, { query }) => json(200, await events.availability(ctx, query)),
   deleteEvent: async (ctx, { params }) => {
     await events.deleteEvent(ctx, params.id);
     return { status: 204 };

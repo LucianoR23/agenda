@@ -104,6 +104,33 @@ export const AgendaEvent = z
   })
   .openapi("AgendaEvent");
 
+const Conflicts = z.array(AgendaEvent).openapi({
+  description:
+    "Timed events that overlap it (Lemy's own, recurring ones expanded, and Google/iCal): tell Lemy before or after saving. Empty for all-day events; a repeating event is checked on its first occurrence. Never blocks the write.",
+});
+
+/** createEvent/updateEvent: the event plus what it overlaps. */
+export const EventSaved = z
+  .strictObject({ ...Event.shape, conflicts: Conflicts })
+  .openapi("EventSaved", { description: "An Event, plus the events it overlaps (`conflicts`)." });
+
+export const AvailabilityQuery = z
+  .strictObject({
+    from: DateTimeInput.openapi({ description: "Start of the slot (without an offset it's Lemy's local time)." }),
+    to: DateTimeInput.openapi({ description: "End of the slot, exclusive. At most 31 days after `from`." }),
+  })
+  .openapi("AvailabilityQuery");
+
+export const Availability = z
+  .strictObject({
+    from: Timestamp,
+    to: Timestamp,
+    free: z.boolean().openapi({ description: "No timed event overlaps the slot (all-day events don't count)." }),
+    busy: z.array(AgendaEvent).openapi({ description: "Timed events overlapping the slot, chronological." }),
+    allDay: z.array(AgendaEvent).openapi({ description: "All-day events on those days (a holiday, a trip): context, not busy." }),
+  })
+  .openapi("Availability");
+
 export const EventQuery = z
   .strictObject({
     from: LocalDate.openapi({ description: "First day (user's timezone)." }),
