@@ -218,13 +218,16 @@ function EventForm({
     reminderOffsets: offsets,
   });
 
-  // what the slot overlaps, from the cached day (works offline; the API checks again on save)
+  // what the slot overlaps, from the cached day (works offline; the API checks again on save). Once saved, the new
+  // event is in that cache too: stop checking, or it would overlap itself while the sheet closes.
+  const [saved, setSaved] = useState(false);
   const dayEvents = useEvents(date, endBeforeStart ? addDays(date, 1) : date).data?.events ?? [];
-  const slot = allDay || !start ? null : input();
+  const slot = allDay || !start || saved ? null : input();
   const overlap = slot?.startsAt ? clashes(dayEvents, slot.startsAt, slot.endsAt ?? null, eventId) : [];
 
   const save = () => {
     if (!title.trim()) return;
+    setSaved(true);
     if (eventId) actions.update(eventId, input());
     else {
       actions.create(input());
