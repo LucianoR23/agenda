@@ -17,6 +17,7 @@
     "openapi:gen": "tsx scripts/openapi.ts",
     "openapi:check": "tsx scripts/openapi.ts --check",
     "openapi:lint": "redocly lint openapi.yaml openapi.sunday.yaml",
+    "secrets:gen": "tsx scripts/secrets.ts",
     "icons": "tsx scripts/icons.ts",
     "icons:check": "tsx scripts/icons.ts --check",
     "test": "vitest run",
