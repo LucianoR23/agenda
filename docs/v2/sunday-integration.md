@@ -23,7 +23,7 @@ Two kinds of integration:
 | | |
 |---|---|
 | Base URL | `https://agenda.lemydev.com` (all paths start with `/api/`) |
-| Spec for Open WebUI | `GET /api/openapi.sunday.json` (public, no auth) — 37 operations |
+| Spec for Open WebUI | `GET /api/openapi.sunday.json` (public, no auth) — 38 operations |
 | Auth | `Authorization: Bearer agd_…` — the API token named **sunday**, scopes `read`, `write`, `notify`. Lemy creates it in Agenda → Ajustes → Tokens de API; it's shown once. Keep it in Open WebUI's tool server config / Sunday's secrets, never in the repo. |
 | Content type | `application/json` both ways |
 | Timezone | `America/Buenos_Aires`; every timestamp in responses carries its offset (`2026-11-19T09:00:00.000-03:00`) |
@@ -64,6 +64,10 @@ provisioning script for Open WebUI), add it there instead of clicking.
   or acted on. Codes worth handling: `VALIDATION_ERROR` (400, `details.fields`), `NOT_FOUND` (404),
   `READ_ONLY_EVENT` (409: a Google event can't be changed), `VERSION_CONFLICT` (409), `INSUFFICIENT_SCOPE` (403),
   `UNAUTHORIZED` (401: token wrong/revoked), `RATE_LIMITED` (429).
+- **Overlaps:** `createEvent` and `updateEvent` return `conflicts`: the timed events (Lemy's own and Google's) that
+  overlap the one just saved; a task with a time returns `conflicts` too. The write is never blocked: if the list
+  isn't empty, tell Lemy ("Listo, aunque ojo: a esa hora ya tenés la daily") and offer to move it; don't move it on
+  your own. To check before proposing a time, or for "¿tengo algo el jueves a las 15?", use `checkAvailability`.
 - Everything created with the token is stored as `source: "sunday"` (Lemy sees it in Métricas).
 
 ## 5. Operations
@@ -108,9 +112,10 @@ body.
 | Tool | Call | Use |
 |---|---|---|
 | `listEvents` [read] | `GET /api/events?from*&to*&includeExternal` | ≤ 92 days. Google ones: `source: "google"`, `readOnly: true`, use `externalEventId`. |
+| `checkAvailability` [read] | `GET /api/availability?from*&to*` | Is a slot free? `free`, `busy` (timed events overlapping [from, to), Google included) and `allDay` (that day's all-day events, as context). ≤ 31 days. |
 | `getEvent` [read] | `GET /api/events/{id}` | Local events. |
-| `createEvent` [write] | `POST /api/events` `{title*, startsAt, endsAt, allDay, startDate, endDate, location, notes, rrule, reminderOffsets, clientId}` | Timed (`startsAt` [+ `endsAt`]) or all-day (`allDay: true`, `startDate` [+ exclusive `endDate`]). `reminderOffsets: [60, 15]` = pushes 60 and 15 min before. Created in Agenda, not in Google. |
-| `updateEvent` / `deleteEvent` [write] | `PATCH/DELETE /api/events/{id}` | Local only; Google → 409 `READ_ONLY_EVENT` (tell Lemy to change it in Google Calendar). |
+| `createEvent` [write] | `POST /api/events` `{title*, startsAt, endsAt, allDay, startDate, endDate, location, notes, rrule, reminderOffsets, clientId}` | Timed (`startsAt` [+ `endsAt`]) or all-day (`allDay: true`, `startDate` [+ exclusive `endDate`]). `reminderOffsets: [60, 15]` = pushes 60 and 15 min before. Created in Agenda, not in Google. The response adds `conflicts` (overlapping events): mention them. |
+| `updateEvent` / `deleteEvent` [write] | `PATCH/DELETE /api/events/{id}` | Local only; Google → 409 `READ_ONLY_EVENT` (tell Lemy to change it in Google Calendar). `updateEvent` returns `conflicts` too. |
 | `remindExternalEvent` [write] | `POST /api/external-events/{id}/remind` `{minutesBefore \| at}` | "Avisame 10 min antes de la daily" for a Google event. |
 
 **Habits, sleep, the day**
@@ -173,7 +178,7 @@ Keep automations within the limits (20 pushes per 24 h shared by everything Sund
 ## 8. Checklist to call it done
 
 - [ ] Token `sunday` created in Agenda (read, write, notify) and stored only in Open WebUI / Sunday's secrets.
-- [ ] Tool server registered; the 37 tools are listed.
+- [ ] Tool server registered; the 38 tools are listed.
 - [ ] Sunday's prompts/docs use camelCase and the rules of §4 (getNow, search before change, clientId, whenText).
 - [ ] From a chat: "¿qué día es?" → `getNow`; "anotá X mañana a las 9 y recordámelo" → task + reminder visible in
       Agenda with source Sunday; "¿qué tengo mañana?" → overview; "mandame una notificación de prueba" → push arrives.

@@ -516,6 +516,64 @@ export async function listEvents(ctx: Ctx, q: { from: IsoDate; to: IsoDate; incl
   return eventsBetween(ctx, q.from, q.to, q.includeExternal !== "false");
 }
 
+// ---------- overlaps ----------
+
+/** The search window for an overlap check is capped: a months-long event only checks its first month. */
+const OVERLAP_MAX_DAYS = 31;
+
+/** [s, e) and [os, oe) overlap; a zero-length span is a point (it overlaps what contains it or starts with it). */
+const overlaps = (s: Temporal.Instant, e: Temporal.Instant, os: Temporal.Instant, oe: Temporal.Instant) =>
+  (Temporal.Instant.compare(s, oe) < 0 && Temporal.Instant.compare(os, e) < 0) || s.equals(os);
+
+const dayOf = (i: Temporal.Instant, tz: string) => i.toZonedDateTimeISO(tz).toPlainDate().toString();
+
+/** Timed occurrences of `list` overlapping [start, end), skipping the event being saved. All-day events never count. */
+function timedOverlapping(list: AgendaEventOut[], start: Temporal.Instant, end: Temporal.Instant, excludeEventId?: string | null) {
+  return list.filter((o) => {
+    if (o.allDay || !o.startsAt) return false;
+    if (excludeEventId && o.eventId === excludeEventId) return false;
+    const os = Temporal.Instant.from(o.startsAt);
+    return overlaps(start, end, os, o.endsAt ? Temporal.Instant.from(o.endsAt) : os);
+  });
+}
+
+/**
+ * Timed events (Lemy's own, recurring ones expanded, and enabled Google/iCal calendars) that overlap [start, end), or
+ * the moment `start` when there's no end. Never blocks a write: callers return it as `conflicts` so Sunday or the
+ * app can warn.
+ */
+export async function overlapping(ctx: Ctx, start: Temporal.Instant, end: Temporal.Instant | null, excludeEventId?: string | null) {
+  const cap = start.add({ hours: OVERLAP_MAX_DAYS * 24 });
+  const e = end === null ? start : Temporal.Instant.compare(end, cap) > 0 ? cap : end;
+  const list = await eventsBetween(ctx, dayOf(start, ctx.tz), dayOf(e, ctx.tz));
+  return timedOverlapping(list, start, e, excludeEventId);
+}
+
+/** What a saved local event overlaps (its first occurrence if it repeats); all-day events have none. */
+export async function conflictsOf(ctx: Ctx, ev: Pick<EventOut, "id" | "allDay" | "startsAt" | "endsAt">) {
+  if (ev.allDay || !ev.startsAt) return [];
+  return overlapping(ctx, Temporal.Instant.from(ev.startsAt), ev.endsAt ? Temporal.Instant.from(ev.endsAt) : null, ev.id);
+}
+
+/** checkAvailability: what's booked between two moments (timed events) plus the all-day events of those days. */
+export async function availability(ctx: Ctx, q: { from: string; to: string }) {
+  const start = localInstant(q.from, ctx.tz);
+  const end = localInstant(q.to, ctx.tz);
+  if (Temporal.Instant.compare(end, start) <= 0) throw validation([{ path: "query/to", message: "Must be after from" }]);
+  if (start.until(end).total("hours") > OVERLAP_MAX_DAYS * 24)
+    throw validation([{ path: "query/to", message: `At most ${OVERLAP_MAX_DAYS} days after from` }]);
+  // the end is exclusive: a range ending at 00:00 doesn't reach into that day
+  const list = await eventsBetween(ctx, dayOf(start, ctx.tz), dayOf(end.subtract({ milliseconds: 1 }), ctx.tz));
+  const busy = timedOverlapping(list, start, end);
+  return {
+    from: formatInstant(start, ctx.tz),
+    to: formatInstant(end, ctx.tz),
+    free: busy.length === 0,
+    busy,
+    allDay: list.filter((o) => o.allDay),
+  };
+}
+
 /** Local events matching text, for searchAgenda (Google ones are found in Google). */
 export async function searchEvents(ctx: Ctx, q: string, limit = 20) {
   const esc = q.replace(/[\\%_]/g, (c) => `\\${c}`);

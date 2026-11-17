@@ -30,6 +30,7 @@ export const SUNDAY_OPERATIONS = [
   "deleteReminder",
   // events
   "listEvents",
+  "checkAvailability",
   "getEvent",
   "createEvent",
   "updateEvent",
@@ -67,7 +68,7 @@ export const SUNDAY_GUIDE: Record<SundayOperation, string> = {
     "For task-only questions ('¿qué tengo pendiente?', 'tareas de Casa', 'lo que hice ayer' with view=done). For a day's full picture prefer getAgendaOverview.",
   getTask: "Fetch one task by id (after a search) to check its current state.",
   createTask:
-    "A to-do. Without a date it goes to the Inbox. `dueDate` can be a date or a date-time ('mañana a las 9' → `2026-11-15T09:00`). `list` takes the list's name. `reminderAt` also schedules a push. Always send a `clientId`. For a push at a moment with nothing to do afterwards, createReminder fits better; for something with a start and end, createEvent.",
+    "A to-do. Without a date it goes to the Inbox. `dueDate` can be a date or a date-time ('mañana a las 9' → `2026-11-15T09:00`). `list` takes the list's name. `reminderAt` also schedules a push. Always send a `clientId`. For a push at a moment with nothing to do afterwards, createReminder fits better; for something with a start and end, createEvent. A task with a time returns `conflicts` (events at that moment): mention them.",
   updateTask:
     "Reschedule ('pasala al viernes'), rename, move to another list (`list` by name) or cancel (`status: cancelled`). Only send the fields that change. Get the id with searchAgenda first.",
   completeTask: "When Lemy says he did it. A recurring task returns `next`, its next occurrence: mention when it comes back.",
@@ -86,11 +87,13 @@ export const SUNDAY_GUIDE: Record<SundayOperation, string> = {
   deleteReminder: "Cancel a reminder Lemy no longer wants.",
   listEvents:
     "Calendar only (Lemy's events plus Google Calendar) for a range up to 92 days. Google events have `readOnly: true`: they can't be changed here, only get a reminder with remindExternalEvent.",
+  checkAvailability:
+    "'¿Tengo algo el jueves a las 15?', or before proposing a time: whether a slot is free, and what's there if not. Times can omit the offset.",
   getEvent: "Fetch one of Lemy's own events by id.",
   createEvent:
-    "Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar.",
+    "Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar. If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.",
   updateEvent:
-    "Move or edit one of Lemy's own events (the whole series if it repeats). A Google Calendar event answers READ_ONLY_EVENT: tell Lemy to change it in Google Calendar.",
+    "Move or edit one of Lemy's own events (the whole series if it repeats). A Google Calendar event answers READ_ONLY_EVENT: tell Lemy to change it in Google Calendar. Like createEvent, mention any `conflicts` in the response.",
   deleteEvent: "Delete one of Lemy's own events. Google Calendar events can't be deleted here.",
   remindExternalEvent:
     "'Avisame 15 minutos antes de la daily': a reminder for a Google Calendar event (its `externalEventId` from getAgendaOverview or listEvents).",

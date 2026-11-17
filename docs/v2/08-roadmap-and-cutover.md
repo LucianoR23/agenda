@@ -40,7 +40,7 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 ## Phase 4 — Tasks
 - [x] Contract + endpoints + domain (lists, recurrence, search); pick `rrule` vs `rrule-temporal` and add RRULE helpers (`domain/recurrence.ts`)
 - [x] Screens: Hoy (tasks part), Inbox, Tareas; quick add parser; gestures; offline outbox
-- [ ] **First deploy** to Coolify on `agenda.lemydev.com` (branch v2) ⟶ sunday: `DATABASE_URL` for DB `agenda` ready — **moved: Lemy deploys before phase 9 or as part of it** (decided 2026-11-14; `main` isn't in use meanwhile); steps in [`runbooks/deploy.md`](runbooks/deploy.md)
+- [x] **First deploy** to Coolify on `agenda.lemydev.com` (branch v2) ⟶ sunday: `DATABASE_URL` for DB `agenda` ready — **moved: Lemy deploys before phase 9 or as part of it** (decided 2026-11-14; `main` isn't in use meanwhile); steps in [`runbooks/deploy.md`](runbooks/deploy.md)
 
 > **Decisions (Phase 4, 2026-11-14):** `rrule-temporal` pinned at 2.2.8. Completing a recurring task creates the next occurrence on the first date after both the due date and today (missed ones skipped; completing counts for today; COUNT carried down). Undo (`reopen`) removes the spawned occurrence, found through `change_log` when the client doesn't know its id (offline). Deleting a list moves its tasks to the Inbox. Task writes from the UI are optimistic through the outbox with client UUIDv7 ids; `src/client/task-cache.ts` mirrors the server views. Quick add grammar per the plan (`src/ui/quick-add.ts`). Tabs: Hoy, Inbox, Tareas, Historial, Ajustes. New Calma components: DatePicker, TimePicker, SwipeRow, TaskRow, TextArea. E2E runs the production standalone server (`scripts/e2e-server.mjs`); plain http is accepted in production only on the loopback.
 
@@ -79,15 +79,30 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 - [x] README describes v2; v1 leftovers in docs cleaned
 - [x] Deploy runbook complete from zero (`runbooks/deploy.md`) + `pnpm secrets:gen`
 - [x] Sunday integration guide for the sunday repo (`sunday-integration.md`)
-- [ ] PR `v2` → `main` merged by Lemy; `v2` branch deleted
-- [ ] Coolify app from `main` deployed and verified (health, headers, specs)
+- [x] PR `v2` → `main` merged; `v2` branch deleted (2026-11-17)
+- [x] Coolify app from `main` deployed and verified (health, headers, specs, CORS); version stamped from the commit
 - [ ] Devices: setup/PIN, recovery codes saved, passkey, push test, PWA installed; laptop paired
 - [ ] Scheduled backups of `postgres-core` (to decide)
 
 ### 9b — Sunday
-- [ ] Token "sunday" created; tool server registered in Open WebUI (`runbooks/sunday-tool-server.md`)
+- [x] Token "sunday" created; tool server registered in Open WebUI (`runbooks/sunday-tool-server.md`)
 - [ ] Sunday repo updated with `sunday-integration.md` (camelCase, rules, 21:30 automation)
 - [ ] Smoke test: create by voice from Sunday → push arrives → "Listo" from the notification
+
+## Phase 10 — Overlaps and Agenda events in Google Calendar
+
+> **Decision (2026-11-17):** Lemy wants Sunday to warn "ya tenés un evento a esa hora" and his events to show up in Google Calendar. Overlaps don't need Google writes (Google events are already synced), so they ship first (10a). Google writes (10b): a dedicated **"Agenda" calendar** in Lemy's Google account with the `calendar.app.created` scope (the app can only touch the calendar it created), **one-way** (Agenda → Google; edits made in Google are overwritten by the next change in Agenda), events copied **without Google reminders** (Agenda's pushes already notify), and on disconnect the calendar **stays** in Google.
+
+### 10a — Overlaps
+- [ ] `createEvent` / `updateEvent` return `conflicts` (timed events overlapping, local + Google/iCal, recurring expanded; never blocks); a task with a time too
+- [ ] `checkAvailability` (`GET /api/availability`), Sunday operation #38; Sunday guide updated (hand it to the sunday repo again)
+- [ ] Event editor warns "Se superpone con …" from the cached day
+
+### 10b — Agenda calendar in Google
+- [ ] Scope `calendar.app.created` (optional: reading keeps working without it; Ajustes asks to reconnect)
+- [ ] Switch "Copiar mis eventos a Google": creates the "Agenda" calendar, backfills from 7 days ago, excluded from the read sync
+- [ ] Outbox: create/update/delete of local events pushed by the worker, idempotent (Google event id derived from ours), retried
+- [ ] `/privacidad`, `06`, `02`, Google runbook updated
 
 ## Later (stage 2, don't start)
 `/sunday` screen with chat/voice/orb over Open WebUI's API; wake word in the PWA; Android APK.

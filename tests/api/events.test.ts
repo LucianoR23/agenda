@@ -101,6 +101,75 @@ describe("events API", () => {
   });
 });
 
+describe("overlaps", () => {
+  const at = (h: string) => `2026-11-18T${h}:00-03:00`;
+
+  it("create and update return the events they overlap; touching ends and all-day events don't count", async () => {
+    const { user } = await setupUser();
+    const meeting = (await user.post("/api/events", { title: "Reunión", startsAt: at("10:00"), endsAt: at("11:00") })).body;
+    expect(meeting.conflicts).toEqual([]);
+    await user.post("/api/events", { title: "Feriado", allDay: true, startDate: "2026-11-18" });
+
+    const clash = await user.post("/api/events", { title: "Dentista", startsAt: at("10:30"), endsAt: at("11:30") });
+    expect(clash.status).toBe(201); // never blocks
+    expect(clash.body.conflicts).toMatchObject([
+      { eventId: meeting.id, title: "Reunión", whenText: "miércoles 18 de noviembre, 10:00–11:00" },
+    ]);
+
+    const after = await user.post("/api/events", { title: "Café", startsAt: at("11:30"), endsAt: at("12:00") });
+    expect(after.body.conflicts).toEqual([]); // starts when the dentist ends
+
+    // a moment inside the meeting (no end) overlaps; moving out clears it; an event never conflicts with itself
+    const call = await user.post("/api/events", { title: "Llamada", startsAt: at("10:15") });
+    expect(call.body.conflicts.map((c: { title: string }) => c.title)).toEqual(["Reunión"]);
+    const moved = await user.patch(`/api/events/${call.body.id}`, { startsAt: at("13:00") });
+    expect(moved.body.conflicts).toEqual([]);
+    const self = await user.patch(`/api/events/${meeting.id}`, { title: "Reunión de equipo" });
+    expect(self.body.conflicts.map((c: { title: string }) => c.title)).toEqual(["Dentista"]);
+
+    const allDay = await user.post("/api/events", { title: "Viaje", allDay: true, startDate: "2026-11-18" });
+    expect(allDay.body.conflicts).toEqual([]);
+  });
+
+  it("recurring events and Google events count; a task with a time reports what's at that moment", async () => {
+    const { user } = await setupUser();
+    await user.post("/api/events", {
+      title: "Gym",
+      startsAt: "2026-11-16T19:00:00-03:00",
+      endsAt: "2026-11-16T20:00:00-03:00",
+      rrule: "FREQ=DAILY",
+    });
+    const e = await user.post("/api/events", { title: "Cena", startsAt: at("19:30"), endsAt: at("21:00") });
+    expect(e.body.conflicts).toMatchObject([{ title: "Gym", startsAt: "2026-11-18T19:00:00.000-03:00", recurring: true }]);
+
+    const task = await user.post("/api/tasks", { title: "Llamar a Juan", dueDate: "2026-11-18T19:45" });
+    expect(task.body.conflicts.map((c: { title: string }) => c.title)).toEqual(["Gym", "Cena"]);
+    const noTime = await user.post("/api/tasks", { title: "Comprar pan", dueDate: "2026-11-18" });
+    expect(noTime.body.conflicts).toBeUndefined();
+  });
+
+  it("checkAvailability: busy slots, all-day context, validation", async () => {
+    const { user } = await setupUser();
+    await user.post("/api/events", { title: "Reunión", startsAt: at("10:00"), endsAt: at("11:00") });
+    await user.post("/api/events", { title: "Feriado", allDay: true, startDate: "2026-11-18" });
+
+    const busy = await user.get("/api/availability?from=2026-11-18T09:00&to=2026-11-18T10:30");
+    expect(busy.status).toBe(200);
+    expect(busy.body).toMatchObject({ from: "2026-11-18T09:00:00.000-03:00", to: "2026-11-18T10:30:00.000-03:00", free: false });
+    expect(busy.body.busy.map((e: { title: string }) => e.title)).toEqual(["Reunión"]);
+    expect(busy.body.allDay.map((e: { title: string }) => e.title)).toEqual(["Feriado"]);
+
+    const free = await user.get("/api/availability?from=2026-11-18T11:00&to=2026-11-18T12:00");
+    expect(free.body).toMatchObject({ free: true, busy: [] });
+    // a range ending at midnight doesn't reach into the next day
+    const evening = await user.get("/api/availability?from=2026-11-17T20:00&to=2026-11-18T00:00");
+    expect(evening.body.allDay).toEqual([]);
+
+    expect((await user.get("/api/availability?from=2026-11-18T12:00&to=2026-11-18T11:00")).status).toBe(400);
+    expect((await user.get("/api/availability?from=2026-11-18T12:00&to=2027-01-18T11:00")).status).toBe(400);
+  });
+});
+
 describe("event reminders", () => {
   it("offsets become reminders within 48 h; moving the event moves them; deleting removes them", async () => {
     const { user } = await setupUser();

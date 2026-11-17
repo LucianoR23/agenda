@@ -12,7 +12,7 @@ import {
   Uuid,
   WhenText,
 } from "./common";
-import { Event } from "./events";
+import { AgendaEvent, Event } from "./events";
 import { Reminder } from "./reminders";
 import { z } from "./zod";
 
@@ -130,6 +130,10 @@ export const TaskCreated = z
   .strictObject({
     ...Task.shape,
     reminder: Reminder.optional().openapi({ description: "The reminder `reminderAt` scheduled (only when sent)." }),
+    conflicts: z
+      .array(AgendaEvent)
+      .optional()
+      .openapi({ description: "Only for a task with a time (`dueAt`): the timed events happening at that moment. Mention them to Lemy." }),
   })
   .openapi("TaskCreated", { description: "A Task, plus the reminder when `reminderAt` was sent." });
 
