@@ -1,14 +1,12 @@
 import { Uuid } from "../common";
+import { errorBody } from "../errors";
 import * as ex from "../examples";
-import { problem } from "../problems";
 import type { RouteDef } from "../route-def";
 import {
+  ApiToken,
   ChangePinInput,
-  CloseDayInput,
-  CloseDayResult,
   Device,
   DeviceRename,
-  ExportBundle,
   Health,
   PasskeyInfo,
   PasskeyVerifyInput,
@@ -16,16 +14,20 @@ import {
   PushSubscribeInput,
   PushSubscription,
   PushUnsubscribeInput,
+  ReauthResult,
   RecoverInput,
   RecoverResult,
   RecoveryCodes,
   SessionState,
+  Settings,
+  SettingsPatch,
   SetupInput,
   SetupResult,
+  TokenCreated,
+  TokenCreateInput,
   UnlockInput,
   UnlockResult,
   WebAuthnJson,
-  WebhookStatus,
 } from "../system";
 import { z } from "../zod";
 
@@ -51,8 +53,16 @@ const laptop = {
   lastUnlockAt: "2026-10-12T20:00:00.000-03:00",
 };
 const codes = [
-  "K7QM-2XPA-9TRC", "H3ZD-8WNB-4LFE", "P6VJ-5RYK-2MQS", "X9CA-7HTU-3NGE", "B4LR-6QWZ-8KDP",
-  "M2FX-9JVA-5RHT", "T8NS-3PKC-7YWB", "E5GU-4ZMD-6XLQ", "R3WH-2BNF-9CAV", "Z7KP-8LTE-4SJM",
+  "K7QM-2XPA-9TRC",
+  "H3ZD-8WNB-4LFE",
+  "P6VJ-5RYK-2MQS",
+  "X9CA-7HTU-3NGE",
+  "B4LR-6QWZ-8KDP",
+  "M2FX-9JVA-5RHT",
+  "T8NS-3PKC-7YWB",
+  "E5GU-4ZMD-6XLQ",
+  "R3WH-2BNF-9CAV",
+  "Z7KP-8LTE-4SJM",
 ];
 const cookie = { "Set-Cookie": "agenda_session=<token>; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000" };
 
@@ -67,8 +77,34 @@ const authRoutes: RouteDef[] = [
     access: "preauth",
     responses: { 200: { description: "State.", schema: SessionState } },
     exchanges: [
-      { name: "locked", summary: "Phone unused for 8 days", actor: "anonymous", status: 200, response: { state: "locked", passkeyEnabled: true, lockedUntil: null, device: { id: phone.id, name: phone.name }, vapidPublicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" } },
-      { name: "setup", summary: "Fresh install", actor: "anonymous", status: 200, response: { state: "setup_required", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null } },
+      {
+        name: "locked",
+        summary: "Phone unused for 8 days",
+        actor: "anonymous",
+        status: 200,
+        response: {
+          state: "locked",
+          passkeyEnabled: true,
+          lockedUntil: null,
+          device: { id: phone.id, name: phone.name },
+          vapidPublicKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+          timezone: "America/Buenos_Aires",
+        },
+      },
+      {
+        name: "setup",
+        summary: "Fresh install",
+        actor: "anonymous",
+        status: 200,
+        response: {
+          state: "setup_required",
+          passkeyEnabled: false,
+          lockedUntil: null,
+          device: null,
+          vapidPublicKey: null,
+          timezone: "America/Buenos_Aires",
+        },
+      },
     ],
   },
   {
@@ -77,13 +113,13 @@ const authRoutes: RouteDef[] = [
     path: "/api/auth/setup",
     tag: "Auth",
     summary: "First-run setup",
-    description: "Only while no user exists; afterwards 404 forever. Returns the 10 recovery codes once and trusts this device.",
+    description: "Only while no user exists; afterwards 409 `SETUP_COMPLETED`. Returns the 10 recovery codes once and trusts this device.",
     access: "preauth",
     body: SetupInput,
     responses: {
       201: { description: "User created, device trusted.", schema: SetupResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials`: wrong SETUP_CODE (counts toward lockout)." },
-      404: { description: "`setup_completed`." },
+      401: { description: "`INVALID_CREDENTIALS`: wrong SETUP_CODE (counts toward lockout)." },
+      409: { description: "`SETUP_COMPLETED`." },
     },
     exchanges: [
       {
@@ -109,19 +145,38 @@ const authRoutes: RouteDef[] = [
     body: UnlockInput,
     responses: {
       200: { description: "Unlocked.", schema: UnlockResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials` with `remainingAttempts`." },
-      429: { description: "`locked_out` with `retryAfterSeconds`.", headers: ["Retry-After"] },
+      401: { description: "`INVALID_CREDENTIALS` with `remainingAttempts`." },
+      429: { description: "`LOCKED_OUT` with `retryAfterSeconds`.", headers: ["Retry-After"] },
     },
     exchanges: [
-      { name: "ok", summary: "Correct PIN", actor: "anonymous", body: { pin: "482913" }, status: 200, response: { device: phone }, responseHeaders: cookie },
-      { name: "wrong", summary: "Wrong PIN", actor: "anonymous", body: { pin: "111111" }, status: 401, response: problem(401, "invalid_credentials", "Wrong PIN.", { remainingAttempts: 3 }) },
+      {
+        name: "ok",
+        summary: "Correct PIN",
+        actor: "anonymous",
+        body: { pin: "482913" },
+        status: 200,
+        response: { device: phone },
+        responseHeaders: cookie,
+      },
+      {
+        name: "wrong",
+        summary: "Wrong PIN",
+        actor: "anonymous",
+        body: { pin: "111111" },
+        status: 401,
+        response: errorBody("INVALID_CREDENTIALS", "PIN incorrecto. Te quedan 3 intentos.", { remainingAttempts: 3 }),
+      },
       {
         name: "lockedOut",
         summary: "5th failure",
         actor: "anonymous",
         body: { pin: "222222" },
         status: 429,
-        response: problem(429, "locked_out", "Try again in 15 minutes.", { retryAfterSeconds: 900 }),
+        response: errorBody(
+          "LOCKED_OUT",
+          "Demasiados intentos fallidos. Probá de nuevo en 15 min, o usá un código de recuperación desde otro dispositivo.",
+          { retryAfterSeconds: 900 },
+        ),
         responseHeaders: { "Retry-After": "900" },
       },
     ],
@@ -135,9 +190,13 @@ const authRoutes: RouteDef[] = [
     access: "preauth",
     body: RecoverInput,
     responses: {
-      200: { description: "New PIN set, device trusted. A used recovery code is consumed.", schema: RecoverResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials`." },
-      429: { description: "`locked_out`.", headers: ["Retry-After"] },
+      200: {
+        description: "New PIN set, device trusted. A used recovery code is consumed.",
+        schema: RecoverResult,
+        headers: ["Set-Cookie"],
+      },
+      401: { description: "`INVALID_CREDENTIALS`." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
     },
     exchanges: [
       {
@@ -168,7 +227,11 @@ const authRoutes: RouteDef[] = [
     summary: "Change PIN (Ajustes → Seguridad)",
     access: "user",
     body: ChangePinInput,
-    responses: { 204: { description: "Changed." }, 401: { description: "`invalid_credentials`." }, 429: { description: "`locked_out`.", headers: ["Retry-After"] } },
+    responses: {
+      204: { description: "Changed." },
+      401: { description: "`INVALID_CREDENTIALS`." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
+    },
     exchanges: [{ name: "change", summary: "Change PIN", actor: "user", body: { currentPin: "482913", newPin: "730154" }, status: 204 }],
   },
   {
@@ -179,8 +242,10 @@ const authRoutes: RouteDef[] = [
     summary: "Regenerate recovery codes (invalidates the old ones)",
     access: "user",
     body: PinConfirmInput,
-    responses: { 200: { description: "New codes, shown once.", schema: RecoveryCodes }, 401: { description: "`invalid_credentials`." } },
-    exchanges: [{ name: "regen", summary: "Regenerate", actor: "user", body: { pin: "482913" }, status: 200, response: { recoveryCodes: codes } }],
+    responses: { 200: { description: "New codes, shown once.", schema: RecoveryCodes }, 401: { description: "`INVALID_CREDENTIALS`." } },
+    exchanges: [
+      { name: "regen", summary: "Regenerate", actor: "user", body: { pin: "482913" }, status: 200, response: { recoveryCodes: codes } },
+    ],
   },
   {
     operationId: "passkeyRegisterOptions",
@@ -194,14 +259,17 @@ const authRoutes: RouteDef[] = [
     exchanges: [
       {
         name: "options",
-        summary: "Enable \"Desbloquear con huella\"",
+        summary: 'Enable "Desbloquear con huella"',
         actor: "user",
         status: 200,
         response: {
           challenge: "dGhpcy1pcy1hLWNoYWxsZW5nZQ",
           rp: { name: "Agenda", id: "agenda.lemydev.com" },
           user: { id: "cmFuZG9tLXVzZXItaGFuZGxl", name: "luciano", displayName: "Luciano" },
-          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 },
+          ],
           authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
           timeout: 60000,
           attestation: "none",
@@ -217,13 +285,23 @@ const authRoutes: RouteDef[] = [
     summary: "Fingerprint: verify registration",
     access: "user",
     body: PasskeyVerifyInput,
-    responses: { 201: { description: "Passkey stored for this device.", schema: PasskeyInfo }, 401: { description: "`invalid_credentials`: verification failed." } },
+    responses: {
+      201: { description: "Passkey stored for this device.", schema: PasskeyInfo },
+      401: { description: "`INVALID_CREDENTIALS`: verification failed." },
+    },
     exchanges: [
       {
         name: "verify",
         summary: "Browser attestation response",
         actor: "user",
-        body: { response: { id: "Y3JlZC1pZA", rawId: "Y3JlZC1pZA", type: "public-key", response: { clientDataJSON: "…", attestationObject: "…", transports: ["internal"] } } },
+        body: {
+          response: {
+            id: "Y3JlZC1pZA",
+            rawId: "Y3JlZC1pZA",
+            type: "public-key",
+            response: { clientDataJSON: "…", attestationObject: "…", transports: ["internal"] },
+          },
+        },
         status: 201,
         response: { id: ex.uid(810), deviceId: phone.id, createdAt: now, lastUsedAt: null },
       },
@@ -237,14 +315,23 @@ const authRoutes: RouteDef[] = [
     summary: "Fingerprint: unlock options",
     description: "Only for a known (locked) device that has a passkey.",
     access: "preauth",
-    responses: { 200: { description: "`PublicKeyCredentialRequestOptionsJSON`.", schema: WebAuthnJson }, 404: { description: "`not_found`: no passkey on this device." } },
+    responses: {
+      200: { description: "`PublicKeyCredentialRequestOptionsJSON`.", schema: WebAuthnJson },
+      404: { description: "`NOT_FOUND`: no passkey on this device." },
+    },
     exchanges: [
       {
         name: "options",
         summary: "Unlock screen offers fingerprint",
         actor: "anonymous",
         status: 200,
-        response: { challenge: "YW5vdGhlci1jaGFsbGVuZ2U", allowCredentials: [{ id: "Y3JlZC1pZA", type: "public-key", transports: ["internal"] }], userVerification: "required", timeout: 60000, rpId: "agenda.lemydev.com" },
+        response: {
+          challenge: "YW5vdGhlci1jaGFsbGVuZ2U",
+          allowCredentials: [{ id: "Y3JlZC1pZA", type: "public-key", transports: ["internal"] }],
+          userVerification: "required",
+          timeout: 60000,
+          rpId: "agenda.lemydev.com",
+        },
       },
     ],
   },
@@ -258,15 +345,22 @@ const authRoutes: RouteDef[] = [
     body: PasskeyVerifyInput,
     responses: {
       200: { description: "Unlocked.", schema: UnlockResult, headers: ["Set-Cookie"] },
-      401: { description: "`invalid_credentials` (counts toward lockout)." },
-      429: { description: "`locked_out`.", headers: ["Retry-After"] },
+      401: { description: "`INVALID_CREDENTIALS` (counts toward lockout)." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
     },
     exchanges: [
       {
         name: "verify",
         summary: "Fingerprint OK",
         actor: "anonymous",
-        body: { response: { id: "Y3JlZC1pZA", rawId: "Y3JlZC1pZA", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } },
+        body: {
+          response: {
+            id: "Y3JlZC1pZA",
+            rawId: "Y3JlZC1pZA",
+            type: "public-key",
+            response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" },
+          },
+        },
         status: 200,
         response: { device: phone },
         responseHeaders: cookie,
@@ -302,8 +396,18 @@ const authRoutes: RouteDef[] = [
     access: "user",
     params: z.strictObject({ id: Uuid }),
     body: DeviceRename,
-    responses: { 200: { description: "Renamed.", schema: Device }, 404: { description: "`not_found`." } },
-    exchanges: [{ name: "rename", summary: "Rename laptop", actor: "user", params: { id: laptop.id }, body: { name: "Notebook del local" }, status: 200, response: { ...laptop, name: "Notebook del local" } }],
+    responses: { 200: { description: "Renamed.", schema: Device }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [
+      {
+        name: "rename",
+        summary: "Rename laptop",
+        actor: "user",
+        params: { id: laptop.id },
+        body: { name: "Notebook del local" },
+        status: 200,
+        response: { ...laptop, name: "Notebook del local" },
+      },
+    ],
   },
   {
     operationId: "revokeDevice",
@@ -314,7 +418,7 @@ const authRoutes: RouteDef[] = [
     description: "Ends its session and deletes its passkey and push subscriptions. Revoking the current device logs out.",
     access: "user",
     params: z.strictObject({ id: Uuid }),
-    responses: { 204: { description: "Revoked." }, 404: { description: "`not_found`." } },
+    responses: { 204: { description: "Revoked." }, 404: { description: "`NOT_FOUND`." } },
     exchanges: [{ name: "revoke", summary: "Revoke laptop", actor: "user", params: { id: laptop.id }, status: 204 }],
   },
   {
@@ -326,7 +430,174 @@ const authRoutes: RouteDef[] = [
     description: "Revokes this device (same as revoking it from Dispositivos).",
     access: "user",
     responses: { 204: { description: "Logged out; cookie cleared.", headers: ["Set-Cookie"] } },
-    exchanges: [{ name: "logout", summary: "Log out", actor: "user", status: 204, responseHeaders: { "Set-Cookie": "agenda_session=; Path=/; Max-Age=0" } }],
+    exchanges: [
+      {
+        name: "logout",
+        summary: "Log out",
+        actor: "user",
+        status: 204,
+        responseHeaders: { "Set-Cookie": "agenda_session=; Path=/; Max-Age=0" },
+      },
+    ],
+  },
+];
+
+const tokenExample = {
+  id: ex.uid(900),
+  name: "sunday",
+  prefix: "agd_x7Kp",
+  scopes: ["read", "write", "notify"],
+  lastUsedAt: "2026-11-13T09:02:11.000-03:00",
+  lastUsedIp: "203.0.113.7",
+  expiresAt: null,
+  createdAt: "2026-11-01T18:30:00.000-03:00",
+};
+
+const securityRoutes: RouteDef[] = [
+  {
+    operationId: "reauth",
+    method: "post",
+    path: "/api/auth/reauth",
+    tag: "Auth",
+    summary: "Confirm the PIN for a sensitive action",
+    description: "Opens a 5-minute window for creating or revoking API tokens. A fingerprint unlock opens it too.",
+    access: "user",
+    body: PinConfirmInput,
+    responses: {
+      200: { description: "Confirmed.", schema: ReauthResult },
+      401: { description: "`INVALID_CREDENTIALS` with `remainingAttempts`." },
+      429: { description: "`LOCKED_OUT`.", headers: ["Retry-After"] },
+    },
+    exchanges: [
+      {
+        name: "ok",
+        summary: "PIN confirmed",
+        actor: "user",
+        body: { pin: "482913" },
+        status: 200,
+        response: { validUntil: "2026-11-13T09:07:00.000-03:00" },
+      },
+    ],
+  },
+  {
+    operationId: "getSettings",
+    method: "get",
+    path: "/api/settings",
+    tag: "Settings",
+    summary: "User settings (timezone, quiet hours, snooze)",
+    access: "user",
+    token: "read",
+    responses: { 200: { description: "Settings.", schema: Settings } },
+    exchanges: [
+      {
+        name: "settings",
+        summary: "Defaults",
+        actor: "user",
+        status: 200,
+        response: {
+          timezone: "America/Buenos_Aires",
+          locale: "es-AR",
+          quietStart: "23:30",
+          quietEnd: "07:00",
+          defaultSnoozeMinutes: 10,
+          missedAfterHours: 12,
+        },
+      },
+    ],
+  },
+  {
+    operationId: "updateSettings",
+    method: "patch",
+    path: "/api/settings",
+    tag: "Settings",
+    summary: "Change settings",
+    description: "Timezone must be an IANA name. Quiet hours: both or neither (null turns them off).",
+    access: "user",
+    body: SettingsPatch,
+    responses: { 200: { description: "Updated settings.", schema: Settings } },
+    exchanges: [
+      {
+        name: "travel",
+        summary: "Traveling to Madrid",
+        actor: "user",
+        body: { timezone: "Europe/Madrid" },
+        status: 200,
+        response: {
+          timezone: "Europe/Madrid",
+          locale: "es-AR",
+          quietStart: "23:30",
+          quietEnd: "07:00",
+          defaultSnoozeMinutes: 10,
+          missedAfterHours: 12,
+        },
+      },
+      {
+        name: "bad",
+        summary: "Unknown zone",
+        actor: "user",
+        body: { timezone: "Mars/Olympus" },
+        status: 400,
+        response: errorBody("VALIDATION_ERROR", '"Mars/Olympus" no es una zona horaria IANA válida (por ejemplo America/Buenos_Aires).', {
+          fields: [{ path: "/timezone", message: "Unknown IANA timezone" }],
+        }),
+      },
+    ],
+  },
+  {
+    operationId: "listTokens",
+    method: "get",
+    path: "/api/tokens",
+    tag: "Tokens",
+    summary: "Active API tokens",
+    access: "user",
+    responses: { 200: { description: "Tokens (never the secrets).", schema: z.strictObject({ tokens: z.array(ApiToken) }) } },
+    exchanges: [{ name: "list", summary: "Sunday's token", actor: "user", status: 200, response: { tokens: [tokenExample] } }],
+  },
+  {
+    operationId: "createToken",
+    method: "post",
+    path: "/api/tokens",
+    tag: "Tokens",
+    summary: "Create an API token (shown once)",
+    description:
+      "Needs PIN or fingerprint confirmed in the last 5 minutes (`POST /api/auth/reauth`). Names are unique among active tokens.",
+    access: "user",
+    body: TokenCreateInput,
+    responses: {
+      201: { description: "Created; `token` is the secret, shown only now.", schema: TokenCreated },
+      403: { description: "`REAUTH_REQUIRED`." },
+      409: { description: "`CONFLICT`: an active token has that name." },
+    },
+    exchanges: [
+      {
+        name: "sunday",
+        summary: "Token for Sunday",
+        actor: "user",
+        body: { name: "sunday", scopes: ["read", "write", "notify"] },
+        status: 201,
+        response: { ...tokenExample, lastUsedAt: null, lastUsedIp: null, token: "agd_x7KpQ2mN8vR4tW6yZ1bC3dE5fG7hJ9kL0nP2qS4uV6w" },
+      },
+      {
+        name: "reauth",
+        summary: "PIN not confirmed recently",
+        actor: "user",
+        body: { name: "sunday", scopes: ["read"] },
+        status: 403,
+        response: errorBody("REAUTH_REQUIRED"),
+      },
+    ],
+  },
+  {
+    operationId: "revokeToken",
+    method: "delete",
+    path: "/api/tokens/{id}",
+    tag: "Tokens",
+    summary: "Revoke an API token",
+    description: "Stops working immediately. Needs a recent PIN or fingerprint confirmation.",
+    access: "user",
+    params: z.strictObject({ id: Uuid }),
+    responses: { 204: { description: "Revoked." }, 403: { description: "`REAUTH_REQUIRED`." }, 404: { description: "`NOT_FOUND`." } },
+    exchanges: [{ name: "revoke", summary: "Revoke", actor: "user", params: { id: tokenExample.id }, status: 204 }],
   },
 ];
 
@@ -340,8 +611,20 @@ export const systemRoutes: RouteDef[] = [
     access: "public",
     responses: { 200: { description: "Healthy.", schema: Health }, 503: { description: "DB unreachable.", schema: Health } },
     exchanges: [
-      { name: "ok", summary: "Healthy", actor: "anonymous", status: 200, response: { status: "ok", db: "ok", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" } },
-      { name: "down", summary: "DB down", actor: "anonymous", status: 503, response: { status: "degraded", db: "down", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" } },
+      {
+        name: "ok",
+        summary: "Healthy",
+        actor: "anonymous",
+        status: 200,
+        response: { status: "ok", db: "ok", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" },
+      },
+      {
+        name: "down",
+        summary: "DB down",
+        actor: "anonymous",
+        status: 503,
+        response: { status: "degraded", db: "down", version: "0.1.0+a6ebbf4", time: "2026-10-19T07:00:00.000-03:00" },
+      },
     ],
   },
   {
@@ -350,13 +633,43 @@ export const systemRoutes: RouteDef[] = [
     path: "/api/openapi.json",
     tag: "Ops",
     summary: "This OpenAPI document",
-    description: "Compact by default (no examples, ~115 KB). `?examples=true` returns the full document (~320 KB), identical to `openapi.yaml`.",
+    description:
+      "Compact by default (no examples, ~115 KB). `?examples=true` returns the full document (~320 KB), identical to `openapi.yaml`.",
     access: "public",
     query: z.strictObject({ examples: z.enum(["true", "false"]).optional() }),
     responses: { 200: { description: "OpenAPI 3.1 document.", schema: z.record(z.string(), z.unknown()) } },
-    exchanges: [{ name: "doc", summary: "The contract", actor: "anonymous", status: 200, response: { openapi: "3.1.0", info: { title: "Agenda API", version: "1.0.0" } } }],
+    exchanges: [
+      {
+        name: "doc",
+        summary: "The contract",
+        actor: "anonymous",
+        status: 200,
+        response: { openapi: "3.1.0", info: { title: "Agenda API", version: "1.0.0" } },
+      },
+    ],
+  },
+  {
+    operationId: "openapiSunday",
+    method: "get",
+    path: "/api/openapi.sunday.json",
+    tag: "Ops",
+    summary: "Sunday's tools (OpenAPI subset)",
+    description:
+      'Only the operations tagged `sunday`, token auth only, no header parameters or examples. Open WebUI loads this URL as a tool server (Bearer = the "sunday" API token).',
+    access: "public",
+    responses: { 200: { description: "OpenAPI 3.1 document.", schema: z.record(z.string(), z.unknown()) } },
+    exchanges: [
+      {
+        name: "doc",
+        summary: "Sunday's tools",
+        actor: "anonymous",
+        status: 200,
+        response: { openapi: "3.1.0", info: { title: "Agenda de Lemy", version: "2.0.0" } },
+      },
+    ],
   },
   ...authRoutes,
+  ...securityRoutes,
   {
     operationId: "pushSubscribe",
     method: "post",
@@ -372,9 +685,20 @@ export const systemRoutes: RouteDef[] = [
         name: "subscribe",
         summary: "Enable notifications",
         actor: "user",
-        body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b", keys: { p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", auth: "tBHItJI5svbpez7KI4CCXg" }, callReminders: true, sleepReminders: true },
+        body: {
+          endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b",
+          keys: {
+            p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+            auth: "tBHItJI5svbpez7KI4CCXg",
+          },
+        },
         status: 201,
-        response: { id: ex.uid(820), deviceId: phone.id, endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b", callReminders: true, sleepReminders: true, createdAt: now },
+        response: {
+          id: ex.uid(820),
+          deviceId: phone.id,
+          endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b",
+          createdAt: now,
+        },
       },
     ],
   },
@@ -387,55 +711,14 @@ export const systemRoutes: RouteDef[] = [
     access: "user",
     body: PushUnsubscribeInput,
     responses: { 204: { description: "Removed." } },
-    exchanges: [{ name: "unsubscribe", summary: "Disable notifications", actor: "user", body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b" }, status: 204 }],
-  },
-  {
-    operationId: "webhookStatus",
-    method: "get",
-    path: "/api/webhook/status",
-    tag: "Agent",
-    summary: "Last webhook delivery to Agenbot (Ajustes → Agenbot)",
-    access: "user",
-    responses: { 200: { description: "Status.", schema: WebhookStatus } },
     exchanges: [
       {
-        name: "status",
-        summary: "Last batch delivered",
+        name: "unsubscribe",
+        summary: "Disable notifications",
         actor: "user",
-        status: 200,
-        response: {
-          configured: true,
-          lastDelivery: { batchId: ex.uid(900), date: ex.DATE, status: "sent", attempts: 1, lastAttemptAt: "2026-10-19T10:52:12.400-03:00", lastResponseStatus: 200, lastError: null, sentAt: "2026-10-19T10:52:12.400-03:00" },
-          queued: 0,
-          failedLast7Days: 0,
-        },
+        body: { endpoint: "https://fcm.googleapis.com/fcm/send/eXaMpLe:APA91b" },
+        status: 204,
       },
-    ],
-  },
-  {
-    operationId: "exportData",
-    method: "get",
-    path: "/api/export",
-    tag: "Ops",
-    summary: "Export all data as JSON",
-    access: "user",
-    responses: { 200: { description: "Download (`Content-Disposition: attachment`).", schema: ExportBundle } },
-    exchanges: [
-      { name: "export", summary: "Export", actor: "user", status: 200, response: { exportedAt: "2026-10-19T23:00:00.000-03:00", schemaVersion: 1, days: [], habits: [], habitLogs: [], tasks: [], proposals: [], adjustments: [], sleepLogs: [], changeLog: [] } },
-    ],
-  },
-  {
-    operationId: "closeDay",
-    method: "post",
-    path: "/api/internal/close-day",
-    tag: "Ops",
-    summary: "Close past days (Coolify scheduled task, 00:05 ART)",
-    description: "Closes every unclosed day before today and purges idempotency keys older than 48 h. Idempotent.",
-    access: "internal",
-    body: CloseDayInput,
-    responses: { 200: { description: "Result.", schema: CloseDayResult } },
-    exchanges: [
-      { name: "cron", summary: "00:05 on 2026-10-20", actor: "internal", body: {}, status: 200, response: { closed: ["2026-10-19"], purgedIdempotencyKeys: 14 } },
     ],
   },
 ];

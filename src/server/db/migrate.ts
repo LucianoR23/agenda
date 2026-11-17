@@ -2,6 +2,7 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { log } from "../log";
 
 /** Applies pending SQL migrations from ./drizzle. Idempotent; safe to run on every container start. */
 async function main() {
@@ -10,10 +11,10 @@ async function main() {
   const pg = postgres(url, { max: 1, onnotice: () => {} });
   await migrate(drizzle(pg), { migrationsFolder: process.env.MIGRATIONS_DIR ?? "./drizzle" });
   await pg.end();
-  console.log("migrations applied");
+  log.info("migrations applied");
 }
 
 main().catch((err) => {
-  console.error(err);
+  log.error("migrations failed", { err });
   process.exit(1);
 });

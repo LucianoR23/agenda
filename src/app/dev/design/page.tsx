@@ -1,10 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import * as ex from "@/contract/examples";
-import { BLOCK_TYPES, typeColor, type BlockTypeKey } from "@/ui/block-types";
-import { BlockCard, NowLine, type BlockData } from "@/ui/components/block-card";
-import { Button, Fab, FilterChip, PageDots, Ring, Segmented, StatusChip, StreakChip, Toggle } from "@/ui/components/controls";
-import { ConflictCompare, DayReviewCard, OutcomePicker, ProposalDiffView, ShiftChooser, SleepCard } from "@/ui/components/extensions";
+import { Button, Fab, FilterChip, Ring, Segmented, StatusChip, StreakChip, Toggle } from "@/ui/components/controls";
+import { ConflictCompare, DayReviewCard } from "@/ui/components/extensions";
 import { Banner, SyncStatus, Toast } from "@/ui/components/feedback";
 import { Icon } from "@/ui/components/icon";
 import { DayHeader, TabBar } from "@/ui/components/navigation";
@@ -14,7 +11,6 @@ import {
   ChartCard,
   EmptyState,
   HeatCell,
-  OptionCard,
   RowGroup,
   SectionCard,
   SettingsRow,
@@ -25,7 +21,7 @@ import {
   TimelineSkeleton,
 } from "@/ui/components/surfaces";
 
-/** Living version of design/Agenda - Sistema.dc.html, rendered with the real contract examples. Dev only. */
+/** Living version of design/Agenda - Sistema.dc.html (Sistema Calma components in both themes). Dev only. */
 export default function DesignGallery() {
   if (process.env.NODE_ENV === "production") notFound();
   return (
@@ -33,7 +29,7 @@ export default function DesignGallery() {
       <header className="flex max-w-3xl flex-col gap-2">
         <span className="font-mono text-mono tracking-[.08em] text-[#55574F]">AGENDA · SISTEMA CALMA v0.2 · IMPLEMENTACIÓN</span>
         <h1 className="text-[44px] leading-tight font-semibold tracking-[-.02em]">Componentes</h1>
-        <p className="text-[18px] text-[#3C3E38]">Mismo marcado en ambos temas, con los datos de ejemplo del contrato (lunes 19/10).</p>
+        <p className="text-[18px] text-[#3C3E38]">Mismo marcado en ambos temas.</p>
       </header>
       <div className="flex flex-col gap-8 xl:flex-row xl:items-start">
         <Gallery theme="dark" name="Oscuro" note="TEMA PRIMARIO" />
@@ -55,30 +51,6 @@ function Card({ title, note, children, className }: { title: string; note?: stri
   );
 }
 
-const optionA = ex.dayDraft.options[0];
-const blocksA = optionA.blocks;
-const find = (pred: (b: BlockData) => boolean) => blocksA.find(pred)!;
-const martin = find((b) => b.lead?.name === "Martín Gómez");
-const local = find((b) => b.type === "local_work");
-const sleep = find((b) => b.type === "sleep");
-
-const SAMPLES: Array<{ cap: string; block: BlockData }> = [
-  { cap: "PENDIENTE · AGENBOT", block: ex.blockReadingA },
-  { cap: "HECHO", block: ex.blockGymDone },
-  { cap: "SALTEADO", block: { ...find((b) => b.title === "Almuerzo"), status: "skipped" } },
-  { cap: "CALENDAR · HORA FIJA", block: local },
-  { cap: "EDITADO POR VOS", block: ex.blockReadingMoved },
-  { cap: "LLAMADA · PENDIENTE", block: martin },
-  { cap: "LLAMADA · CON RESULTADO", block: ex.blockMartinDone },
-  { cap: "YA NO ESTÁ EN CALENDAR (D31)", block: { ...find((b) => b.lead?.name === "Laura Pérez"), status: "done", outcome: "no_show", removedFromCalendarAt: "2026-10-19T16:00:00.000-03:00" } },
-  { cap: "PASA LA MEDIANOCHE (D54)", block: { ...sleep, start: "24:15", end: "07:45", userOverrides: ["start", "end"] } },
-];
-
-const segments = (blocks: BlockData[]) =>
-  blocks
-    .filter((b) => b.type !== "sleep")
-    .map((b) => ({ color: typeColor(b.type), weight: 1 }));
-
 function Gallery({ theme, name, note }: { theme: "dark" | "light"; name: string; note: string }) {
   return (
     <div data-theme={theme} className="flex flex-1 flex-col gap-6 rounded-[28px] bg-sunken p-4 md:p-8">
@@ -87,51 +59,16 @@ function Gallery({ theme, name, note }: { theme: "dark" | "light"; name: string;
         <span className="font-mono text-mono text-muted">COMPONENTES · {note}</span>
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="BLOQUE DE TIMELINE · ESTADOS" note="Hora · ícono de tipo · título · estado (ícono + texto) · meta · fuente." className="lg:row-span-3">
-          {SAMPLES.map((s) => (
-            <div key={s.cap} className="flex flex-col gap-1.5">
-              <span className="pl-[62px] font-mono text-micro text-muted">{s.cap}</span>
-              <BlockCard block={s.block} />
-            </div>
-          ))}
-          <NowLine time="15:12" />
-        </Card>
-
-        <Card title="REGISTRO DE TIPOS" note="13 tipos; el color sale del tono con L/C fijos por tema.">
-          <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(BLOCK_TYPES) as BlockTypeKey[]).map((k) => (
-              <div key={k} className="flex items-center gap-2.5 rounded-md bg-surface px-3 py-2">
-                <span className="flex size-8 items-center justify-center rounded-[9px] bg-surface2">
-                  <Icon name={BLOCK_TYPES[k].icon} size={18} color={typeColor(k)} />
-                </span>
-                <span className="flex flex-col">
-                  <span className="text-body-sm text-text">{BLOCK_TYPES[k].label}</span>
-                  <span className="font-mono text-micro text-muted">{k}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="TARJETA DE OPCIÓN · BOTÓN FIJO" note="Carrusel horizontal; la siguiente opción asoma para invitar al swipe.">
-          <div className="-mr-5 flex snap-x gap-3 overflow-x-auto pb-1 md:-mr-6">
-            <OptionCard label="A" title={optionA.title} description={optionA.description} segments={segments(blocksA)} summary="12 bloques · 2 llamadas · gym ✓" selected />
-            <OptionCard label="B" title={ex.dayDraft.options[1].title} description={ex.dayDraft.options[1].description} segments={segments(ex.dayDraft.options[1].blocks)} summary="13 bloques · 2 llamadas · gym ✓" />
-          </div>
-          <PageDots count={2} active={0} />
-          <Button size="lg">Elegir esta</Button>
-        </Card>
-
         <Card title="CONTROLES">
           <div className="flex flex-wrap gap-2">
             <FilterChip selected>Todo</FilterChip>
-            <FilterChip>Llamadas</FilterChip>
-            <FilterChip>Hábitos</FilterChip>
+            <FilterChip>Inbox</FilterChip>
+            <FilterChip>Hoy</FilterChip>
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusChip icon="radio_button_unchecked">Pendiente</StatusChip>
             <StatusChip tone="success" icon="check_circle">Hecho</StatusChip>
-            <StatusChip tone="muted" icon="do_not_disturb_on" strike>Salteado</StatusChip>
+            <StatusChip tone="muted" icon="do_not_disturb_on" strike>Descartada</StatusChip>
             <StatusChip icon="event">Calendar</StatusChip>
           </div>
           <Segmented value="week" options={[{ value: "week", label: "Semana" }, { value: "month", label: "Mes" }, { value: "year", label: "Año" }]} />
@@ -140,57 +77,45 @@ function Gallery({ theme, name, note }: { theme: "dark" | "light"; name: string;
             <StreakChip count={12} />
             <Toggle checked label="Activado" />
             <Toggle checked={false} label="Desactivado" />
-            <Fab label="Agregar bloque" />
+            <Fab label="Agregar tarea" />
           </div>
         </Card>
 
-        <Card title="BOTTOM SHEET · BLOQUE DE CALENDAR" note="La hora no se edita acá; solo estado, resultado y nota." className="lg:row-span-2">
+        <Card title="BOTTOM SHEET" note="Hoja de edición con filas y acción principal.">
           <div className="overflow-hidden rounded-xl bg-[var(--scrim)] pt-14">
-            <Sheet label="Editar bloque">
-              <div className="flex flex-col gap-1">
-                <span className="flex items-center gap-2 text-caption text-muted">
-                  <Icon name="call" size={16} className="text-call" />
-                  Llamada · 10:00–10:45 · <Icon name="event" size={14} /> Calendar
-                </span>
-                <span className="text-title text-text">Martín Gómez</span>
-              </div>
-              <Segmented background="bg-bg" value="done" options={[{ value: "pending", label: "Pendiente" }, { value: "done", label: "Hecho", icon: "check" }, { value: "skipped", label: "Salteado" }]} />
+            <Sheet label="Editar tarea">
+              <span className="text-title text-text">Pagar la luz</span>
+              <Segmented background="bg-bg" value="pending" options={[{ value: "pending", label: "Pendiente" }, { value: "done", label: "Hecha", icon: "check" }]} />
               <RowGroup>
-                <SheetRow icon="flag" label="Resultado" value="Seguimiento" valueTone="call" chevron />
+                <SheetRow icon="event" label="Vence" value="Hoy 18:00" chevron />
                 <SheetRow icon="notes" label="Agregá una nota…" placeholder />
-                <SheetRow icon="notifications" label="Avisarme 10 min antes" trailing={<Toggle checked label="Avisarme 10 min antes" />} />
+                <SheetRow icon="notifications" label="Recordarme" trailing={<Toggle checked label="Recordarme" />} />
               </RowGroup>
-              <Button variant="ghost" icon="open_in_new" className="justify-start px-0">
-                Editar en Google Calendar
-              </Button>
               <Button size="lg">Guardar</Button>
             </Sheet>
           </div>
         </Card>
 
         <Card title="BANNERS · TOAST">
-          <Banner kind="info">Agenbot cargó tu día a las 07:00.</Banner>
-          <Banner kind="proposal" title="Agenbot propone 1 cambio" action="Ver">
-            Mover la llamada con Laura a las 15:00.
-          </Banner>
+          <Banner kind="info">Sunday agregó 2 tareas a tu Inbox.</Banner>
           <Banner kind="offline">Sin conexión. Guardamos tus cambios y los subimos cuando vuelvas.</Banner>
           <Banner kind="conflict" action="Resolver">
             Tu versión y la del servidor no coinciden.
           </Banner>
           <SyncStatus state="syncing" lastSync="15:10" />
-          <Toast message="Gym marcado como hecho" action="Deshacer" />
+          <Toast message="Tarea hecha" action="Deshacer" />
         </Card>
 
         <Card title="STAT CARD · GRÁFICOS">
           <div className="grid grid-cols-2 gap-2.5">
-            <StatCard label="Bloques hechos" value="78%" note="▲ 6 pts vs semana pasada" noteTone="success" />
-            <StatCard label="Llamadas cerradas" value="2 / 9" note="esta semana" />
+            <StatCard label="Tareas hechas" value="78%" note="▲ 6 pts vs semana pasada" noteTone="success" />
+            <StatCard label="Recordatorios" value="9" note="esta semana" />
           </div>
-          <ChartCard title="Llamadas por día" period="Semana" reading="Lunes 2, martes 1, miércoles 3, jueves 2, viernes 1.">
+          <ChartCard title="Tareas por día" period="Semana" reading="Lunes 2, martes 1, miércoles 3, jueves 2, viernes 1.">
             <BarChart highlight={2} bars={[["L", 2], ["M", 1], ["M", 3], ["J", 2], ["V", 1], ["S", 0], ["D", 0]].map(([label, value]) => ({ label: String(label), value: Number(value) }))} />
           </ChartCard>
           <ChartCard title="Horas dormidas" period="Semana" reading="Promedio 6 h 58 min.">
-            <Sparkline color={typeColor("sleep")} values={[425, 395, 440, 410, 380, 455, 410]} />
+            <Sparkline color="var(--accent)" values={[425, 395, 440, 410, 380, 455, 410]} />
           </ChartCard>
           <div className="grid grid-cols-14 gap-1">
             {[0, 0.25, 0.5, 0.75, 1, 0.5, null, 0.25, 1, 0.75, 0.5, 0, 0.25, 0.75].map((v, i) => (
@@ -199,18 +124,8 @@ function Gallery({ theme, name, note }: { theme: "dark" | "light"; name: string;
           </div>
         </Card>
 
-        <Card title="VACÍO · CARGANDO" note="'Armar mi día' crea un día propio (D60).">
-          <EmptyState
-            icon="schedule"
-            title="Agenbot todavía no cargó tu día"
-            body="Suele llegar a las 07:00. Podés esperarlo o armarlo vos."
-            actions={
-              <>
-                <Button>Armar mi día</Button>
-                <Button variant="secondary">Reintentar</Button>
-              </>
-            }
-          />
+        <Card title="VACÍO · CARGANDO">
+          <EmptyState icon="schedule" title="Nada para hoy" body="Agregá una tarea o pedíselo a Sunday." actions={<Button>Agregar tarea</Button>} />
           <TimelineSkeleton />
         </Card>
 
@@ -226,7 +141,7 @@ function Gallery({ theme, name, note }: { theme: "dark" | "light"; name: string;
         </Card>
 
         <Card title="PATRONES · AJUSTES">
-          <SectionCard icon="fitness_center" iconColor={typeColor("gym")} title="Hábitos de hoy" action="Ver todo">
+          <SectionCard icon="fitness_center" title="Hábitos de hoy" action="Ver todo">
             <div className="flex items-center gap-4">
               <Ring value={1} total={3} />
               <StreakChip count={5} unit="semanas" />
@@ -234,29 +149,12 @@ function Gallery({ theme, name, note }: { theme: "dark" | "light"; name: string;
           </SectionCard>
           <RowGroup>
             <SettingsRow icon="lock" title="Seguridad" subtitle="PIN, huella, dispositivos" />
-            <SettingsRow icon="auto_awesome" title="Agenbot" subtitle="Carga diaria a las 07:00" value="Activo" />
-            <SettingsRow icon="bedtime" title="Sueño" subtitle="Recordatorio a las 10:00 si falta cargar" value="Activo" />
+            <SettingsRow icon="notifications" title="Notificaciones" subtitle="Recordatorios en este dispositivo" value="Activas" />
           </RowGroup>
         </Card>
 
-        <Card title="EXTENSIÓN · SUEÑO" note="No está en el diseño: tarjeta en Hoy con botones y recordatorio (D55–D58).">
-          <SleepCard mode="morning" previousNight={{ ...ex.sleepPrevNight, wokeAt: null, wakeSource: null, durationMinutes: null }} night={null} />
-          <SleepCard mode="morning" previousNight={ex.sleepPrevNight} night={null} />
-          <SleepCard mode="night" previousNight={ex.sleepPrevNight} night={null} />
-          <SleepCard mode="night" previousNight={ex.sleepPrevNight} night={ex.sleepTonightBed} />
-        </Card>
-
-        <Card title="EXTENSIÓN · PROPUESTA DE AGENBOT" note="Diff agregado / quitado / movido / conservado.">
-          <ProposalDiffView reason={ex.proposalPending.reason} diff={ex.proposalPending.diff} />
-        </Card>
-
-        <Card title="EXTENSIÓN · ME ATRASÉ">
-          <ShiftChooser value={30} fromTime="21:00" affected={2} />
-        </Card>
-
-        <Card title="EXTENSIÓN · CONFLICTO · RESULTADO">
-          <ConflictCompare field="Lectura · horario" mine="11:15–11:45" server="14:00–14:30" />
-          <OutcomePicker value="follow_up" />
+        <Card title="EXTENSIÓN · CONFLICTO">
+          <ConflictCompare field="Pagar la luz · vence" mine="Hoy 18:00" server="Mañana 10:00" />
         </Card>
 
         <Card title="EXTENSIÓN · CIERRE DEL DÍA">

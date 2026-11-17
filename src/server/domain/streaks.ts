@@ -4,7 +4,7 @@
  * weekly → days done (boolean) or the sum of values (numeric) reaches the target.
  * The current period never breaks a streak until it ends.
  */
-import { addDays, weekStart } from "../time";
+import { addDays, weekStart } from "./time";
 
 export interface HabitDef {
   kind: "boolean" | "numeric";

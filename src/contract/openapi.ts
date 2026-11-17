@@ -1,48 +1,61 @@
-import {
-  OpenAPIRegistry,
-  OpenApiGeneratorV31,
-  type RouteConfig,
-} from "@asteasolutions/zod-to-openapi";
+import { OpenAPIRegistry, OpenApiGeneratorV31, type RouteConfig } from "@asteasolutions/zod-to-openapi";
 import type { ZodType } from "zod";
-import { Problem } from "./common";
-import { dayEditedWithProposal } from "./examples";
-import { AdjustmentWebhookPayload } from "./adjustments";
-import type { Access, Exchange, ResponseDef, RouteDef } from "./route-def";
-import { adjustmentRoutes, adjustmentWebhookExamples } from "./routes/adjustments";
-import { planningRoutes } from "./routes/planning";
+import { ErrorBody } from "./common";
+import type { Exchange, ResponseDef, RouteDef } from "./route-def";
+import { calendarRoutes, eventRoutes } from "./routes/events";
+import { pushRoutes, reminderRoutes } from "./routes/reminders";
+import { sundayRoutes } from "./routes/sunday";
 import { systemRoutes } from "./routes/system";
-import { trackingRoutes } from "./routes/tracking";
-import { WebhookPayload } from "./tracking";
+import { taskRoutesAll } from "./routes/tasks";
+import { habitRoutes, reviewRoutes, sleepRoutes } from "./routes/tracking";
+import { SUNDAY_GUIDE, SUNDAY_OPERATIONS, type SundayOperation } from "./sunday";
 import { z } from "./zod";
 
-export const API_VERSION = "1.0.0";
+export const API_VERSION = "2.0.0-alpha";
 
-export const routes: RouteDef[] = [...planningRoutes, ...adjustmentRoutes, ...trackingRoutes, ...systemRoutes];
+export const routes: RouteDef[] = [
+  ...systemRoutes,
+  ...sundayRoutes,
+  ...pushRoutes,
+  ...taskRoutesAll,
+  ...reminderRoutes,
+  ...eventRoutes,
+  ...calendarRoutes,
+  ...habitRoutes,
+  ...sleepRoutes,
+  ...reviewRoutes,
+];
 
 const WRITE_METHODS = new Set(["post", "put", "patch"]);
 
-const SECURITY: Record<Access, RouteConfig["security"]> = {
-  "agent+user": [{ agentBearer: [] }, { session: [] }],
-  agent: [{ agentBearer: [] }],
-  user: [{ session: [] }],
-  public: [],
-  preauth: [],
-  internal: [{ internalToken: [] }],
-};
+/** `full`: openapi.yaml / openapi.json (app + Sunday). `sunday`: only Sunday's tools, token auth only. */
+export type Audience = "full" | "sunday";
 
-const ACTORS: Record<Access, string[]> = {
-  "agent+user": ["agent", "user"],
-  agent: ["agent"],
-  user: ["user"],
-  public: ["anyone"],
-  preauth: ["anyone (device-key cookie)"],
-  internal: ["internal"],
-};
+const SUNDAY = new Set<string>(SUNDAY_OPERATIONS);
+export const isSunday = (r: RouteDef) => SUNDAY.has(r.operationId);
+export const sundayRouteList = () => routes.filter(isSunday);
+/** Usage guidance for the model (SUNDAY_GUIDE), empty for app-only routes. */
+const guide = (r: RouteDef): string => (isSunday(r) ? SUNDAY_GUIDE[r.operationId as SundayOperation] : "");
+
+const security = (r: RouteDef, audience: Audience): NonNullable<RouteConfig["security"]> =>
+  audience === "sunday"
+    ? [{ apiToken: [r.token ?? "read"] }]
+    : r.access === "user"
+      ? [{ session: [] }, ...(r.token ? [{ apiToken: [r.token] }] : [])]
+      : [];
+
+const actors = (r: RouteDef): string[] =>
+  r.access === "user"
+    ? ["user", ...(r.token ? [`API token with \`${r.token}\``] : [])]
+    : r.access === "public"
+      ? ["anyone"]
+      : ["anyone (device-key cookie)"];
 
 const HEADER_DOCS = {
   ETag: { description: 'Current `version` as a strong ETag, e.g. `"7"`.', schema: { type: "string" as const } },
   "Retry-After": { description: "Seconds to wait.", schema: { type: "integer" as const } },
   "Set-Cookie": { description: "`agenda_session` (httpOnly, Secure, SameSite=Lax).", schema: { type: "string" as const } },
+  Location: { description: "Where the browser goes next.", schema: { type: "string" as const } },
 };
 
 const append = (base: ResponseDef | undefined, description: string, extra?: Partial<ResponseDef>): ResponseDef =>
@@ -53,74 +66,83 @@ const append = (base: ResponseDef | undefined, description: string, extra?: Part
 /** Route responses plus the generic ones every route of that kind can produce. */
 export function effectiveResponses(r: RouteDef): Record<number, ResponseDef> {
   const res: Record<number, ResponseDef> = { ...r.responses };
-  if (r.params || r.query || r.body) res[400] = append(res[400], "`validation_error`.");
-  if (r.access !== "public" && r.access !== "preauth")
-    res[401] = append(res[401], r.access === "internal" ? "`unauthorized`: missing/invalid `X-Internal-Token`." : "`unauthorized` (no/invalid credentials) or `device_locked` (unlock with PIN).");
-  if (r.access === "agent" || r.access === "user") res[403] = append(res[403], `\`forbidden\`: ${r.access} only.`);
-  if (WRITE_METHODS.has(r.method)) {
-    res[409] = append(res[409], "`idempotency_in_progress`.");
-    res[422] = append(res[422], "`idempotency_key_reuse`: same `Idempotency-Key`, different body.");
+  if (r.params || r.query || r.body) res[400] = append(res[400], "`VALIDATION_ERROR` (details.fields).");
+  if (r.body) res[415] = append(res[415], "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`.");
+  if (r.access === "user") {
+    res[401] = append(res[401], "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN).");
+    res[403] = append(
+      res[403],
+      r.token
+        ? "`INSUFFICIENT_SCOPE` (token lacks the scope) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+        : "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin).",
+    );
   }
-  if (r.access === "agent+user" || r.access === "agent")
-    res[429] = append(res[429], "`rate_limited` (agent: 120 req/min).", { headers: ["Retry-After"] });
+  if (r.token)
+    res[429] = append(res[429], "`RATE_LIMITED`: an API token may make 60 requests a minute and 1,000 a day.", {
+      headers: ["Retry-After"],
+    });
+  if (WRITE_METHODS.has(r.method)) {
+    res[409] = append(res[409], "`IDEMPOTENCY_IN_PROGRESS`.");
+    res[422] = append(res[422], "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body.");
+  }
   return res;
 }
 
-const statusText: Record<number, string> = {
-  200: "OK", 201: "Created", 202: "Accepted", 204: "No Content", 400: "Bad Request", 401: "Unauthorized",
-  403: "Forbidden", 404: "Not Found", 409: "Conflict", 422: "Unprocessable Content", 429: "Too Many Requests", 503: "Service Unavailable",
-};
-export const reason = (s: number) => statusText[s] ?? "";
-
-export function buildRegistry() {
+export function buildRegistry(audience: Audience = "full") {
   const registry = new OpenAPIRegistry();
+  const sunday = audience === "sunday";
 
-  registry.registerComponent("securitySchemes", "agentBearer", {
+  if (!sunday)
+    registry.registerComponent("securitySchemes", "session", {
+      type: "apiKey",
+      in: "cookie",
+      name: "agenda_session",
+      description: "Trusted-device session cookie. Actor = `user`.",
+    });
+  registry.registerComponent("securitySchemes", "apiToken", {
     type: "http",
     scheme: "bearer",
-    description: "Agenbot token (32 random bytes; the server stores only its SHA-256 in `AGENT_TOKEN_HASH`). Actor = `agent`.",
-  });
-  registry.registerComponent("securitySchemes", "session", {
-    type: "apiKey",
-    in: "cookie",
-    name: "agenda_session",
-    description: "Trusted-device session cookie. Actor = `user`.",
-  });
-  registry.registerComponent("securitySchemes", "internalToken", {
-    type: "apiKey",
-    in: "header",
-    name: "X-Internal-Token",
-    description: "Shared secret `INTERNAL_TOKEN` for the Coolify scheduled task.",
-  });
-  registry.registerComponent("securitySchemes", "agentWebhookToken", {
-    type: "http",
-    scheme: "bearer",
-    description: "Outbound only: `AGENT_WEBHOOK_TOKEN`, sent by this app to Agenbot's webhook.",
+    description: "Named API token `agd_…` (Ajustes → Tokens de API). Scopes: `read`, `write`, `notify`. Actor = `sunday`.",
   });
 
-  const IdempotencyKey = registry.registerParameter(
-    "IdempotencyKey",
-    z.string().min(1).max(200).optional().openapi({
-      param: { name: "Idempotency-Key", in: "header" },
-      description: "Same key + same body → stored response replayed; different body → 422. Kept 48 h, scoped per actor.",
-      example: "agenbot-2026-10-19-0700",
-    }),
-  );
-  const IfMatch = registry.registerParameter(
-    "IfMatch",
-    z.string().optional().openapi({
-      param: { name: "If-Match", in: "header" },
-      description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `version_conflict` with the current resource.',
-      example: '"7"',
-    }),
-  );
+  const IdempotencyKey = sunday
+    ? undefined
+    : registry.registerParameter(
+        "IdempotencyKey",
+        z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .openapi({
+            param: { name: "Idempotency-Key", in: "header" },
+            description: "Same key + same body → stored response replayed; different body → 422. Kept 24 h, scoped per caller.",
+            example: "019a0a6e-1c00-7000-8000-000000000001",
+          }),
+      );
+  // registered only when a route uses it, so the spec has no unused components
+  const IfMatch =
+    !sunday && routes.some((r) => r.ifMatch)
+      ? registry.registerParameter(
+          "IfMatch",
+          z
+            .string()
+            .optional()
+            .openapi({
+              param: { name: "If-Match", in: "header" },
+              description: 'Expected `version` as ETag (`"7"`). Mismatch → 409 `VERSION_CONFLICT` with the current resource.',
+              example: '"7"',
+            }),
+        )
+      : undefined;
 
-  registry.register("Problem", Problem);
+  registry.register("Error", ErrorBody);
 
-  for (const r of routes) {
+  // Sunday's tools get no header parameters: Open WebUI would offer them to the model (clientId covers retries)
+  for (const r of sunday ? sundayRouteList() : routes) {
     const headers: ZodType[] = [];
-    if (WRITE_METHODS.has(r.method)) headers.push(IdempotencyKey);
-    if (r.ifMatch) headers.push(IfMatch);
+    if (WRITE_METHODS.has(r.method) && IdempotencyKey) headers.push(IdempotencyKey);
+    if (r.ifMatch && IfMatch) headers.push(IfMatch);
 
     const bodyExamples = Object.fromEntries(
       r.exchanges.filter((e) => e.body !== undefined && !e.invalidRequest).map((e) => [e.name, { summary: e.summary, value: e.body }]),
@@ -129,14 +151,12 @@ export function buildRegistry() {
     const responses: RouteConfig["responses"] = {};
     for (const [statusStr, def] of Object.entries(effectiveResponses(r))) {
       const status = Number(statusStr);
-      const schema = def.schema ?? (status >= 400 ? Problem : undefined);
+      const schema = def.schema ?? (status >= 400 ? ErrorBody : undefined);
       const exs = r.exchanges.filter((e) => e.status === status && e.response !== undefined);
-      const mediaType = status >= 400 && !def.schema ? "application/problem+json" : "application/json";
+      const mediaType = "application/json";
       responses[status] = {
         description: def.description,
-        ...(def.headers?.length
-          ? { headers: Object.fromEntries([...new Set(def.headers)].map((h) => [h, HEADER_DOCS[h]])) }
-          : {}),
+        ...(def.headers?.length ? { headers: Object.fromEntries([...new Set(def.headers)].map((h) => [h, HEADER_DOCS[h]])) } : {}),
         ...(schema
           ? {
               content: {
@@ -156,11 +176,13 @@ export function buildRegistry() {
       method: r.method,
       path: r.path,
       operationId: r.operationId,
-      tags: [r.tag],
+      tags: sunday ? [r.tag] : isSunday(r) ? [r.tag, "sunday"] : [r.tag],
       summary: r.summary,
-      description: [r.description, `**Actors:** ${ACTORS[r.access].join(", ")}.`].filter(Boolean).join("\n\n"),
-      security: SECURITY[r.access],
-      "x-actors": ACTORS[r.access],
+      description: sunday
+        ? [r.description ?? r.summary, guide(r)].filter(Boolean).join("\n\n")
+        : [r.description, guide(r), `**Actors:** ${actors(r).join(", ")}.`].filter(Boolean).join("\n\n"),
+      security: security(r, audience),
+      ...(sunday ? {} : { "x-actors": actors(r) }),
       request: {
         ...(r.params ? { params: r.params } : {}),
         ...(r.query ? { query: r.query } : {}),
@@ -180,165 +202,64 @@ export function buildRegistry() {
           : {}),
       },
       responses,
-    } as RouteConfig;
+    } satisfies RouteConfig;
     registry.registerPath(config);
   }
-
-  registry.registerWebhook({
-    method: "post",
-    path: "dayUpdatedByUser",
-    operationId: "dayUpdatedByUser",
-    tags: ["Webhook"],
-    summary: "Outbound: my changes, sent to Agenbot",
-    security: [{ agentWebhookToken: [] }],
-    description: [
-      "`POST ${AGENT_WEBHOOK_URL}` with `Authorization: Bearer ${AGENT_WEBHOOK_TOKEN}` and `Idempotency-Key: <batchId>`.",
-      "Only changes made by me (never the agent's). Debounced per day: sent after `WEBHOOK_DEBOUNCE_SECONDS` (120) without new changes,",
-      "or immediately for `choose` and proposal accept/reject. Retried with exponential backoff, 5 attempts. Any 2xx = delivered.",
-    ].join(" "),
-    request: {
-      body: {
-        content: {
-          "application/json": {
-            schema: WebhookPayload,
-            examples: Object.fromEntries(webhookExamples.map((w) => [w.name, { summary: w.summary, value: w.value }])),
-          },
-        },
-      },
-    },
-    responses: { 200: { description: "Any 2xx acknowledges the batch." } },
-  });
-
-  registry.registerWebhook({
-    method: "post",
-    path: "adjustmentEvent",
-    operationId: "adjustmentEvent",
-    tags: ["Webhook"],
-    summary: "Outbound: \"Pedir ajuste\" requested or cancelled",
-    security: [{ agentWebhookToken: [] }],
-    description: [
-      "Same URL, `Authorization` and retries as `dayUpdatedByUser`; `Idempotency-Key` is the delivery id.",
-      "Sent right away (no debounce) and never batched with other changes, one per request. Only for my actions.",
-      "`adjustment.requested`: read the day, answer with `PUT /api/days/{date}` + `adjustmentIds`, then close it with `PATCH /api/adjustments/{id}`.",
-      "`adjustment.cancelled`: stop working on it (a later PATCH gets 409 `adjustment_resolved`).",
-    ].join(" "),
-    request: {
-      body: {
-        content: {
-          "application/json": {
-            schema: AdjustmentWebhookPayload,
-            examples: Object.fromEntries(adjustmentWebhookExamples.map((w) => [w.name, { summary: w.summary, value: w.value }])),
-          },
-        },
-      },
-    },
-    responses: { 200: { description: "Any 2xx acknowledges the event." } },
-  });
 
   return registry;
 }
 
-export const webhookExample = {
-  event: "day.updated_by_user",
-  batchId: "019a0a6e-1c00-7000-8000-000000000384",
-  date: "2026-10-19",
-  dayVersion: 4,
-  changes: [
-    {
-      entity: "block",
-      id: dayEditedWithProposal.options[0].blocks.find((b) => b.type === "call")!.id,
-      action: "update",
-      fields: { status: { from: "pending", to: "done" }, outcome: { from: null, to: "follow_up" }, note: { from: null, to: "Le interesa, pide hablar con la pareja. Volver a llamar el jueves 18:00." } },
-      block: { title: "Llamada de cierre", type: "call", start: "10:00", externalId: "4f2k9q0d1m7b8s6t3u1v0a2c3e", outcome: "follow_up" },
-      at: "2026-10-19T10:48:03.551-03:00",
-    },
-    {
-      entity: "block",
-      id: dayEditedWithProposal.options[0].blocks.find((b) => b.type === "reading")!.id,
-      action: "update",
-      fields: { start: { from: "11:00", to: "11:15" }, end: { from: "11:30", to: "11:45" } },
-      block: { title: "Lectura (30 min)", type: "reading", start: "11:15", externalId: null },
-      at: "2026-10-19T10:50:12.000-03:00",
-    },
-  ],
-  summary: { blocksDone: 1, blocksTotal: 12, weeklyGym: { done: 0, target: 3 } },
-  dayUrl: "https://agenda.lemydev.com/api/days/2026-10-19",
-};
+const DOMAIN_TAGS = ["Tasks", "Reminders", "Events", "Habits", "Sleep", "Review"];
 
-const sleepBlock = dayEditedWithProposal.options[0].blocks.find((b) => b.type === "sleep")!;
-const partnerBlock = dayEditedWithProposal.options[0].blocks.find((b) => b.type === "partner")!;
-
-/** "Me atrasé" at night + "Me voy a dormir": shows the shift record and the sleep log in the webhook. */
-export const webhookShiftExample = {
-  event: "day.updated_by_user",
-  batchId: "019a0a6e-1c00-7000-8000-000000000385",
-  date: "2026-10-19",
-  dayVersion: 8,
-  changes: [
-    {
-      entity: "day",
-      id: dayEditedWithProposal.id,
-      action: "shift",
-      shift: {
-        fromTime: "21:00",
-        minutes: 45,
-        blocks: [
-          { id: partnerBlock.id, title: partnerBlock.title, from: "21:45", to: "22:30" },
-          { id: sleepBlock.id, title: sleepBlock.title, from: "23:30", to: "24:15" },
-        ],
+export function generateOpenApiDocument(audience: Audience = "full") {
+  const generator = new OpenApiGeneratorV31(buildRegistry(audience).definitions, { sortComponents: "alphabetically" });
+  if (audience === "sunday")
+    return generator.generateDocument({
+      openapi: "3.1.0",
+      info: {
+        title: "Agenda de Lemy",
+        version: API_VERSION,
+        description: [
+          "Lemy's personal agenda: tasks, reminders, events (his own plus Google Calendar, read-only), habits, sleep and the day's review. Times are in his timezone, America/Buenos_Aires.",
+          "",
+          "- Unsure what day it is? Call getNow before turning hoy/mañana/el viernes into dates.",
+          "- To change or delete something, get its id first with searchAgenda (or a list operation).",
+          "- Date-times may omit the offset (`2026-11-14T09:00`): that's Lemy's local time.",
+          "- On creates, send a `clientId` of your own: retrying with it never duplicates.",
+          "- Every item carries `whenText` (a Spanish date ready to read back) and `url` (opens it in the app).",
+          "- Errors come as `{ error: { code, message } }`; `message` says, in Spanish, what to do next.",
+        ].join("\n"),
       },
-      at: "2026-10-19T21:20:00.000-03:00",
-    },
-    {
-      entity: "sleep_log",
-      id: "019a0a6e-1c00-7000-8000-00000000015f",
-      action: "create",
-      sleep: { night: "2026-10-19", bedAt: "2026-10-20T00:20:00.000-03:00", wokeAt: null },
-      at: "2026-10-20T00:20:00.000-03:00",
-    },
-  ],
-  summary: { blocksDone: 11, blocksTotal: 12, weeklyGym: { done: 1, target: 3 } },
-  dayUrl: "https://agenda.lemydev.com/api/days/2026-10-19",
-};
-
-export const webhookExamples = [
-  { name: "afterCall", summary: "Martín's call done + reading moved", value: webhookExample },
-  { name: "shiftAndSleep", summary: "\"Me atrasé\" +45 at night, then \"Me voy a dormir\" at 00:20", value: webhookShiftExample },
-];
-
-export function generateOpenApiDocument() {
-  const generator = new OpenApiGeneratorV31(buildRegistry().definitions, { sortComponents: "alphabetically" });
+      servers: [{ url: "https://agenda.lemydev.com" }],
+      tags: [{ name: "Assistant" }, ...DOMAIN_TAGS.map((name) => ({ name }))],
+    });
   return generator.generateDocument({
     openapi: "3.1.0",
     info: {
       title: "Agenda API",
       version: API_VERSION,
       description: [
-        "Personal day planner fed by Agenbot. Base path `/api`, JSON only, times in America/Buenos_Aires.",
+        "Agenda v2: personal tasks, reminders and events. Base path `/api`, JSON only, user timezone America/Buenos_Aires.",
         "",
-        "- **Actors:** `agent` (Bearer token) and `user` (session cookie), derived from the auth method.",
-        "- **Errors:** RFC 9457 `application/problem+json` with `code`, `errors[]` and `requestId`.",
+        '- **Errors:** `{ "error": { "code", "message", "details"?, "requestId" } }`; `message` is a Spanish sentence that says what to do.',
         "- **Concurrency:** resources carry `version` + `ETag`; writes accept `If-Match` or `version` in the body.",
-        "- **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH.",
-        "- **Ownership:** calendar blocks belong to Google Calendar (agent mirrors them); schedule fields I edit (`userOverrides`), `locked` blocks and tracking fields I set belong to me.",
+        "- **Idempotency:** `Idempotency-Key` on every POST/PUT/PATCH; creates also take `clientId`.",
+        "- **Sunday:** operations tagged `sunday` make up `/api/openapi.sunday.json`.",
         "- Unknown fields are rejected everywhere.",
       ].join("\n"),
     },
     servers: [{ url: "https://agenda.lemydev.com" }, { url: "http://localhost:3000" }],
     tags: [
-      { name: "Days" },
-      { name: "Proposals" },
-      { name: "Adjustments", description: "\"Pedir ajuste\": I describe what changed, Agenbot answers with a proposal." },
-      { name: "Blocks" },
-      { name: "Habits" },
-      { name: "Tasks" },
-      { name: "Sleep" },
-      { name: "Metrics" },
-      { name: "Agent" },
+      { name: "Assistant" },
+      ...DOMAIN_TAGS.slice(0, 3).map((name) => ({ name })),
+      { name: "Calendars" },
+      ...DOMAIN_TAGS.slice(3).map((name) => ({ name })),
       { name: "Auth" },
+      { name: "Settings" },
+      { name: "Tokens" },
       { name: "Push" },
       { name: "Ops" },
-      { name: "Webhook" },
+      { name: "sunday", description: "Published to Sunday (Open WebUI) in /api/openapi.sunday.json." },
     ],
   });
 }
@@ -350,7 +271,9 @@ export function validateExamples(): string[] {
     if (!schema) return;
     const res = schema.safeParse(value);
     if (res.success !== expectValid)
-      failures.push(`${where}: ${expectValid ? res.error?.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ") : "expected to be invalid"}`);
+      failures.push(
+        `${where}: ${expectValid ? res.error?.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ") : "expected to be invalid"}`,
+      );
   };
   for (const r of routes) {
     const responses = effectiveResponses(r);
@@ -368,18 +291,10 @@ export function validateExamples(): string[] {
         failures.push(`${at}: status ${e.status} not documented`);
         continue;
       }
-      const schema = def.schema ?? (e.status >= 400 ? Problem : undefined);
+      const schema = def.schema ?? (e.status >= 400 ? ErrorBody : undefined);
       if (schema) check(`${at} response`, schema, e.response);
       else if (e.response !== undefined) failures.push(`${at}: ${e.status} has no body schema`);
     }
-  }
-  for (const w of webhookExamples) {
-    const wh = WebhookPayload.safeParse(w.value);
-    if (!wh.success) failures.push(`webhook/${w.name}: ${wh.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
-  }
-  for (const w of adjustmentWebhookExamples) {
-    const wh = AdjustmentWebhookPayload.safeParse(w.value);
-    if (!wh.success) failures.push(`webhook/${w.name}: ${wh.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
   }
   return failures;
 }
@@ -387,15 +302,18 @@ export function validateExamples(): string[] {
 export type { Exchange };
 
 /**
- * Removes `examples` (318 KB → 115 KB). `/api/openapi.json` serves this compact form by default so Agenbot
- * spends fewer tokens reading the contract; `?examples=true` returns the full document.
+ * Removes `examples`. `/api/openapi.json` serves this compact form by default; `?examples=true` returns the full document.
  */
 export function withoutExamples<T>(doc: T): T {
   const strip = (o: unknown): unknown =>
     Array.isArray(o)
       ? o.map(strip)
       : o && typeof o === "object"
-        ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== "examples").map(([k, v]) => [k, strip(v)]))
+        ? Object.fromEntries(
+            Object.entries(o)
+              .filter(([k]) => k !== "examples")
+              .map(([k, v]) => [k, strip(v)]),
+          )
         : o;
   return strip(doc) as T;
 }

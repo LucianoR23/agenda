@@ -15,7 +15,7 @@ export const LocalDate = z
     return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(s);
   }, "Invalid calendar date")
   .openapi("LocalDate", {
-    description: "Local date in America/Buenos_Aires, `YYYY-MM-DD`.",
+    description: "Calendar date in the user's timezone, `YYYY-MM-DD`.",
     example: "2026-10-19",
   });
 
@@ -23,95 +23,104 @@ export const LocalTime = z
   .string()
   .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "Expected HH:mm (00:00–23:59)")
   .openapi("LocalTime", {
-    description: "Local time in America/Buenos_Aires, `HH:mm`, 24 h.",
+    description: "Local time in the user's timezone, `HH:mm`, 24 h.",
     example: "09:30",
   });
 
-export const BlockTime = z
-  .string()
-  .regex(/^([01][0-9]|2[0-9]):[0-5][0-9]$/, "Expected HH:mm (00:00–29:59)")
-  .openapi("BlockTime", {
-    description:
-      "Block time on the block's day, `HH:mm`, 00:00–29:59. `24:00`–`29:59` = after midnight (shown as `00:15 (+1)`); the block still belongs to the day it starts. For `end`, a value lower than `start` also means the next day (sleep `23:30`→`07:00`).",
-    example: "24:15",
-  });
-
 export const Timestamp = z.iso.datetime({ offset: true }).openapi("Timestamp", {
-  description: "ISO 8601 timestamp with offset (the API always answers in -03:00).",
+  description: "ISO 8601 timestamp with offset .",
   example: "2026-10-19T07:00:12.345-03:00",
 });
 
+/**
+ * Forgiving date-time input (Sunday): ISO 8601 with or without offset. Without one it's the user's wall time
+ * (`2026-11-14T09:00` = 09:00 in Buenos Aires).
+ */
+export const DateTimeInput = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?([Zz]|[+-]\d{2}:\d{2})?$/, "Expected an ISO date-time, e.g. 2026-11-14T09:00")
+  .refine((s) => !Number.isNaN(new Date(`${s.slice(0, 16)}:00Z`).getTime()), "Invalid date-time")
+  .openapi("DateTimeInput", {
+    description: "ISO 8601 date-time. With offset (`-03:00`, `Z`) it's that instant; without, the user's local time.",
+    example: "2026-11-14T09:00",
+  });
+
+/** Caller-chosen idempotency handle on creates. */
+export const ClientId = z.string().trim().min(1).max(100).openapi("ClientId", {
+  description:
+    "Your own id for this item (≤ 100 chars). Sending the same clientId again doesn't duplicate: it returns the existing item (200), updated with the fields you sent.",
+  example: "sunday-2026-11-14-contador",
+});
+
+/** Human-readable time in Spanish, for reading back to the user. */
+export const WhenText = z.string().nullable().openapi({
+  description: 'When, in Spanish, ready to say: "jueves 14 de noviembre, 09:00". The year only when it is not this year.',
+  example: "jueves 14 de noviembre, 09:00",
+});
+
+export const AppUrl = z.url().openapi({ description: "Opens it in the agenda app." });
+
 export const Uuid = z.uuid().openapi("Uuid", { example: "019a0a6e-5c3e-7b2a-9d41-3f0c8a1b2c3d" });
 
-export const Actor = z.enum(["agent", "user", "system"]).openapi("Actor");
-
-export const OptionLabel = z
-  .string()
-  .regex(/^[A-Z]$/)
-  .openapi("OptionLabel", { description: "Plan option label, `A`–`Z`.", example: "A" });
+/** Who created or last changed something: Lemy in the app, an API token (Sunday), or the app itself. */
+export const ItemSource = z.enum(["user", "sunday", "system"]).openapi("ItemSource");
 
 /** Optimistic-concurrency field accepted in write bodies as an alternative to `If-Match`. */
 export const ExpectedVersion = z.int().min(1).optional().openapi({
-  description: "Expected current version. Alternative to the `If-Match` header; mismatch → 409 `version_conflict`.",
+  description: "Expected current version. Alternative to the `If-Match` header; mismatch → 409 `VERSION_CONFLICT`.",
 });
 
 export const Mutable = {
   version: z.int().min(1),
   createdAt: Timestamp,
   updatedAt: Timestamp,
-  updatedBy: Actor,
+  updatedBy: ItemSource,
 };
 
 export const ErrorCode = z
   .enum([
-    "validation_error",
-    "unauthorized",
-    "device_locked",
-    "forbidden",
-    "not_found",
-    "day_not_found",
-    "method_not_allowed",
-    "version_conflict",
-    "calendar_owned",
-    "user_edit_conflict",
-    "day_closed",
-    "invalid_transition",
-    "shift_out_of_range",
-    "idempotency_key_reuse",
-    "idempotency_in_progress",
-    "rate_limited",
-    "locked_out",
-    "invalid_credentials",
-    "setup_completed",
-    "adjustment_resolved",
-    "adjustment_invalid",
-    "internal_error",
-    "service_unavailable",
+    "VALIDATION_ERROR",
+    "UNSUPPORTED_MEDIA_TYPE",
+    "UNAUTHORIZED",
+    "DEVICE_LOCKED",
+    "REAUTH_REQUIRED",
+    "FORBIDDEN",
+    "ORIGIN_NOT_ALLOWED",
+    "INSUFFICIENT_SCOPE",
+    "NOT_FOUND",
+    "SETUP_REQUIRED",
+    "SETUP_COMPLETED",
+    "METHOD_NOT_ALLOWED",
+    "VERSION_CONFLICT",
+    "CONFLICT",
+    "READ_ONLY_EVENT",
+    "IDEMPOTENCY_KEY_REUSE",
+    "IDEMPOTENCY_IN_PROGRESS",
+    "RATE_LIMITED",
+    "LOCKED_OUT",
+    "INVALID_CREDENTIALS",
+    "INTERNAL_ERROR",
+    "SERVICE_UNAVAILABLE",
   ])
   .openapi("ErrorCode");
+export type ErrorCodeT = z.infer<typeof ErrorCode>;
 
-export const Problem = z
-  .object({
-    type: z.string().openapi({ example: "https://agenda.lemydev.com/problems/version_conflict" }),
-    title: z.string(),
-    status: z.int(),
-    detail: z.string().optional(),
-    code: ErrorCode.optional(),
-    errors: z
-      .array(z.object({ path: z.string(), message: z.string() }))
-      .optional()
-      .openapi({ description: "Field-level validation errors (JSON-pointer-like paths)." }),
-    requestId: z.string(),
-    current: z
-      .unknown()
-      .optional()
-      .openapi({
+/**
+ * Every error response: `{ "error": { "code", "message", "details"?, "requestId" } }`. `message` is a plain
+ * Spanish sentence written for both the UI and an LLM caller (it says what to do next).
+ */
+export const ErrorBody = z
+  .strictObject({
+    error: z.strictObject({
+      code: ErrorCode,
+      message: z.string(),
+      details: z.record(z.string(), z.unknown()).optional().openapi({
         description:
-          "On `version_conflict` / `user_edit_conflict` / `calendar_owned`: the current server state of the resource.",
+          "Extra data by code: `fields` (VALIDATION_ERROR: [{ path, message }]), `retryAfterSeconds` (RATE_LIMITED, LOCKED_OUT), `remainingAttempts` (INVALID_CREDENTIALS), `current` (VERSION_CONFLICT: the server's copy), `requiredScope` (INSUFFICIENT_SCOPE).",
       }),
-    retryAfterSeconds: z.int().optional().openapi({ description: "On `rate_limited` / `locked_out`." }),
-    remainingAttempts: z.int().optional().openapi({ description: "On `invalid_credentials` (PIN / codes)." }),
+      requestId: z.string(),
+    }),
   })
-  .openapi("Problem", { description: "RFC 9457 problem details (`application/problem+json`)." });
+  .openapi("Error");
 
-export type ProblemBody = z.infer<typeof Problem>;
+export type ErrorBodyT = z.infer<typeof ErrorBody>;

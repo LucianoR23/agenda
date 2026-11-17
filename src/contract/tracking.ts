@@ -1,17 +1,28 @@
-import { Actor, BlockTime, ExpectedVersion, LocalDate, LocalTime, Mutable, orNull, Timestamp, Uuid } from "./common";
-import { BlockType, CallKind, CallOutcome, HabitLog, Review, Task, TaskKind, WeeklyGym } from "./planning";
-import { SleepLog } from "./sleep";
+import { ExpectedVersion, ItemSource, LocalDate, Mutable, orNull, Timestamp, Uuid } from "./common";
+import { Task } from "./tasks";
 import { z } from "./zod";
 
 // ---------- habits ----------
 
-export const HabitKind = z.enum(["boolean", "numeric"]).openapi("HabitKind");
-export const HabitPeriod = z.enum(["day", "week"]).openapi("HabitPeriod");
+export const HabitKind = z.enum(["boolean", "numeric"]).openapi("HabitKind", {
+  description: "`boolean`: done or not. `numeric`: a value counts towards the target (pages, km).",
+});
+export const HabitPeriod = z.enum(["day", "week"]).openapi("HabitPeriod", { description: "Weeks are Monday–Sunday." });
+
 const Slug = z
   .string()
-  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "lowercase letters, digits and dashes")
   .max(40)
-  .openapi({ description: "Stable key the agent uses, e.g. `gym`.", example: "gym" });
+  .openapi({ description: "Stable key, usable instead of the id in paths (`/api/habits/gym/log`).", example: "gym" });
+
+const TaskTag = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(40)
+  .regex(/^[^\s#+]+$/, "A tag without spaces, # or +")
+  .openapi({ description: "Completing a task tagged with this (`+gym`) checks the habit that day. Yes/no habits only.", example: "gym" });
 
 export const Habit = z
   .strictObject({
@@ -22,297 +33,234 @@ export const Habit = z
     unit: z.string().nullable(),
     targetCount: z.int(),
     targetPeriod: HabitPeriod,
-    blockType: orNull(BlockType).openapi({
-      description: "Marking a block of this type done logs this habit for that date.",
-    }),
-    active: z.boolean(),
-    order: z.int(),
+    taskTag: z.string().nullable(),
+    active: z.boolean().openapi({ description: "Archived habits keep their history but leave Hoy." }),
+    sortOrder: z.int(),
     ...Mutable,
   })
   .openapi("Habit");
 
+export const HabitLog = z
+  .strictObject({
+    id: Uuid,
+    habitId: Uuid,
+    date: LocalDate,
+    done: z.boolean(),
+    value: z.number().nullable(),
+    source: ItemSource.openapi({ description: "`system` when a tagged task checked it." }),
+    ...Mutable,
+  })
+  .openapi("HabitLog");
+
 export const HabitProgress = z
   .strictObject({
     ...Habit.shape,
-    streak: z
-      .strictObject({ current: z.int(), best: z.int(), unit: HabitPeriod })
-      .openapi({ description: "Consecutive days (daily habits) or ISO weeks Mon–Sun (weekly habits) meeting the target. The current period does not break the streak until it ends." }),
+    streak: z.strictObject({ current: z.int(), best: z.int(), unit: HabitPeriod }).openapi({
+      description: "Consecutive days (daily) or weeks (weekly) meeting the target. The running period doesn't break it until it ends.",
+    }),
     period: z.strictObject({
       start: LocalDate,
       end: LocalDate,
-      count: z.number().openapi({ description: "Days done in the period (boolean) or sum of values (numeric)." }),
+      count: z.number().openapi({ description: "Days done (yes/no) or sum of values (numeric) in the period." }),
       target: z.int(),
       met: z.boolean(),
     }),
-    today: orNull(HabitLog),
+    log: orNull(HabitLog).openapi({ description: "The log of the requested date (default today)." }),
   })
   .openapi("HabitProgress");
 
 export const HabitCreate = z
   .strictObject({
-    slug: Slug,
-    name: z.string().min(1).max(100),
-    kind: HabitKind,
-    unit: z.string().max(20).nullable().optional(),
-    targetCount: z.int().min(1).max(10000),
-    targetPeriod: HabitPeriod,
-    blockType: orNull(BlockType).optional(),
-    active: z.boolean().optional(),
-    order: z.int().min(0).optional(),
+    slug: Slug.optional().openapi({ description: "Default: from the name." }),
+    name: z.string().trim().min(1).max(100),
+    kind: HabitKind.optional().openapi({ description: "Default `boolean`." }),
+    unit: z.string().trim().max(20).nullable().optional(),
+    targetCount: z.int().min(1).max(10_000).optional().openapi({ description: "Default 1." }),
+    targetPeriod: HabitPeriod.optional().openapi({ description: "Default `day`." }),
+    taskTag: TaskTag.nullable().optional(),
   })
   .refine((h) => !h.unit || h.kind === "numeric", { path: ["unit"], message: "Only numeric habits have a unit" })
+  .refine((h) => !h.taskTag || (h.kind ?? "boolean") === "boolean", { path: ["taskTag"], message: "Only yes/no habits follow a task tag" })
   .openapi("HabitCreate");
 
 export const HabitPatch = z
   .strictObject({
-    name: z.string().min(1).max(100).optional(),
-    unit: z.string().max(20).nullable().optional(),
-    targetCount: z.int().min(1).max(10000).optional(),
+    name: z.string().trim().min(1).max(100).optional(),
+    unit: z.string().trim().max(20).nullable().optional(),
+    targetCount: z.int().min(1).max(10_000).optional(),
     targetPeriod: HabitPeriod.optional(),
-    blockType: orNull(BlockType).optional(),
+    taskTag: TaskTag.nullable().optional(),
     active: z.boolean().optional(),
-    order: z.int().min(0).optional(),
+    sortOrder: z.int().min(0).optional(),
     version: ExpectedVersion,
   })
-  .refine((b) => Object.keys(b).some((k) => k !== "version"), "At least one field to change is required")
-  .openapi("HabitPatch", { description: "`slug` and `kind` are immutable." });
+  .openapi("HabitPatch", { description: "`slug` and `kind` don't change." });
 
-export const HabitLogUpsert = z
+export const HabitLogInput = z
   .strictObject({
-    date: LocalDate,
-    done: z.boolean(),
-    value: z.number().min(0).max(1_000_000).nullable().optional().openapi({ description: "Numeric habits only." }),
-    version: ExpectedVersion,
+    date: LocalDate.optional().openapi({ description: "Default today (user's timezone)." }),
+    done: z.boolean().optional().openapi({ description: "Yes/no habits: check (true) or uncheck (false). Default true." }),
+    value: z
+      .number()
+      .min(0)
+      .max(1_000_000)
+      .nullable()
+      .optional()
+      .openapi({ description: "Numeric habits: the day's value (0 or null clears it)." }),
   })
-  .openapi("HabitLogUpsert", {
-    description: "Upsert by (habit, date). The agent may write only when no log exists or the existing one is its own.",
+  .openapi("HabitLogInput");
+
+export const HabitQuery = z
+  .strictObject({
+    date: LocalDate.optional().openapi({ description: "The day to report (default today)." }),
+    includeArchived: z.enum(["true", "false"]).optional(),
+  })
+  .openapi("HabitQuery");
+
+export const RangeQuery = z.strictObject({ from: LocalDate, to: LocalDate }).openapi("RangeQuery");
+
+// ---------- sleep ----------
+
+export const SleepLog = z
+  .strictObject({
+    id: Uuid,
+    date: LocalDate.openapi({ description: "The **wake-up** date: bed Wed 23:30 → up Thu 07:10 is Thursday." }),
+    bedAt: orNull(Timestamp),
+    wakeAt: orNull(Timestamp),
+    durationMinutes: z.int().nullable(),
+    quality: z.int().min(1).max(5).nullable(),
+    notes: z.string().nullable(),
+    source: ItemSource,
+    ...Mutable,
+  })
+  .openapi("SleepLog");
+
+export const SleepEvent = z
+  .strictObject({
+    type: z.enum(["bed", "wake"]).openapi({ description: '`bed` = "Me voy a dormir", `wake` = "Me levanté".' }),
+    at: Timestamp.optional().openapi({ description: 'Default now. Back-date: "me dormí a las 00:20".' }),
+  })
+  .openapi("SleepEvent", {
+    description: "The night is resolved from the time: going to bed from noon on counts for the next day's row; waking up, for that day's.",
   });
 
-// ---------- tasks ----------
-
-export const TaskCreate = z
+export const SleepUpsert = z
   .strictObject({
-    id: Uuid.optional().openapi({ description: "Client-generated UUIDv7 (offline creates)." }),
-    date: LocalDate,
-    title: z.string().min(1).max(500),
-    kind: TaskKind.optional(),
-    relatedBlockId: orNull(Uuid).optional(),
-    order: z.int().min(0).optional(),
-  })
-  .openapi("TaskCreate");
-
-export const TaskPatch = z
-  .strictObject({
-    title: z.string().min(1).max(500).optional(),
-    kind: TaskKind.optional(),
-    done: z.boolean().optional(),
-    relatedBlockId: orNull(Uuid).optional(),
-    order: z.int().min(0).optional(),
-    date: LocalDate.optional().openapi({ description: "Move the task to another day." }),
+    bedAt: orNull(Timestamp).optional(),
+    wakeAt: orNull(Timestamp).optional(),
+    quality: z.int().min(1).max(5).nullable().optional(),
+    notes: z.string().max(1000).nullable().optional(),
     version: ExpectedVersion,
   })
-  .refine((b) => Object.keys(b).some((k) => k !== "version"), "At least one field to change is required")
-  .openapi("TaskPatch", {
-    description: "The agent cannot edit or delete my tasks (origin=user) except marking them done while not done.",
-  });
+  .openapi("SleepUpsert", { description: "Load or correct a night by hand. Not in the future; wake after bed; under 20 h." });
 
-// ---------- metrics ----------
+// ---------- day review ----------
+
+export const DayReview = z
+  .strictObject({
+    date: LocalDate,
+    mood: z.int().min(1).max(5).nullable(),
+    note: z.string().nullable(),
+    highlights: z.array(z.string()),
+    movedTaskIds: z.array(Uuid),
+    version: z.int(),
+    createdAt: Timestamp,
+    updatedAt: Timestamp,
+    updatedBy: ItemSource,
+  })
+  .openapi("DayReview");
+
+export const ReviewMove = z
+  .strictObject({
+    taskId: Uuid,
+    to: z.enum(["tomorrow", "inbox", "drop"]).openapi({
+      description:
+        "`tomorrow`: due the next day (keeps the time). `inbox`: no date, to the Inbox. `drop`: cancelled (a recurring one moves on to its next occurrence).",
+    }),
+  })
+  .openapi("ReviewMove");
+
+export const DayReviewInput = z
+  .strictObject({
+    mood: z.int().min(1).max(5).nullable().optional(),
+    note: z.string().max(5000).nullable().optional(),
+    highlights: z.array(z.string().trim().min(1).max(200)).max(3).optional(),
+    moves: z
+      .array(ReviewMove)
+      .max(200)
+      .optional()
+      .openapi({ description: "Pending tasks to sort out; applied once, recorded in movedTaskIds." }),
+    version: ExpectedVersion,
+  })
+  .openapi("DayReviewInput");
+
+export const DaySummary = z
+  .strictObject({
+    date: LocalDate,
+    tasks: z.strictObject({
+      done: z.array(Task).openapi({ description: "Completed that day." }),
+      pending: z.array(Task).openapi({ description: "Open and due that day." }),
+      overdue: z.array(Task).openapi({ description: "Open and due before that day." }),
+    }),
+    habits: z.array(HabitProgress),
+    sleep: orNull(SleepLog).openapi({ description: "The night that ended that morning." }),
+    review: orNull(DayReview),
+  })
+  .openapi("DaySummary");
+
+// ---------- history & metrics ----------
+
+export const HistoryDay = z
+  .strictObject({
+    date: LocalDate,
+    tasksDone: z.int(),
+    habitsMet: z.int(),
+    habitsTotal: z.int().openapi({ description: "Active daily habits that day." }),
+    sleepMinutes: z.int().nullable(),
+    mood: z.int().nullable(),
+    reviewed: z.boolean(),
+  })
+  .openapi("HistoryDay");
+
+export const History = z
+  .strictObject({ month: z.string(), days: z.array(HistoryDay) })
+  .openapi("History", { description: "Every day of the month up to today." });
 
 const Rate = z.number().min(0).max(1).nullable();
-
-const n = z.int();
-const CallStats = z
-  .strictObject({
-    total: n,
-    outcomes: z.strictObject({ closed_won: n, follow_up: n, lost: n, qualified: n, not_qualified: n, no_show: n, rescheduled: n, unset: n }),
-    showUpRate: Rate.openapi({ description: "(calls with outcome − no_show − rescheduled) / (calls with outcome − rescheduled)." }),
-    closeRate: Rate.openapi({ description: "Closer: closed_won / (showed up − not_qualified). Null for triage." }),
-    qualifyRate: Rate.openapi({ description: "Triage: qualified / showed up. Null for closer." }),
-  })
-  .openapi("CallStats");
 
 export const Metrics = z
   .strictObject({
     range: z.enum(["week", "month", "year"]),
     from: LocalDate,
     to: LocalDate,
-    gym: z.strictObject({
-      habitSlug: z.string().nullable(),
-      weeks: z.array(z.strictObject({ weekStart: LocalDate, count: z.int(), target: z.int().nullable() })),
-      total: z.int(),
-    }),
-    reading: z.strictObject({ habitSlug: z.string().nullable(), days: z.int(), totalDays: z.int() }),
-    blocks: z.strictObject({
-      total: z.int(),
+    tasks: z.strictObject({
       done: z.int(),
-      skipped: z.int(),
-      pending: z.int(),
-      doneRate: Rate,
-      byType: z.array(
-        z.strictObject({ type: BlockType, total: z.int(), done: z.int(), skipped: z.int(), doneRate: Rate }),
-      ),
+      created: z.int(),
+      onTime: z.int().openapi({ description: "Done on or before their due date." }),
+      withDue: z.int().openapi({ description: "Done tasks that had a due date." }),
+      onTimeRate: Rate,
+      buckets: z.array(z.strictObject({ start: LocalDate, label: z.string(), done: z.int() })).openapi({
+        description: "Per day (week, month) or per month (year).",
+      }),
     }),
-    calls: z.strictObject({
-      total: z.int(),
-      perDay: z.array(z.strictObject({ date: LocalDate, count: z.int() })),
-      outcomes: CallStats.shape.outcomes,
-      showUpRate: Rate.openapi({ description: "All calls: (with outcome − no_show − rescheduled) / (with outcome − rescheduled)." }),
-      closeRate: Rate.openapi({ description: "Calls that are not triage: closed_won / (showed up − not_qualified)." }),
-      closer: CallStats,
-      triage: CallStats,
-      unspecified: CallStats.openapi({ description: "Calls without `callKind` (older days)." }),
-    }),
+    habits: z.array(z.strictObject({ id: Uuid, name: z.string(), targetPeriod: HabitPeriod, met: z.int(), total: z.int(), rate: Rate })),
     sleep: z.strictObject({
-      nightsLogged: z.int().openapi({ description: "Nights with both bed and wake times." }),
-      nightsTotal: z.int(),
-      avgDurationMinutes: z.int().nullable(),
-      avgBedtime: orNull(BlockTime).openapi({ description: "Average bedtime, `24:xx` when after midnight." }),
-      avgWakeTime: orNull(LocalTime),
-      avgBedDelayMinutes: z.int().nullable().openapi({ description: "Average bedtime vs planned `sleep` block start." }),
-      nights: z.array(
-        z.strictObject({ date: LocalDate, durationMinutes: z.int().nullable(), bedDelayMinutes: z.int().nullable() }),
-      ),
+      nights: z.int(),
+      avgMinutes: z.int().nullable(),
+      avgBedTime: z.string().nullable().openapi({ description: "`HH:mm`." }),
+      avgWakeTime: z.string().nullable(),
+      avgQuality: z.number().nullable(),
     }),
-    habits: z.array(
-      z.strictObject({
-        slug: z.string(),
-        name: z.string(),
-        currentStreak: z.int(),
-        bestStreak: z.int(),
-        periodsMet: z.int(),
-        periodsTotal: z.int(),
-      }),
-    ),
+    mood: z.strictObject({ days: z.int(), avg: z.number().nullable() }),
+    sources: z
+      .strictObject({ user: z.int(), sunday: z.int() })
+      .openapi({ description: "Tasks, reminders and events created in the range, by who created them." }),
   })
-  .openapi("Metrics", {
-    description:
-      "Computed over closed + current days of the chosen option (option A if never chosen). Gym and reading come from the habits linked to block types `gym` / `reading`.",
-  });
+  .openapi("Metrics");
 
-// ---------- agent context ----------
-
-export const AgentContext = z
+export const MetricsQuery = z
   .strictObject({
-    date: LocalDate,
-    weekStart: LocalDate,
-    weeklyGym: orNull(z.strictObject({ ...WeeklyGym.shape, source: z.enum(["habit", "agent_report"]) })),
-    habitsPendingToday: z.array(
-      z.strictObject({
-        slug: z.string(),
-        name: z.string(),
-        kind: HabitKind,
-        periodCount: z.number(),
-        periodTarget: z.int(),
-        targetPeriod: HabitPeriod,
-      }),
-    ),
-    streaksAtRisk: z.array(
-      z.strictObject({
-        slug: z.string(),
-        name: z.string(),
-        currentStreak: z.int(),
-        reason: z.enum(["not_done_today", "week_target_unreachable_soon"]),
-        remainingInPeriod: z.number().openapi({ description: "Sessions/units still needed in the current period." }),
-      }),
-    ),
-    yesterday: z
-      .strictObject({
-        date: LocalDate,
-        status: z.enum(["draft", "chosen", "edited", "closed"]),
-        completion: Rate,
-        blocksDone: z.int(),
-        blocksTotal: z.int(),
-        unfinishedTasks: z.array(Task),
-      })
-      .nullable(),
-    lastReview: orNull(z.strictObject({ date: LocalDate, ...Review.shape })),
-    lastNightSleep: orNull(SleepLog).openapi({ description: "Night before `date` (may be incomplete)." }),
-    skippedPatterns: z
-      .array(
-        z.strictObject({
-          type: BlockType,
-          hour: LocalTime.openapi({ description: "Start hour bucket, e.g. `07:00` = 07:00–07:59." }),
-          skipped: z.int(),
-          total: z.int(),
-        }),
-      )
-      .openapi({
-        description:
-          "Agent blocks of the same type and start hour skipped ≥ 3 times and in ≥ 50 % of occurrences over the last 14 days.",
-      }),
-    pendingProposal: z.strictObject({ id: Uuid, createdAt: Timestamp }).nullable(),
+    range: z.enum(["week", "month", "year"]).optional().openapi({ description: "Default `week`." }),
+    date: LocalDate.optional().openapi({ description: "Any day inside the period (default today)." }),
   })
-  .openapi("AgentContext", { description: "Compact planning context for the agent's 07:00 run." });
-
-// ---------- changelog ----------
-
-export const ChangeAction = z
-  .enum(["create", "update", "delete", "replace", "choose", "close", "propose", "accept", "reject", "shift"])
-  .openapi("ChangeAction");
-
-export const ChangeLogEntry = z
-  .strictObject({
-    id: Uuid,
-    actor: Actor,
-    entity: z.string(),
-    entityId: orNull(Uuid),
-    date: orNull(LocalDate),
-    action: ChangeAction,
-    diff: z.unknown(),
-    forced: z.boolean(),
-    requestId: z.string(),
-    at: Timestamp,
-  })
-  .openapi("ChangeLogEntry");
-
-// ---------- webhook to Agenbot ----------
-
-export const WebhookChange = z
-  .strictObject({
-    entity: z.enum(["day", "block", "task", "habit_log", "proposal", "sleep_log"]),
-    id: Uuid,
-    action: ChangeAction,
-    fields: z.record(z.string(), z.strictObject({ from: z.unknown(), to: z.unknown() })).optional(),
-    block: z
-      .strictObject({
-        title: z.string(),
-        type: BlockType,
-        start: BlockTime,
-        externalId: z.string().nullable(),
-        outcome: orNull(CallOutcome).optional(),
-        callKind: orNull(CallKind).optional().openapi({ description: "On calls: `closer` | `triage`." }),
-      })
-      .optional(),
-    task: z.strictObject({ title: z.string(), kind: TaskKind }).optional(),
-    habit: z.strictObject({ slug: z.string(), name: z.string() }).optional(),
-    shift: z
-      .strictObject({
-        fromTime: BlockTime,
-        minutes: z.int(),
-        blocks: z.array(z.strictObject({ id: Uuid, title: z.string(), from: BlockTime, to: BlockTime })),
-      })
-      .optional()
-      .openapi({ description: "On `action: shift` (\"Me atrasé\")." }),
-    sleep: z
-      .strictObject({ night: LocalDate, bedAt: orNull(Timestamp), wokeAt: orNull(Timestamp) })
-      .optional(),
-    adjustmentIds: z.array(Uuid).optional().openapi({ description: "On proposal `accept` / `reject`: the \"Pedir ajuste\" requests it answered." }),
-    at: Timestamp,
-  })
-  .openapi("WebhookChange");
-
-export const WebhookPayload = z
-  .strictObject({
-    event: z.literal("day.updated_by_user"),
-    batchId: Uuid,
-    date: LocalDate,
-    dayVersion: z.int(),
-    changes: z.array(WebhookChange).min(1),
-    summary: z.strictObject({
-      blocksDone: z.int(),
-      blocksTotal: z.int(),
-      weeklyGym: orNull(WeeklyGym),
-    }),
-    dayUrl: z.url(),
-  })
-  .openapi("WebhookPayload");
+  .openapi("MetricsQuery");

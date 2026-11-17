@@ -1,7 +1,4 @@
-import { TasksScreen } from "@/ui/screens/tasks";
-
-/** Rendered only after the client gate (auth + offline cache). */
-export const instant = false;
+import { TasksScreen } from "@/ui/screens/task-screens";
 
 export default function Page() {
   return <TasksScreen />;

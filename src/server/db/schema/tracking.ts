@@ -1,56 +1,39 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  check,
-  date,
-  index,
-  integer,
-  numeric,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  unique,
-  uuid,
-} from "drizzle-orm/pg-core";
-import { id, mutable } from "./common";
-import { block, blockTypeEnum } from "./planning";
+import { boolean, check, date, index, integer, numeric, pgEnum, pgTable, smallint, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { at, createdAt, id, itemSourceEnum, syncable, updatedAt } from "./common";
 
 export const habitKindEnum = pgEnum("habit_kind", ["boolean", "numeric"]);
 export const habitPeriodEnum = pgEnum("habit_period", ["day", "week"]);
-export const habitLogSourceEnum = pgEnum("habit_log_source", ["agent", "user"]);
-export const taskKindEnum = pgEnum("task_kind", [
-  "whatsapp_confirm",
-  "lead_context",
-  "follow_up",
-  "other",
-]);
-export const taskOriginEnum = pgEnum("task_origin", ["agent", "user"]);
 
+/** A target to keep ("Gym 3 per week", "Read 20 pages a day"). Streaks are computed in domain code. */
 export const habit = pgTable(
   "habit",
   {
     id: id(),
-    // stable machine key so the agent can address habits ("gym", "reading")
-    slug: text().notNull().unique("habit_slug_uq"),
+    /** Stable key Sunday can address ("gym", "reading"). */
+    slug: text().notNull(),
     name: text().notNull(),
     kind: habitKindEnum().notNull(),
     unit: text(),
     targetCount: integer().notNull(),
     targetPeriod: habitPeriodEnum().notNull(),
-    // optional link: marking a block of this type done logs the habit for that date
-    blockType: blockTypeEnum(),
     active: boolean().notNull().default(true),
-    order: integer().notNull().default(0),
-    ...mutable(),
+    sortOrder: integer().notNull().default(0),
+    /** Completing a task tagged with this (`+gym`) checks the habit that day. Yes/no habits only. */
+    taskTag: text(),
+    ...syncable(),
   },
   (t) => [
+    uniqueIndex("habit_active_slug_uq").on(t.slug).where(sql`${t.deletedAt} IS NULL`),
+    uniqueIndex("habit_task_tag_uq").on(t.taskTag).where(sql`${t.deletedAt} IS NULL AND ${t.taskTag} IS NOT NULL`),
+    check("habit_task_tag_boolean", sql`${t.taskTag} IS NULL OR ${t.kind} = 'boolean'`),
     check("habit_slug_format", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
     check("habit_target_positive", sql`${t.targetCount} > 0`),
     check("habit_unit_only_numeric", sql`${t.unit} IS NULL OR ${t.kind} = 'numeric'`),
   ],
 );
 
+/** One check-in per habit and local date (among live rows: a soft-deleted check-in can be redone). */
 export const habitLog = pgTable(
   "habit_log",
   {
@@ -61,59 +44,57 @@ export const habitLog = pgTable(
     date: date({ mode: "string" }).notNull(),
     done: boolean().notNull(),
     value: numeric({ precision: 12, scale: 2, mode: "number" }),
-    source: habitLogSourceEnum().notNull(),
-    ...mutable(),
+    source: itemSourceEnum().notNull(),
+    ...syncable(),
   },
   (t) => [
-    unique("habit_log_habit_date_uq").on(t.habitId, t.date),
+    uniqueIndex("habit_log_habit_date_uq").on(t.habitId, t.date).where(sql`${t.deletedAt} IS NULL`),
     index("habit_log_date_idx").on(t.date),
-  ],
-);
-
-export const task = pgTable(
-  "task",
-  {
-    id: id(),
-    date: date({ mode: "string" }).notNull(),
-    title: text().notNull(),
-    kind: taskKindEnum().notNull().default("other"),
-    origin: taskOriginEnum().notNull(),
-    done: boolean().notNull().default(false),
-    doneAt: timestamp({ withTimezone: true }),
-    relatedBlockId: uuid().references(() => block.id, { onDelete: "set null" }),
-    order: integer().notNull().default(0),
-    ...mutable(),
-  },
-  (t) => [
-    index("task_date_order_idx").on(t.date, t.order),
-    check("task_done_at_consistent", sql`${t.done} = (${t.doneAt} IS NOT NULL)`),
+    index("habit_log_updated_idx").on(t.updatedAt),
   ],
 );
 
 /**
- * Actual sleep for the night that starts on `date` (bedtime on `date` evening or after midnight,
- * wake-up the next morning). Each half has its own source so ownership works per field:
- * the agent may only fill a half that is still empty.
+ * One night of sleep, keyed by the **wake-up date** (bed Wed 23:30 → up Thu 07:10 is Thursday's row), so "how did
+ * I sleep" on Hoy, metrics, habits and the day review all look at the same date. Going to bed after noon counts
+ * for the next day's row.
  */
 export const sleepLog = pgTable(
   "sleep_log",
   {
     id: id(),
-    date: date({ mode: "string" }).notNull().unique("sleep_log_date_uq"),
-    bedAt: timestamp({ withTimezone: true }),
-    bedSource: habitLogSourceEnum(),
-    wokeAt: timestamp({ withTimezone: true }),
-    wakeSource: habitLogSourceEnum(),
-    note: text(),
-    ...mutable(),
+    date: date({ mode: "string" }).notNull(),
+    bedAt: at(),
+    wakeAt: at(),
+    quality: smallint(),
+    notes: text(),
+    source: itemSourceEnum().notNull(),
+    ...syncable(),
   },
   (t) => [
-    check("sleep_log_bed_source", sql`(${t.bedAt} IS NULL) = (${t.bedSource} IS NULL)`),
-    check("sleep_log_wake_source", sql`(${t.wokeAt} IS NULL) = (${t.wakeSource} IS NULL)`),
+    uniqueIndex("sleep_log_date_uq").on(t.date).where(sql`${t.deletedAt} IS NULL`),
+    index("sleep_log_updated_idx").on(t.updatedAt),
+    check("sleep_log_quality_range", sql`${t.quality} IS NULL OR ${t.quality} BETWEEN 1 AND 5`),
     check(
       "sleep_log_order",
-      sql`${t.bedAt} IS NULL OR ${t.wokeAt} IS NULL
-        OR (${t.wokeAt} > ${t.bedAt} AND ${t.wokeAt} - ${t.bedAt} < interval '20 hours')`,
+      sql`${t.bedAt} IS NULL OR ${t.wakeAt} IS NULL OR (${t.wakeAt} > ${t.bedAt} AND ${t.wakeAt} - ${t.bedAt} < interval '20 hours')`,
     ),
   ],
+);
+
+/** "Cierre del día": one per local date. Versioned for offline conflicts; not soft-deletable (the date is the key). */
+export const dayReview = pgTable(
+  "day_review",
+  {
+    date: date({ mode: "string" }).primaryKey(),
+    mood: smallint(),
+    note: text(),
+    highlights: text().array().notNull().default(sql`'{}'::text[]`),
+    movedTaskIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
+    version: integer().notNull().default(1),
+    updatedBy: itemSourceEnum().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check("day_review_mood_range", sql`${t.mood} IS NULL OR ${t.mood} BETWEEN 1 AND 5`)],
 );

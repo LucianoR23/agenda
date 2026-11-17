@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { createContext, type ReactNode, type RefObject, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, type ReactNode, type RefObject, useContext, useEffect, useRef, useState } from "react";
 import type { IconName } from "../icons";
 import { Toast } from "./feedback";
 
@@ -22,23 +22,35 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
   useEffect(() => {
     const el = sheet.current;
     if (!open || !el) return;
-    let x0 = 0, y0 = 0, dy = 0, lastY = 0, lastT = 0, speed = 0;
+    let x0 = 0,
+      y0 = 0,
+      dy = 0,
+      lastY = 0,
+      lastT = 0,
+      speed = 0;
     let mode: "pending" | "drag" | "scroll" = "scroll";
     const move = (y: number, animated = false) => {
       el.style.transition = animated ? "translate 200ms cubic-bezier(.2,.8,.2,1)" : "none";
       el.style.setProperty("translate", y ? `0 ${y}px` : "");
     };
     const start = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return void (mode = "scroll");
-      x0 = e.touches[0].clientX;
-      y0 = lastY = e.touches[0].clientY;
+      if (e.touches.length !== 1) {
+        mode = "scroll";
+        return;
+      }
+      const t = e.touches[0];
+      if (!t) return;
+      x0 = t.clientX;
+      y0 = lastY = t.clientY;
       lastT = e.timeStamp;
       dy = speed = 0;
       mode = "pending";
     };
     const touchMove = (e: TouchEvent) => {
       if (mode === "scroll") return;
-      const { clientX: x, clientY: y } = e.touches[0];
+      const t = e.touches[0];
+      if (!t) return;
+      const { clientX: x, clientY: y } = t;
       if (mode === "pending") {
         if (Math.abs(y - y0) < 8 && Math.abs(x - x0) < 8) return;
         // down, mostly vertical, content at the top → drag the sheet; anything else is a normal scroll
@@ -54,7 +66,10 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
       move(dy);
     };
     const end = () => {
-      if (mode !== "drag") return void (mode = "scroll");
+      if (mode !== "drag") {
+        mode = "scroll";
+        return;
+      }
       mode = "scroll";
       if (dy > 120 || speed > 0.6) onClose();
       else move(0, true);
@@ -73,7 +88,17 @@ function useSwipeToClose(sheet: RefObject<HTMLDivElement | null>, open: boolean,
 }
 
 /** Modal bottom sheet: scrim, slide up (280 ms), swipe down (anywhere on touch, the handle with a mouse) or tap outside to close. */
-export function BottomSheet({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+export function BottomSheet({
+  open,
+  onClose,
+  label,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  label: string;
+  children: ReactNode;
+}) {
   const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -91,7 +116,14 @@ export function BottomSheet({ open, onClose, label, children }: { open: boolean;
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end">
-          <motion.div className="absolute inset-0 touch-none bg-[var(--scrim)]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={onClose} />
+          <motion.div
+            className="absolute inset-0 touch-none bg-[var(--scrim)]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+          />
           <motion.div
             ref={sheet}
             role="dialog"
@@ -147,19 +179,26 @@ export const useToast = () => useContext(ToastCtx);
 export function ToastHost({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
-  const show = useCallback((t: Omit<ToastItem, "id">) => {
+  const show = (t: Omit<ToastItem, "id">) => {
     const id = ++seq.current;
     setItems([{ ...t, id }]); // one at a time, as in the design
     setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4500);
-  }, []);
+  };
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      {/* below sheets (z-40), above the tab bar (z-30) */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(88px+env(safe-area-inset-bottom))] z-[35] mx-auto flex max-w-[560px] flex-col gap-2 px-4 md:bottom-6">
+      {/* below sheets (z-40), above the tab bar (z-30) and the + button */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(160px+env(safe-area-inset-bottom))] z-[35] mx-auto flex max-w-[560px] flex-col gap-2 px-4 md:bottom-6">
         <AnimatePresence>
           {items.map((t) => (
-            <motion.div key={t.id} className="pointer-events-auto" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={{ duration: 0.2, ease: EASE }}>
+            <motion.div
+              key={t.id}
+              className="pointer-events-auto"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.2, ease: EASE }}
+            >
               <Toast
                 icon={t.icon}
                 message={t.message}

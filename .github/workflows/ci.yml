@@ -2,95 +2,103 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm lint
+      - name: Biome (lint + format)
+        run: pnpm check
+      - name: Dependency audit
+        run: pnpm audit
       - name: Schema ↔ migrations in sync
         run: pnpm db:check
-      - name: Contract drift (examples valid, openapi.yaml + docs/api-examples.md up to date)
+      - name: Contract drift (examples valid, openapi.yaml up to date)
         run: pnpm openapi:check
       - run: pnpm openapi:lint
       - name: Icon sprite up to date
         run: pnpm icons:check
+      - name: Production build
+        run: pnpm build
 
   test:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18-alpine
+        image: pgvector/pgvector:pg18-trixie
         env:
           POSTGRES_USER: agenda
           POSTGRES_PASSWORD: agenda
           POSTGRES_DB: agenda_test
-        ports: ["5434:5432"]
+        ports: ["5433:5432"]
         options: >-
-          --health-cmd "pg_isready -U agenda" --health-interval 2s --health-retries 20
+          --health-cmd "pg_isready -U agenda -d agenda_test" --health-interval 2s --health-retries 20
     env:
-      TEST_DATABASE_URL: postgres://agenda:agenda@localhost:5434/agenda_test
+      TEST_DATABASE_URL: postgres://agenda:agenda@localhost:5433/agenda_test
       TZ: America/Buenos_Aires
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Unit + API integration + contract tests (real Postgres 18)
+      - name: Unit + integration + contract tests (real Postgres 18)
         run: pnpm test:coverage
 
   e2e:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18-alpine
+        image: pgvector/pgvector:pg18-trixie
         env:
           POSTGRES_USER: agenda
           POSTGRES_PASSWORD: agenda
           POSTGRES_DB: agenda_test
-        ports: ["5434:5432"]
+        ports: ["5433:5432"]
         options: >-
-          --health-cmd "pg_isready -U agenda" --health-interval 2s --health-retries 20
+          --health-cmd "pg_isready -U agenda -d agenda_test" --health-interval 2s --health-retries 20
     env:
       TZ: America/Buenos_Aires
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Mobile E2E (production build, Android viewport)
+      - name: Mobile E2E (production standalone build, Android viewport)
         run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: screenshots
-          path: docs/screenshots
+          name: e2e-results
+          path: test-results
 
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
       - name: Build the production image for linux/arm64 (Oracle Ampere)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/arm64
@@ -98,4 +106,3 @@ jobs:
           build-args: APP_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-

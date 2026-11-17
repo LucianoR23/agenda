@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { hash as argonHash, verify as argonVerify } from "@node-rs/argon2";
+import { env } from "../env";
 
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -11,9 +12,13 @@ export function safeEqual(a: string, b: string) {
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
 
+/** Constant-time comparison that also hides the length (both sides are hashed first). */
+export const digestEqual = (a: string, b: string) =>
+  timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
+
 /** Argon2id with OWASP-recommended parameters (19 MiB, t=2, p=1). Tests lower the memory via ARGON2_MEMORY_KIB. */
 export const hashSecret = (secret: string) =>
-  argonHash(secret, { memoryCost: Number(process.env.ARGON2_MEMORY_KIB ?? 19_456), timeCost: 2, parallelism: 1, algorithm: 2 });
+  argonHash(secret, { memoryCost: env().ARGON2_MEMORY_KIB, timeCost: 2, parallelism: 1, algorithm: 2 });
 export const verifySecret = (hash: string, secret: string) => argonVerify(hash, secret).catch(() => false);
 
 /** Compact signed value `payload.signature` (HMAC-SHA256, base64url), for short-lived cookies. */

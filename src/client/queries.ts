@@ -1,15 +1,32 @@
 "use client";
 
-import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { uuidv7 } from "uuidv7";
-import { api, ApiProblem, get } from "./api";
+import { QueryClient, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiProblem, api, get } from "./api";
 import { idb } from "./db";
-import { enqueue, markSynced, reapplyPending, setOnline, withPending } from "./sync";
-import type { Adjustment, Day, DaySummary, Device, HabitProgress, Metrics, SessionState, Task, WebhookStatus } from "./types";
+import { markSynced, reapplyPending, setOnline, withPending } from "./sync";
+import type {
+  AgendaEvent,
+  ApiToken,
+  CalendarStatus,
+  DayReview,
+  DaySummary,
+  Device,
+  HabitProgress,
+  History,
+  Metrics,
+  Reminder,
+  ReminderQuery,
+  SessionState,
+  Settings,
+  SleepLog,
+  Task,
+  TaskList,
+  TaskQuery,
+} from "./types";
 
 const CACHE_DAYS = 14;
 /** Bump when an API response changes shape: entries cached by older builds are dropped instead of rendered. */
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 5;
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -28,7 +45,9 @@ export function makeQueryClient() {
 /** IndexedDB first: puts every cached response into the query cache before the first render. */
 export async function hydrateFromIdb(qc: QueryClient) {
   const cutoff = Date.now() - CACHE_DAYS * 86_400_000;
-  await idb().cache.filter((e) => e.at < cutoff || e.v !== CACHE_VERSION).delete();
+  await idb()
+    .cache.filter((e) => e.at < cutoff || e.v !== CACHE_VERSION)
+    .delete();
   // shown immediately, but marked stale so every screen revalidates against the server on mount
   for (const e of await idb().cache.toArray()) qc.setQueryData(JSON.parse(e.key), e.data, { updatedAt: 1 });
   await reapplyPending(qc);
@@ -54,87 +73,56 @@ async function cached<T>(key: unknown[], path: string): Promise<T> {
 }
 
 function useCached<T>(key: unknown[], path: string | null, opts: { refetchInterval?: number } = {}) {
-  return useQuery<T, ApiProblem>({ queryKey: key, queryFn: () => cached<T>(key, path!), enabled: path !== null, ...opts });
+  return useQuery<T, ApiProblem>({ queryKey: key, queryFn: path === null ? skipToken : () => cached<T>(key, path), ...opts });
 }
 
-export const useDay = (date: string) => useCached<Day>(["day", date], `/api/days/${date}`, { refetchInterval: 60_000 });
-export const useDays = (from: string, to: string) => useCached<{ days: DaySummary[] }>(["days", from, to], `/api/days?from=${from}&to=${to}`);
-export const useHabits = () => useCached<{ habits: HabitProgress[] }>(["habits"], "/api/habits");
-export const useTasks = (date: string) => useCached<{ tasks: Task[] }>(["tasks", date], `/api/tasks?date=${date}`);
-export const useMetrics = (range: string, anchor: string) => useCached<Metrics>(["metrics", range, anchor], `/api/metrics?range=${range}&anchor=${anchor}`);
 export const useDevices = () => useCached<{ devices: Device[] }>(["devices"], "/api/auth/devices");
-// polled while visible: the agent's answer (proposal / note) usually arrives within a minute
-export const useAdjustments = (date: string) => useCached<{ adjustments: Adjustment[] }>(["adjustments", date], `/api/adjustments?date=${date}`, { refetchInterval: 20_000 });
-export const useWebhookStatus = () => useCached<WebhookStatus>(["webhook"], "/api/webhook/status");
+export const useTokens = () => useCached<{ tokens: ApiToken[] }>(["tokens"], "/api/tokens");
+export const useSettings = () => useCached<Settings>(["settings"], "/api/settings");
+export const useTaskLists = () => useCached<{ lists: TaskList[] }>(["lists"], "/api/lists");
+
+/** Reminders for a view/range; like useTasks, the query object is the cache key. */
+export function useReminders(query: ReminderQuery) {
+  const params = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "") as [string, string][]);
+  return useCached<{ reminders: Reminder[] }>(["reminders", query], `/api/reminders?${params}`);
+}
+
+/** Local + Google/iCal events overlapping [from, to] (dates in the user's zone); the range is the cache key. */
+export const useEvents = (from: string, to: string) =>
+  useCached<{ events: AgendaEvent[] }>(["events", { from, to }], `/api/events?from=${from}&to=${to}`);
+
+/** Habits with streaks and the period's progress as of `date` (default today). */
+export function useHabits(date?: string, includeArchived = false) {
+  const query = { ...(date ? { date } : {}), ...(includeArchived ? { includeArchived: "true" as const } : {}) };
+  return useCached<{ habits: HabitProgress[] }>(["habits", query], `/api/habits?${new URLSearchParams(query)}`);
+}
+
+export const useSleep = (from: string, to: string) =>
+  useCached<{ logs: SleepLog[] }>(["sleep", { from, to }], `/api/sleep?from=${from}&to=${to}`);
+export const useReview = (date: string) => useCached<{ review: DayReview | null }>(["review", date], `/api/reviews/${date}`);
+export const useDaySummary = (date: string | null) =>
+  useCached<DaySummary>(["summary", date], date === null ? null : `/api/summary/day?date=${date}`);
+export const useHistory = (month: string) => useCached<History>(["history", month], `/api/history?month=${month}`);
+export const useMetrics = (range: "week" | "month" | "year", date: string) =>
+  useCached<Metrics>(["metrics", { range, date }], `/api/metrics?range=${range}&date=${date}`);
+
+export const useCalendars = () => useCached<CalendarStatus>(["calendars"], "/api/calendars");
+
+/** Tasks for a view/filter; the query object is part of the cache key (and drives optimistic updates). */
+export function useTasks(query: TaskQuery) {
+  const params = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "") as [string, string][]);
+  return useCached<{ tasks: Task[] }>(["tasks", query], `/api/tasks?${params}`);
+}
 
 export const useSession = () =>
-  useQuery<SessionState, ApiProblem>({ queryKey: ["session"], queryFn: () => get<SessionState>("/api/auth/session"), staleTime: 60_000, retry: 1 });
+  useQuery<SessionState, ApiProblem>({
+    queryKey: ["session"],
+    queryFn: () => get<SessionState>("/api/auth/session"),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
 // ---------- writes ----------
-
-const k = (...key: unknown[]) => JSON.stringify(key);
-
-/** Writes go through the outbox: optimistic, queued with an Idempotency-Key, replayed when back online. */
-export function useWrites(date: string) {
-  const qc = useQueryClient();
-  const dayKeys = [k("day", date), k("tasks", date), k("habits")];
-  // the version the edit was made against travels with it: if the server moved on, it answers 409 → conflict sheet
-  const blockVersion = (id: string) =>
-    qc
-      .getQueryData<Day>(["day", date])
-      ?.options.flatMap((o) => o.blocks)
-      .find((b) => b.id === id)?.version;
-  const taskVersion = (id: string) => qc.getQueryData<Day>(["day", date])?.tasks.find((t) => t.id === id)?.version ?? qc.getQueryData<{ tasks: Task[] }>(["tasks", date])?.tasks.find((t) => t.id === id)?.version;
-  return {
-    patchBlock: (blockId: string, patch: Record<string, unknown>, label = "Bloque actualizado") =>
-      enqueue(qc, {
-        method: "PATCH",
-        path: `/api/days/${date}/blocks/${blockId}`,
-        body: { ...patch, ...(blockVersion(blockId) ? { version: blockVersion(blockId) } : {}) },
-        invalidate: dayKeys,
-        optimistic: { kind: "block", date, blockId, patch },
-        label,
-      }),
-    patchTask: (taskId: string, patch: Record<string, unknown>) =>
-      enqueue(qc, {
-        method: "PATCH",
-        path: `/api/tasks/${taskId}`,
-        body: { ...patch, ...(taskVersion(taskId) ? { version: taskVersion(taskId) } : {}) },
-        invalidate: dayKeys,
-        optimistic: { kind: "task", date, taskId, patch },
-        label: "Tarea",
-      }),
-    send: (method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body: unknown, label: string, extra: string[] = []) =>
-      enqueue(qc, { method, path, body, invalidate: [...dayKeys, ...extra], label }),
-    /** "Pedir ajuste" for `forDate` (may differ from the day on screen). */
-    requestAdjustment: (forDate: string, text: string) => {
-      const now = new Date().toISOString();
-      const adjustment: Adjustment = {
-        id: uuidv7(),
-        date: forDate,
-        text,
-        status: "pending",
-        agentNote: null,
-        proposal: null,
-        resolvedAt: null,
-        version: 1,
-        createdAt: now,
-        updatedAt: now,
-        updatedBy: "user",
-      };
-      return enqueue(qc, {
-        method: "POST",
-        path: "/api/adjustments",
-        body: { id: adjustment.id, date: forDate, text },
-        invalidate: [k("adjustments", forDate)],
-        optimistic: { kind: "adjustment", date: forDate, adjustment },
-        label: "Pedido a Agenbot",
-      });
-    },
-    cancelAdjustment: (a: Adjustment) =>
-      enqueue(qc, { method: "POST", path: `/api/adjustments/${a.id}/cancel`, body: undefined, invalidate: [k("adjustments", a.date)], label: "Pedido cancelado" }),
-  };
-}
 
 /** Direct (online-only) call that refreshes the given queries; used for auth/settings screens. */
 export function useDirect() {

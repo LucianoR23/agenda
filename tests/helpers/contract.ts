@@ -1,6 +1,6 @@
+import { readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
-import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
 /**
@@ -28,9 +28,9 @@ export const coverage = new Set<string>();
 
 export function validateResponse(method: string, pathname: string, status: number, contentType: string | null, body: unknown) {
   const m = method.toLowerCase();
-  const t = templates.find((x) => x.regex.test(pathname) && doc.paths[x.path][m]);
-  if (!t) throw new Error(`Contract: no ${method} ${pathname} in openapi.yaml`);
-  const op = doc.paths[t.path][m];
+  const t = templates.find((x) => x.regex.test(pathname) && doc.paths[x.path]?.[m]);
+  const op = t && doc.paths[t.path]?.[m];
+  if (!t || !op) throw new Error(`Contract: no ${method} ${pathname} in openapi.yaml`);
   const res = op.responses[String(status)];
   if (!res) throw new Error(`Contract: ${method} ${t.path} does not document status ${status}`);
   coverage.add(`${method.toUpperCase()} ${t.path} ${status}`);
@@ -38,7 +38,7 @@ export function validateResponse(method: string, pathname: string, status: numbe
     if (body !== undefined && body !== null && body !== "") throw new Error(`Contract: ${method} ${t.path} ${status} documents no body`);
     return;
   }
-  const type = (contentType ?? "").split(";")[0];
+  const type = (contentType ?? "").split(";")[0] ?? "";
   const media = res.content[type];
   if (!media) throw new Error(`Contract: ${method} ${t.path} ${status} documents ${Object.keys(res.content)}, got ${type}`);
   const key = `${m} ${t.path} ${status} ${type}`;
@@ -48,5 +48,7 @@ export function validateResponse(method: string, pathname: string, status: numbe
     cache.set(key, validate);
   }
   if (!validate(body))
-    throw new Error(`Contract: ${method} ${pathname} ${status} does not match openapi.yaml:\n${ajv.errorsText(validate.errors, { separator: "\n" })}`);
+    throw new Error(
+      `Contract: ${method} ${pathname} ${status} does not match openapi.yaml:\n${ajv.errorsText(validate.errors, { separator: "\n" })}`,
+    );
 }

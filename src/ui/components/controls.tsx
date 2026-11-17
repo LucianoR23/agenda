@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
 import { cx } from "../cx";
 import type { IconName } from "../icons";
 import { Icon } from "./icon";
@@ -118,20 +118,35 @@ export function Segmented<T extends string>({
   className?: string;
   background?: string;
 }) {
+  // WAI-ARIA radio group: one tab stop (the checked option), arrow keys move and select
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step || !onChange) return;
+    e.preventDefault();
+    const i = options.findIndex((o) => o.value === value);
+    const next = options[(i + step + options.length) % options.length];
+    if (!next) return;
+    onChange(next.value);
+    const buttons = e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]");
+    buttons[options.indexOf(next)]?.focus();
+  };
   return (
     <div
       role="radiogroup"
+      onKeyDown={onKeyDown}
       className={cx("grid h-11 rounded-[14px] p-1", background, className)}
       style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}
     >
       {options.map((o) => {
         const on = o.value === value;
         return (
+          // biome-ignore lint/a11y/useSemanticElements: styled segmented control following the WAI-ARIA radio group pattern (roving tabindex + arrows)
           <button
             key={o.value}
             type="button"
             role="radio"
             aria-checked={on}
+            tabIndex={on ? 0 : -1}
             onClick={() => onChange?.(o.value)}
             className={cx(
               "flex items-center justify-center gap-1 rounded-[10px] text-body-sm transition-colors",
@@ -212,8 +227,54 @@ export function PageDots({ count, active }: { count: number; active: number }) {
   return (
     <div className="flex justify-center gap-1" aria-hidden>
       {Array.from({ length: count }, (_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: dots are positions, not items
         <span key={i} className={cx("h-1.5 rounded-[3px]", i === active ? "w-4 bg-text" : "w-1.5 bg-border2")} />
       ))}
     </div>
+  );
+}
+
+/**
+ * Text input of Sistema Calma: 48 px, surface background, accent border on focus, theme tokens only (works in both
+ * themes). `mono` for codes and secrets. Always pass `label` (visible or not) for screen readers.
+ */
+export function TextField({
+  label,
+  hideLabel = true,
+  mono,
+  className,
+  ...rest
+}: { label: string; hideLabel?: boolean; mono?: boolean } & Omit<ComponentProps<"input">, "aria-label">) {
+  return (
+    <label className={cx("flex flex-col gap-1.5", className)}>
+      <span className={hideLabel ? "sr-only" : "text-caption text-muted"}>{label}</span>
+      <input
+        {...rest}
+        className={cx(
+          "h-12 w-full rounded-md border border-border2 bg-surface px-3.5 text-body text-text outline-none placeholder:text-muted focus:border-accent",
+          mono && "font-mono",
+        )}
+      />
+    </label>
+  );
+}
+
+/** Multi-line companion of TextField (notes). Grows with its content up to `rows`. */
+export function TextArea({
+  label,
+  hideLabel = true,
+  className,
+  rows = 3,
+  ...rest
+}: { label: string; hideLabel?: boolean } & Omit<ComponentProps<"textarea">, "aria-label">) {
+  return (
+    <label className={cx("flex flex-col gap-1.5", className)}>
+      <span className={hideLabel ? "sr-only" : "text-caption text-muted"}>{label}</span>
+      <textarea
+        {...rest}
+        rows={rows}
+        className="w-full resize-y rounded-md border border-border2 bg-surface px-3.5 py-3 text-body text-text outline-none placeholder:text-muted focus:border-accent"
+      />
+    </label>
   );
 }

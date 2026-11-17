@@ -2,16 +2,20 @@ import { randomUUID } from "node:crypto";
 import type { ZodType } from "zod";
 import { routes } from "@/contract/openapi";
 import type { RouteDef } from "@/contract/route-def";
-import { randomToken, safeEqual, sha256 } from "../auth/crypto";
 import { DEVICE_KEY_COOKIE, parseCookies, SESSION_COOKIE, setCookie } from "../auth/cookies";
+import { randomToken } from "../auth/crypto";
 import { resolveSession, touchDevice } from "../auth/session";
+import { authenticateToken } from "../auth/tokens";
 import { getDb } from "../db/client";
+import { userTimeZone } from "../domain/settings";
+import { clock } from "../domain/time";
 import { env } from "../env";
-import { now as clockNow } from "../time";
-import type { Actor, Ctx, Handler, HandlerResult } from "./context";
+import { log } from "../log";
+import type { Caller, Ctx, Handler, HandlerResult } from "./context";
 import { ApiError, validation } from "./errors";
 import { complete, release, reserve } from "./idempotency";
-import { AGENT_LIMIT_PER_MINUTE, hit } from "./ratelimit";
+import { clientIp } from "./ip";
+import { limitToken } from "./ratelimit";
 
 type Compiled = { def: RouteDef; regex: RegExp; keys: string[]; literals: number };
 
@@ -24,7 +28,7 @@ const compiled: Compiled[] = routes
     });
     return { def, regex: new RegExp(`^${pattern}$`), keys, literals: def.path.split("/").filter((s) => s && !s.startsWith("{")).length };
   })
-  // literal segments beat parameters: /blocks/reorder before /blocks/{id}
+  // literal segments beat parameters: /items/reorder before /items/{id}
   .sort((a, b) => b.literals - a.literals);
 
 let handlers: Record<string, Handler> = {};
@@ -36,6 +40,7 @@ export function registerHandlers(map: Record<string, Handler>) {
 
 export const implementedOperations = () => Object.keys(handlers);
 
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const IDEMPOTENT_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
 function match(method: string, pathname: string) {
@@ -45,11 +50,11 @@ function match(method: string, pathname: string) {
     if (!m) continue;
     pathMatched = true;
     if (c.def.method.toUpperCase() !== method) continue;
-    const params = Object.fromEntries(c.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
+    const params = Object.fromEntries(c.keys.map((k, i) => [k, decodeURIComponent(m[i + 1] ?? "")]));
     return { route: c.def, params };
   }
-  if (pathMatched) throw new ApiError(405, "method_not_allowed", `${method} is not allowed on ${pathname}.`);
-  throw new ApiError(404, "not_found", `No route for ${method} ${pathname}.`);
+  if (pathMatched) throw new ApiError(405, "METHOD_NOT_ALLOWED", `${method} no está permitido en ${pathname}.`);
+  throw new ApiError(404, "NOT_FOUND", `No existe la ruta ${method} ${pathname}.`);
 }
 
 const pointer = (prefix: string, path: PropertyKey[]) => prefix + path.map((p) => `/${String(p)}`).join("");
@@ -73,8 +78,7 @@ function respond(status: number, body: unknown, requestId: string, headers: Reco
   const h = new Headers({ "X-Request-Id": requestId, "Cache-Control": "no-store", ...headers });
   for (const c of cookies) h.append("Set-Cookie", c);
   if (body === undefined || status === 204) return new Response(null, { status, headers: h });
-  const isProblem = status >= 400 && typeof body === "object" && body !== null && "code" in body && "requestId" in body;
-  h.set("Content-Type", isProblem ? "application/problem+json" : "application/json");
+  h.set("Content-Type", "application/json");
   return new Response(JSON.stringify(body), { status, headers: h });
 }
 
@@ -83,56 +87,121 @@ function toApiError(err: unknown): ApiError {
   const pg = err as { code?: string; constraint_name?: string; cause?: { code?: string; constraint_name?: string } };
   const code = pg.code ?? pg.cause?.code;
   const constraint = pg.constraint_name ?? pg.cause?.constraint_name;
-  if (code === "23505") return validation([{ path: "/", message: `Already exists (${constraint})` }]);
-  if (code === "23514" || code === "23503") return validation([{ path: "/", message: `Violates ${constraint}` }]);
-  console.error(err);
-  return new ApiError(500, "internal_error", "Unexpected error.");
+  if (code === "23505") return new ApiError(409, "CONFLICT", undefined, { constraint });
+  if (code === "23514" || code === "23503" || code === "23001")
+    return validation([{ path: "/", message: `Violates ${constraint ?? "a database constraint"}` }]);
+  log.error("unhandled error", { err });
+  return new ApiError(500, "INTERNAL_ERROR");
+}
+
+/**
+ * CSRF defence for cookie-authenticated writes: the request must come from the app itself. Browsers always send
+ * `Origin` on cross-origin and non-GET requests; `Sec-Fetch-Site` covers the rest. Tokens carry no cookies and are
+ * exempt.
+ */
+function assertSameOrigin(req: Request) {
+  const origin = req.headers.get("origin");
+  if (origin) {
+    if (origin === new URL(env().APP_ORIGIN).origin) return;
+    throw new ApiError(403, "ORIGIN_NOT_ALLOWED");
+  }
+  const site = req.headers.get("sec-fetch-site");
+  if (site === "same-origin" || site === "none") return;
+  throw new ApiError(403, "ORIGIN_NOT_ALLOWED");
+}
+
+/** Resolves who is calling and enforces the route's access rule. */
+async function authenticate(
+  route: RouteDef,
+  req: Request,
+  session: Awaited<ReturnType<typeof resolveSession>>,
+  now: Temporal.Instant,
+  ip: string | null,
+): Promise<Caller> {
+  const db = getDb();
+  const authz = req.headers.get("authorization");
+  if (authz) {
+    const m = /^Bearer\s+(\S+)$/i.exec(authz);
+    const token = m?.[1] ? await authenticateToken(db, m[1], now, ip) : null;
+    if (!token) throw new ApiError(401, "UNAUTHORIZED", "Token inválido, revocado o vencido.");
+    limitToken(token.id, now.epochMilliseconds);
+    if (route.access === "public") return { kind: "token", tokenId: token.id, name: token.name, scopes: token.scopes };
+    if (!route.token) throw new ApiError(403, "FORBIDDEN", "Esta operación no está disponible para tokens de API.");
+    if (!token.scopes.includes(route.token))
+      throw new ApiError(403, "INSUFFICIENT_SCOPE", `El token necesita el permiso "${route.token}" para esta operación.`, {
+        requiredScope: route.token,
+      });
+    return { kind: "token", tokenId: token.id, name: token.name, scopes: token.scopes };
+  }
+  if (route.access !== "user") return session && !session.locked ? { kind: "user", deviceId: session.device.id } : { kind: "anonymous" };
+  if (session && !session.locked) {
+    await touchDevice(db, session.device, now);
+    return { kind: "user", deviceId: session.device.id };
+  }
+  if (session?.locked) throw new ApiError(401, "DEVICE_LOCKED");
+  throw new ApiError(401, "UNAUTHORIZED");
+}
+
+// ---------- CORS (docs/v2/04: browser-side tool servers in Open WebUI) ----------
+
+const CORS_METHODS = "GET, POST, PUT, PATCH, DELETE";
+const CORS_HEADERS = "Authorization, Content-Type, Idempotency-Key, If-Match";
+const CORS_EXPOSE = "ETag, Retry-After, X-Request-Id, Idempotent-Replayed";
+
+/** The request's Origin when it's in CORS_ALLOWED_ORIGINS. No credentials: token calls carry no cookies. */
+function allowedOrigin(req: Request): string | null {
+  const origin = req.headers.get("origin");
+  return origin && env().CORS_ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
+function preflight(req: Request): Response {
+  const origin = allowedOrigin(req);
+  const requestId = `req_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+  const method = req.headers.get("access-control-request-method")?.toUpperCase() ?? "";
+  if (!origin || !CORS_METHODS.split(", ").includes(method))
+    return respond(403, new ApiError(403, "ORIGIN_NOT_ALLOWED").toBody(requestId), requestId, { Vary: "Origin" });
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": CORS_METHODS,
+      "Access-Control-Allow-Headers": CORS_HEADERS,
+      "Access-Control-Max-Age": "600",
+      Vary: "Origin",
+    },
+  });
 }
 
 /** Entry point for every /api request (the catch-all route and the tests call this). */
 export async function handle(req: Request): Promise<Response> {
+  if (req.method.toUpperCase() === "OPTIONS") return preflight(req);
+  const res = await dispatch(req);
+  const origin = allowedOrigin(req);
+  res.headers.append("Vary", "Origin");
+  if (origin) {
+    res.headers.set("Access-Control-Allow-Origin", origin);
+    res.headers.set("Access-Control-Expose-Headers", CORS_EXPOSE);
+  }
+  return res;
+}
+
+async function dispatch(req: Request): Promise<Response> {
   const requestId = `req_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
-  const now = clockNow();
+  const now = clock().now(); // one reading per request; tests inject the clock
   const db = getDb();
   const cookies = parseCookies(req.headers.get("cookie"));
   const setCookies: string[] = [];
-  let idem: { actor: Actor; key: string } | null = null;
+  const ip = clientIp(req.headers, env().TRUST_CF);
+  let idem: { scope: string; key: string } | null = null;
 
   try {
     const { route, params } = match(method, url.pathname);
 
-    // --- authentication ---
-    const authz = req.headers.get("authorization");
-    let caller: Ctx["caller"] = "anonymous";
     const session = await resolveSession(db, cookies[SESSION_COOKIE], now);
-
-    if (route.access === "internal") {
-      const token = req.headers.get("x-internal-token") ?? "";
-      if (!safeEqual(token, env().INTERNAL_TOKEN)) throw new ApiError(401, "unauthorized", "Missing or invalid X-Internal-Token.");
-      caller = "internal";
-    } else if (route.access !== "public" && route.access !== "preauth") {
-      if (authz) {
-        const m = /^Bearer\s+(.+)$/i.exec(authz);
-        if (!m || !safeEqual(sha256(m[1].trim()), env().AGENT_TOKEN_HASH)) throw new ApiError(401, "unauthorized", "Invalid agent token.");
-        caller = "agent";
-      } else if (session && !session.locked) {
-        caller = "user";
-        await touchDevice(db, session.device, now);
-      } else if (session?.locked) {
-        throw new ApiError(401, "device_locked", "Unlock with your PIN or fingerprint.");
-      } else {
-        throw new ApiError(401, "unauthorized", "Authentication required.");
-      }
-      if (route.access === "agent" && caller !== "agent") throw new ApiError(403, "forbidden", "Agent only.");
-      if (route.access === "user" && caller !== "user") throw new ApiError(403, "forbidden", "User only.");
-    }
-
-    if (caller === "agent") {
-      const wait = hit("agent", AGENT_LIMIT_PER_MINUTE, now.getTime());
-      if (wait !== null) throw new ApiError(429, "rate_limited", "Agent rate limit: 120 requests per minute.", { retryAfterSeconds: wait }, { "Retry-After": String(wait) });
-    }
+    const caller = await authenticate(route, req, session, now, ip);
+    if (WRITE_METHODS.has(method) && caller.kind !== "token") assertSameOrigin(req);
 
     let deviceKey = cookies[DEVICE_KEY_COOKIE];
     if (!deviceKey && route.access === "preauth") {
@@ -145,61 +214,68 @@ export async function handle(req: Request): Promise<Response> {
     const parsedParams = parse(route.params, params, "params", errors);
     const parsedQuery = parse(route.query, Object.fromEntries(url.searchParams), "query", errors);
     let rawBody = "";
-    let parsedBody: unknown = undefined;
+    let parsedBody: unknown;
     if (route.body) {
+      const type = req.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
       rawBody = await req.text();
+      if (rawBody && type !== "application/json") throw new ApiError(415, "UNSUPPORTED_MEDIA_TYPE");
       let json: unknown;
       try {
         json = rawBody ? JSON.parse(rawBody) : undefined;
       } catch {
         throw validation([{ path: "/", message: "Body is not valid JSON" }]);
       }
-      if (json === undefined) errors.push({ path: "/", message: "Body is required" });
-      else parsedBody = parse(route.body, json, "", errors);
+      // no body = `{}`: actions whose fields are all optional (complete, snooze, log) can be called bare
+      const empty = json === undefined && route.body.safeParse({}).success;
+      if (json === undefined && !empty) errors.push({ path: "/", message: "Body is required" });
+      else parsedBody = parse(route.body, empty ? {} : json, "", errors);
     }
     if (errors.length) throw validation(errors);
     const ifMatch = route.ifMatch ? parseIfMatch(req.headers.get("if-match")) : null;
 
     // --- idempotency (outside the request transaction so 4xx responses are stored too) ---
     const key = req.headers.get("idempotency-key");
-    if (key && IDEMPOTENT_METHODS.has(method) && (caller === "agent" || caller === "user")) {
-      const r = await reserve(db, caller, key, method, url.pathname + url.search, rawBody, now);
+    if (key && IDEMPOTENT_METHODS.has(method) && caller.kind !== "anonymous") {
+      const scope = caller.kind === "token" ? `token:${caller.tokenId}` : "session";
+      const r = await reserve(db, scope, key, method, url.pathname + url.search, rawBody, now);
       if (r && "replay" in r) return respond(r.replay.status, r.replay.body ?? undefined, requestId, { "Idempotent-Replayed": "true" });
-      idem = { actor: caller, key };
+      idem = { scope, key };
     }
 
     const handler = handlers[route.operationId];
-    if (!handler) throw new ApiError(500, "internal_error", `${route.operationId} is not implemented.`);
+    if (!handler) throw new ApiError(500, "INTERNAL_ERROR", `${route.operationId} no está implementado.`);
 
+    const tz = await userTimeZone(db);
     const afterCommit: Array<() => Promise<void>> = [];
     const result: HandlerResult = await db.transaction(async (tx) => {
-        const ctx: Ctx = {
-          requestId,
-          req,
-          now,
-          caller,
-          sessionDevice: session?.device ?? null,
-          sessionLocked: session?.locked ?? false,
-          deviceKey: deviceKey ?? "",
-          ip: req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? null,
-          userAgent: req.headers.get("user-agent"),
-          ifMatch,
-          setCookies,
-          db: tx,
-          afterCommit,
-        };
-        return handler(ctx, { params: parsedParams, query: parsedQuery, body: parsedBody });
+      const ctx: Ctx = {
+        requestId,
+        req,
+        now,
+        caller,
+        tz,
+        sessionDevice: session?.device ?? null,
+        sessionLocked: session?.locked ?? false,
+        deviceKey: deviceKey ?? "",
+        ip,
+        userAgent: req.headers.get("user-agent"),
+        ifMatch,
+        setCookies,
+        db: tx,
+        afterCommit,
+      };
+      return handler(ctx, { params: parsedParams, query: parsedQuery, body: parsedBody });
     });
 
-    if (idem) await complete(db, idem.actor, idem.key, result.status, result.body ?? null);
-    for (const fn of afterCommit) await fn().catch((e) => console.error("afterCommit failed", e));
+    if (idem) await complete(db, idem.scope, idem.key, result.status, result.body ?? null);
+    for (const fn of afterCommit) await fn().catch((err) => log.error("afterCommit failed", { err, requestId }));
     return respond(result.status, result.body, requestId, result.headers, setCookies);
   } catch (err) {
     const e = toApiError(err);
     const body = e.toBody(requestId);
     if (idem) {
-      if (e.status >= 500) await release(db, idem.actor, idem.key).catch(() => {});
-      else await complete(db, idem.actor, idem.key, e.status, body).catch(() => {});
+      if (e.status >= 500) await release(db, idem.scope, idem.key).catch(() => {});
+      else await complete(db, idem.scope, idem.key, e.status, body).catch(() => {});
     }
     return respond(e.status, body, requestId, e.headers, setCookies);
   }

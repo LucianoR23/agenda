@@ -1,5 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { env } from "../env";
+import { assertTestDatabase, underTestRunner } from "./guard";
 import * as schema from "./schema";
 
 function create(url: string) {
@@ -10,12 +12,12 @@ function create(url: string) {
 type Conn = ReturnType<typeof create>;
 
 // one pool per process, reused across dev hot reloads
-const globalForDb = globalThis as unknown as { agendaDb?: Conn };
+const globalForDb = globalThis as unknown as { agendaDb?: Conn | undefined };
 
 function conn(): Conn {
   if (!globalForDb.agendaDb) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set");
+    const url = env().DATABASE_URL;
+    if (underTestRunner()) assertTestDatabase(url);
     globalForDb.agendaDb = create(url);
   }
   return globalForDb.agendaDb;

@@ -3,7 +3,17 @@ import type { ReactNode } from "react";
 import { Icon } from "./icon";
 
 /** Screen title (display 32) with an optional back link and trailing action. */
-export function PageTitle({ title, back, trailing, subtitle }: { title: string; back?: string; trailing?: ReactNode; subtitle?: string }) {
+export function PageTitle({
+  title,
+  back,
+  trailing,
+  subtitle,
+}: {
+  title: string;
+  back?: string;
+  trailing?: ReactNode;
+  subtitle?: string | undefined;
+}) {
   return (
     <header className="flex flex-col gap-1 pt-2">
       {back && (

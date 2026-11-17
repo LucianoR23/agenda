@@ -1,8 +1,6 @@
-import { MetricsScreen } from "@/ui/screens/metrics";
+import { redirect } from "next/navigation";
 
-/** Rendered only after the client gate (auth + offline cache). */
-export const instant = false;
-
+/** Historial y métricas are one screen (docs/v2/01). */
 export default function Page() {
-  return <MetricsScreen />;
+  redirect("/historial?tab=metricas");
 }

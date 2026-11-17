@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Adjustment } from "./types";
+import type { AgendaEvent, Reminder, Task } from "./types";
 
 /** Last good server response per query key (offline reads). */
 export interface CacheEntry {
@@ -23,13 +23,20 @@ export interface OutboxItem {
   label: string;
   createdAt: number;
   state: "pending" | "conflict";
-  conflict?: { code?: string; detail?: string; current?: unknown };
+  conflict?: { code?: string | undefined; detail?: string | undefined; current?: unknown } | undefined;
 }
 
+/** How to re-apply an optimistic change on top of fresh server data (until the write lands). */
 export type Optimistic =
-  | { kind: "block"; date: string; blockId: string; patch: Record<string, unknown> }
-  | { kind: "task"; date: string; taskId: string; patch: Record<string, unknown> }
-  | { kind: "adjustment"; date: string; adjustment: Adjustment };
+  | { kind: "task-put"; task: Task }
+  | { kind: "task-remove"; id: string }
+  | { kind: "reminder-put"; reminder: Reminder }
+  | { kind: "reminder-remove"; id: string }
+  /** A local event as one occurrence (a recurring one shows its first until the server expands it). */
+  | { kind: "event-put"; event: AgendaEvent }
+  | { kind: "event-remove"; eventId: string }
+  /** A habit checked/unchecked (or its value) for a date. */
+  | { kind: "habit-log"; habitId: string; date: string; done: boolean; value: number | null };
 
 class AgendaDb extends Dexie {
   cache!: EntityTable<CacheEntry, "key">;

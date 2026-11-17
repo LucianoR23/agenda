@@ -3,10 +3,10 @@
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiProblem } from "@/client/api";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { ApiProblem, api } from "@/client/api";
 import type { SessionState } from "@/client/types";
-import { Button, Segmented } from "../components/controls";
+import { Button, Segmented, TextField } from "../components/controls";
 import { Icon } from "../components/icon";
 import { PinPad } from "../components/pin-pad";
 import { haptic } from "../time";
@@ -20,34 +20,31 @@ function usePin(onComplete: (pin: string, reset: () => void) => void, active = t
   useEffect(() => {
     done.current = onComplete;
   });
-  const reset = useCallback(() => {
+  const reset = () => {
     value.current = "";
     setDigits("");
-  }, []);
-  const push = useCallback(
-    (d: string) => {
-      if (value.current.length >= length) return;
-      value.current += d;
-      setDigits(value.current);
-      haptic(8);
-      if (value.current.length === length) done.current(value.current, reset);
-    },
-    [length, reset],
-  );
-  const back = useCallback(() => {
+  };
+  const push = (d: string) => {
+    if (value.current.length >= length) return;
+    value.current += d;
+    setDigits(value.current);
+    haptic(8);
+    if (value.current.length === length) done.current(value.current, reset);
+  };
+  const back = () => {
     value.current = value.current.slice(0, -1);
     setDigits(value.current);
-  }, []);
+  };
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (/^\d$/.test(e.key)) push(e.key);
+    if (e.key === "Backspace") back();
+  });
   useEffect(() => {
     if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (/^\d$/.test(e.key)) push(e.key);
-      if (e.key === "Backspace") back();
-    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [push, back, active]);
+  }, [active]);
   return { digits, push, back, reset };
 }
 
@@ -67,10 +64,8 @@ function Brand() {
 const problemText = (e: unknown) => {
   if (!(e instanceof ApiProblem)) return "Algo salió mal.";
   if (e.offline) return "Sin conexión.";
-  const p = e.problem;
-  if (p.code === "locked_out") return `Demasiados intentos. Probá en ${Math.ceil((p.retryAfterSeconds ?? 60) / 60)} min.`;
-  if (p.code === "invalid_credentials") return p.remainingAttempts !== undefined ? `Incorrecto. Te quedan ${p.remainingAttempts} intentos.` : "Código incorrecto.";
-  return p.detail ?? p.title;
+  // the server writes the message for the user (attempts left, wait time…)
+  return e.problem.message;
 };
 
 // ---------- setup ----------
@@ -104,7 +99,7 @@ export function SetupScreen() {
       setError(problemText(e));
       resetConfirm();
       create.reset();
-      setStep(e instanceof ApiProblem && e.problem.code === "invalid_credentials" ? "code" : "pin");
+      setStep(e instanceof ApiProblem && e.problem.code === "INVALID_CREDENTIALS" ? "code" : "pin");
     }
   }, step === "confirm");
 
@@ -115,12 +110,12 @@ export function SetupScreen() {
         <div className="flex w-full max-w-sm flex-col gap-3">
           <h1 className="text-title text-text">Configurar Agenda</h1>
           <p className="text-body-sm text-text2">Ingresá el código de configuración del servidor (SETUP_CODE). Se usa una sola vez.</p>
-          <input
+          <TextField
+            label="Código de configuración"
             autoFocus
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Código de configuración"
-            className="h-12 rounded-md border border-border2 bg-surface px-3.5 text-body text-text outline-none focus:border-accent"
           />
           {error && <p className="text-caption text-danger">{error}</p>}
           <Button size="lg" disabled={!code} onClick={() => setStep("pin")}>
@@ -134,7 +129,14 @@ export function SetupScreen() {
     return (
       <Screen>
         <Brand />
-        <PinPad title={step === "pin" ? "Elegí un PIN de 6 dígitos" : "Repetí el PIN"} filled={pad.digits.length} error={error} onDigit={pad.push} onBackspace={pad.back} recoverLabel={null} />
+        <PinPad
+          title={step === "pin" ? "Elegí un PIN de 6 dígitos" : "Repetí el PIN"}
+          filled={pad.digits.length}
+          error={error}
+          onDigit={pad.push}
+          onBackspace={pad.back}
+          recoverLabel={null}
+        />
       </Screen>
     );
   }
@@ -146,7 +148,9 @@ export function SetupScreen() {
           <Icon name="check_circle" size={16} /> Listo, este dispositivo ya es de confianza
         </span>
         <h1 className="text-title text-text">Códigos de recuperación</h1>
-        <p className="text-body-sm text-text2">Si olvidás el PIN, cada código sirve una vez. Guardalos fuera del celular: no se vuelven a mostrar.</p>
+        <p className="text-body-sm text-text2">
+          Si olvidás el PIN, cada código sirve una vez. Guardalos fuera del celular: no se vuelven a mostrar.
+        </p>
         <ol className="grid grid-cols-2 gap-2 rounded-lg bg-surface p-3.5 font-mono text-[15px] text-text" data-testid="recovery-codes">
           {codes.map((c) => (
             <li key={c}>{c}</li>
@@ -156,7 +160,12 @@ export function SetupScreen() {
           <Button variant="secondary" icon="check" className="flex-1" onClick={() => navigator.clipboard?.writeText(text)}>
             Copiar
           </Button>
-          <Button variant="secondary" icon="download" className="flex-1" href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Agenda — códigos de recuperación\n\n${text}\n`)}`}>
+          <Button
+            variant="secondary"
+            icon="download"
+            className="flex-1"
+            href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Agenda — códigos de recuperación\n\n${text}\n`)}`}
+          >
             Descargar
           </Button>
         </div>
@@ -189,31 +198,39 @@ export function UnlockScreen({ session }: { session: SessionState }) {
     }
   });
 
-  const fingerprint = useCallback(async () => {
+  const fingerprint = async () => {
     try {
-      const { data: options } = await api<Parameters<typeof startAuthentication>[0]["optionsJSON"]>("POST", "/api/auth/passkey/auth/options");
+      const { data: options } = await api<Parameters<typeof startAuthentication>[0]["optionsJSON"]>(
+        "POST",
+        "/api/auth/passkey/auth/options",
+      );
       const response = await startAuthentication({ optionsJSON: options });
       await api("POST", "/api/auth/passkey/auth/verify", { response });
       await unlocked();
     } catch (e) {
       if (e instanceof ApiProblem) setError(problemText(e));
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
   // fingerprint first on devices that enabled it, PIN as fallback
+  const autoFingerprint = useEffectEvent(() => void fingerprint());
   useEffect(() => {
     if (session.passkeyEnabled && session.state === "locked" && !tried.current) {
       tried.current = true;
-      void fingerprint();
+      autoFingerprint();
     }
-  }, [session, fingerprint]);
+  }, [session]);
 
   if (recover) return <RecoverScreen onBack={() => setRecover(false)} />;
   return (
     <Screen>
       <Brand />
-      {session.state === "unauthenticated" && <p className="max-w-xs text-center text-body-sm text-text2">Dispositivo nuevo: ingresá tu PIN para confiar en él.</p>}
-      {session.state === "locked" && <p className="max-w-xs text-center text-body-sm text-text2">Hace más de 7 días que no usás este dispositivo.</p>}
+      {session.state === "unauthenticated" && (
+        <p className="max-w-xs text-center text-body-sm text-text2">Dispositivo nuevo: ingresá tu PIN para confiar en él.</p>
+      )}
+      {session.state === "locked" && (
+        <p className="max-w-xs text-center text-body-sm text-text2">Hace más de 7 días que no usás este dispositivo.</p>
+      )}
       <PinPad
         filled={pin.digits.length}
         fingerprint={session.passkeyEnabled && session.state === "locked"}
@@ -251,7 +268,14 @@ function RecoverScreen({ onBack }: { onBack: () => void }) {
   if (step === "pin")
     return (
       <Screen>
-        <PinPad title="Elegí un PIN nuevo" filled={pin.digits.length} error={error} onDigit={pin.push} onBackspace={pin.back} recoverLabel={null} />
+        <PinPad
+          title="Elegí un PIN nuevo"
+          filled={pin.digits.length}
+          error={error}
+          onDigit={pin.push}
+          onBackspace={pin.back}
+          recoverLabel={null}
+        />
       </Screen>
     );
   if (step === "done")
@@ -289,17 +313,25 @@ function RecoverScreen({ onBack }: { onBack: () => void }) {
             ? "Uno de los 10 códigos que guardaste al configurar (XXXX-XXXX-XXXX)."
             : "El código de 8 dígitos que imprime `pnpm auth:reset-pin` en la terminal del contenedor (vale 15 min)."}
         </p>
-        <input
+        <TextField
+          label={method === "recovery_code" ? "Código de recuperación" : "Código del servidor"}
+          mono
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value)}
           inputMode={method === "reset_code" ? "numeric" : "text"}
           autoCapitalize="characters"
           placeholder={method === "recovery_code" ? "K7QM-2XPA-9TRC" : "58302917"}
-          className="h-12 rounded-md border border-border2 bg-surface px-3.5 font-mono text-body text-text outline-none focus:border-accent"
         />
         {error && <p className="text-caption text-danger">{error}</p>}
-        <Button size="lg" disabled={code.trim().length < 4} onClick={() => (setError(null), setStep("pin"))}>
+        <Button
+          size="lg"
+          disabled={code.trim().length < 4}
+          onClick={() => {
+            setError(null);
+            setStep("pin");
+          }}
+        >
           Continuar
         </Button>
       </div>

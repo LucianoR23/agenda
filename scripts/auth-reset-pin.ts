@@ -12,7 +12,7 @@ async function main() {
   const [user] = await getDb().select({ id: appUser.id }).from(appUser).limit(1);
   if (!user) throw new Error("No user yet: finish the first-run setup in the app.");
   const code = resetCode();
-  await createResetCode(getDb(), code, new Date());
+  await createResetCode(getDb(), code, Temporal.Now.instant());
   console.log(`PIN reset code (valid 15 minutes, single use):\n\n  ${code}\n`);
 }
 

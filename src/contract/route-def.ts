@@ -1,9 +1,12 @@
-import type { ZodType } from "zod";
+import type { ZodObject, ZodType } from "zod";
 
-/** Who may call a route. Drives the OpenAPI `security`, `x-actors` and the automatic 401/403/429 responses. */
-export type Access = "agent+user" | "user" | "agent" | "public" | "preauth" | "internal";
+/** API token permission. Mirrors the `token_scope` enum. */
+export type TokenScope = "read" | "write" | "notify";
 
-export type ExampleActor = "agent" | "user" | "anonymous" | "internal";
+/** Who may call a route. Drives the OpenAPI `security`, `x-actors` and the automatic 401 responses. */
+export type Access = "user" | "public" | "preauth";
+
+export type ExampleActor = "user" | "anonymous";
 
 /** A paired request/response example. Validated against the route's schemas at generation time. */
 export interface Exchange {
@@ -23,9 +26,9 @@ export interface Exchange {
 
 export interface ResponseDef {
   description: string;
-  /** Defaults to `Problem` for status >= 400; omit for empty bodies (204). */
+  /** Defaults to the `Error` body for status >= 400; omit for empty bodies (204). */
   schema?: ZodType;
-  headers?: Array<"ETag" | "Retry-After" | "Set-Cookie">;
+  headers?: Array<"ETag" | "Retry-After" | "Set-Cookie" | "Location">;
 }
 
 export interface RouteDef {
@@ -36,8 +39,12 @@ export interface RouteDef {
   summary: string;
   description?: string;
   access: Access;
-  params?: ZodType;
-  query?: ZodType;
+  /** API tokens may call this route when they hold this scope (Sunday operations). Session users always can. */
+  token?: TokenScope;
+  /** Path parameters: always an object schema (zod-to-openapi requires it). */
+  params?: ZodObject;
+  /** Query string: always an object schema. */
+  query?: ZodObject;
   body?: ZodType;
   /** Accepts `If-Match` for optimistic concurrency. */
   ifMatch?: boolean;

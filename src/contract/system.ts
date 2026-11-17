@@ -1,4 +1,4 @@
-import { LocalDate, orNull, Timestamp, Uuid } from "./common";
+import { orNull, Timestamp, Uuid } from "./common";
 import { z } from "./zod";
 
 // ---------- auth ----------
@@ -18,8 +18,15 @@ export const SessionState = z
     lockedUntil: orNull(Timestamp).openapi({ description: "Set while PIN entry is locked out." }),
     device: z.strictObject({ id: Uuid, name: z.string() }).nullable(),
     vapidPublicKey: z.string().nullable().openapi({ description: "Web Push application server key; null when push is not configured." }),
+    timezone: z
+      .string()
+      .openapi({ description: "The user's IANA timezone (every local date/time uses it).", example: "America/Buenos_Aires" }),
   })
   .openapi("SessionState");
+
+export const ReauthResult = z
+  .strictObject({ validUntil: Timestamp.openapi({ description: "Sensitive actions (API tokens) are allowed until then." }) })
+  .openapi("ReauthResult");
 
 export const Device = z
   .strictObject({
@@ -47,13 +54,9 @@ export const RecoveryCodes = z
   })
   .openapi("RecoveryCodes");
 
-export const SetupResult = z
-  .strictObject({ device: Device, ...RecoveryCodes.shape })
-  .openapi("SetupResult");
+export const SetupResult = z.strictObject({ device: Device, ...RecoveryCodes.shape }).openapi("SetupResult");
 
-export const UnlockInput = z
-  .strictObject({ pin: Pin, deviceName: z.string().max(80).optional() })
-  .openapi("UnlockInput");
+export const UnlockInput = z.strictObject({ pin: Pin, deviceName: z.string().max(80).optional() }).openapi("UnlockInput");
 
 export const UnlockResult = z.strictObject({ device: Device }).openapi("UnlockResult");
 
@@ -68,9 +71,7 @@ export const RecoverInput = z
   })
   .openapi("RecoverInput");
 
-export const RecoverResult = z
-  .strictObject({ device: Device, remainingRecoveryCodes: z.int() })
-  .openapi("RecoverResult");
+export const RecoverResult = z.strictObject({ device: Device, remainingRecoveryCodes: z.int() }).openapi("RecoverResult");
 
 export const ChangePinInput = z.strictObject({ currentPin: Pin, newPin: Pin }).openapi("ChangePinInput");
 
@@ -79,11 +80,9 @@ export const PinConfirmInput = z.strictObject({ pin: Pin }).openapi("PinConfirmI
 export const DeviceRename = z.strictObject({ name: z.string().min(1).max(80) }).openapi("DeviceRename");
 
 /** WebAuthn JSON payloads are produced/consumed by @simplewebauthn; documented as opaque objects. */
-export const WebAuthnJson = z
-  .record(z.string(), z.unknown())
-  .openapi("WebAuthnJson", {
-    description: "`PublicKeyCredential*OptionsJSON` or `*ResponseJSON` from @simplewebauthn (opaque here).",
-  });
+export const WebAuthnJson = z.record(z.string(), z.unknown()).openapi("WebAuthnJson", {
+  description: "`PublicKeyCredential*OptionsJSON` or `*ResponseJSON` from @simplewebauthn (opaque here).",
+});
 
 export const PasskeyVerifyInput = z.strictObject({ response: WebAuthnJson }).openapi("PasskeyVerifyInput");
 
@@ -97,10 +96,6 @@ export const PushSubscribeInput = z
   .strictObject({
     endpoint: z.url(),
     keys: z.strictObject({ p256dh: z.string().min(1), auth: z.string().min(1) }),
-    callReminders: z.boolean().optional().openapi({ description: "10-minute reminder before each call block." }),
-    sleepReminders: z.boolean().optional().openapi({
-      description: "Morning reminder (SLEEP_REMINDER_TIME, default 10:00) when last night's bed or wake time is missing.",
-    }),
   })
   .openapi("PushSubscribeInput");
 
@@ -111,8 +106,6 @@ export const PushSubscription = z
     id: Uuid,
     deviceId: Uuid,
     endpoint: z.string(),
-    callReminders: z.boolean(),
-    sleepReminders: z.boolean(),
     createdAt: Timestamp,
   })
   .openapi("PushSubscription");
@@ -128,52 +121,65 @@ export const Health = z
   })
   .openapi("Health");
 
-export const CloseDayInput = z
-  .strictObject({
-    date: LocalDate.optional().openapi({ description: "Close only this date. Default: every unclosed day before today (ART)." }),
-  })
-  .openapi("CloseDayInput");
+// ---------- settings ----------
 
-export const CloseDayResult = z
-  .strictObject({
-    closed: z.array(LocalDate),
-    purgedIdempotencyKeys: z.int(),
-  })
-  .openapi("CloseDayResult");
+const HHmm = z
+  .string()
+  .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "Expected HH:mm")
+  .openapi({ example: "23:30" });
 
-export const WebhookStatus = z
+export const Settings = z
   .strictObject({
-    configured: z.boolean(),
-    lastDelivery: z
-      .strictObject({
-        batchId: Uuid,
-        date: LocalDate,
-        status: z.enum(["collecting", "pending", "sent", "failed"]),
-        attempts: z.int(),
-        lastAttemptAt: orNull(Timestamp),
-        lastResponseStatus: z.int().nullable(),
-        lastError: z.string().nullable(),
-        sentAt: orNull(Timestamp),
-      })
-      .nullable(),
-    queued: z.int().openapi({ description: "Batches collecting or waiting for (re)delivery." }),
-    failedLast7Days: z.int(),
+    timezone: z.string().openapi({ description: "IANA timezone.", example: "America/Buenos_Aires" }),
+    locale: z.string(),
+    quietStart: HHmm.nullable().openapi({ description: "Quiet hours start (local). Non-urgent reminders wait until quietEnd." }),
+    quietEnd: HHmm.nullable(),
+    defaultSnoozeMinutes: z.int(),
+    missedAfterHours: z.int().openapi({ description: "A reminder later than this (server down) is marked missed instead of pushed." }),
   })
-  .openapi("WebhookStatus");
+  .openapi("Settings");
 
-export const ExportBundle = z
+export const SettingsPatch = z
   .strictObject({
-    exportedAt: Timestamp,
-    schemaVersion: z.literal(1),
-    days: z.array(z.unknown()),
-    habits: z.array(z.unknown()),
-    habitLogs: z.array(z.unknown()),
-    tasks: z.array(z.unknown()),
-    proposals: z.array(z.unknown()),
-    adjustments: z.array(z.unknown()),
-    sleepLogs: z.array(z.unknown()),
-    changeLog: z.array(z.unknown()),
+    timezone: z.string().min(1).max(64).optional(),
+    locale: z.string().min(2).max(16).optional(),
+    quietStart: HHmm.nullable().optional(),
+    quietEnd: HHmm.nullable().optional(),
+    defaultSnoozeMinutes: z.int().min(1).max(1440).optional(),
+    missedAfterHours: z.int().min(1).max(168).optional(),
   })
-  .openapi("ExportBundle", {
-    description: "All personal data as JSON (no auth secrets: no PIN/recovery hashes, sessions or passkeys).",
-  });
+  .openapi("SettingsPatch");
+
+// ---------- API tokens ----------
+
+export const TokenScope = z.enum(["read", "write", "notify"]).openapi("TokenScope", {
+  description: "`read`: query the agenda. `write`: create/change items. `notify`: send pushes.",
+});
+
+export const ApiToken = z
+  .strictObject({
+    id: Uuid,
+    name: z.string(),
+    prefix: z.string().openapi({ description: "First 8 characters, for recognising the token.", example: "agd_x7Kp" }),
+    scopes: z.array(TokenScope),
+    lastUsedAt: orNull(Timestamp),
+    lastUsedIp: z.string().nullable(),
+    expiresAt: orNull(Timestamp),
+    createdAt: Timestamp,
+  })
+  .openapi("ApiToken");
+
+export const TokenCreateInput = z
+  .strictObject({
+    name: z.string().trim().min(1).max(60),
+    scopes: z.array(TokenScope).min(1),
+    expiresAt: Timestamp.optional(),
+  })
+  .openapi("TokenCreateInput");
+
+export const TokenCreated = z
+  .strictObject({
+    ...ApiToken.shape,
+    token: z.string().openapi({ description: "The secret (`agd_…`). Shown only in this response.", example: "agd_x7Kp…" }),
+  })
+  .openapi("TokenCreated");

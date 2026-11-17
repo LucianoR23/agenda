@@ -1,8 +1,5 @@
-import { TodayScreen } from "@/ui/screens/today/today";
+import { TodayScreen } from "@/ui/screens/task-screens";
 
-/** Rendered only after the client gate (auth + offline cache): nothing to validate for instant navigation. */
-export const instant = false;
-
-export default function TodayPage() {
+export default function Page() {
   return <TodayScreen />;
 }

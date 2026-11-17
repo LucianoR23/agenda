@@ -1,5 +1,7 @@
 # Design: Sistema Calma v0.2
 
+> Still the design system of v2. The v1 day-plan pieces (block types, block cards, now line) were removed with that domain.
+
 Source: Claude Design project "Agenda" → `Agenda - Sistema.dc.html` (copy in `design/`, read-only reference).
 Living implementation: **`/dev/design`** (dev server only), the same gallery rendered with the real contract examples
 in both themes.
@@ -9,14 +11,13 @@ in both themes.
 | Design | Code |
 |---|---|
 | Semantic color tokens (dark primary + light) | `src/app/globals.css` (`:root` / `[data-theme]`) → Tailwind colors `bg-surface`, `text-muted`, `border-border2`… |
-| Block type registry (13 types, hue → color) | `src/ui/block-types.ts` + `--t-<type>` vars; dark `oklch(0.78 0.06 h)`, light `oklch(0.50 0.08 h)`, call = `--call`, other = neutral |
 | Type scale (display 32 … micro 11) | Tailwind `text-display`, `text-title`, `text-headline`, `text-body`, `text-body-sm`, `text-caption`, `text-mono`, `text-micro` |
 | Instrument Sans / Geist Mono | `next/font/google` in `src/app/layout.tsx` (self-hosted at build) |
 | Material Symbols Rounded | SVG sprite `public/icons.svg` built by `pnpm icons` from `src/ui/icons.ts` (no 3 MB icon font; works offline) |
 | Radius 8/12/16/20/28/pill, spacing base 4 | Tailwind `rounded-sm…2xl`, default spacing scale |
 | Motion 80/120/200/280 ms, `cubic-bezier(.2,.8,.2,1)` | `duration-instant`, default 120 ms, `duration-base`, `duration-sheet`, `ease-calma`; reduced-motion respected |
 | Elevation (dark by tone, light white + shadow) | `bg-surface` / `bg-surface2` / `bg-raised`, `shadow-calma` |
-| Components | `src/ui/components/*`: `BlockCard`, `NowLine`, `OptionCard`, `Button`, chips, `Segmented`, `Toggle`, `Ring`, `StreakChip`, `Fab`, `Sheet` + rows, `Banner`, `Toast`, `SyncStatus`, `StatCard`, `ChartCard`, `BarChart`, `Sparkline`, `HeatCell`, `EmptyState`, `TimelineSkeleton`, `PinPad`, `TabBar`, `DayHeader`, `SectionCard`, `SettingsRow` |
+| Components | `src/ui/components/*`: `OptionCard`, `Button`, chips, `Segmented`, `Toggle`, `Ring`, `StreakChip`, `Fab`, `Sheet` + rows, `Banner`, `Toast`, `SyncStatus`, `StatCard`, `ChartCard`, `BarChart`, `Sparkline`, `HeatCell`, `EmptyState`, `TimelineSkeleton`, `PinPad`, `TabBar`, `DayHeader`, `SectionCard`, `SettingsRow` |
 
 ## Extensions (not in the design, built from its tokens and patterns)
 

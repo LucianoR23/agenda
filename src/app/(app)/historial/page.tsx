@@ -1,7 +1,4 @@
-import { HistoryScreen } from "@/ui/screens/history";
-
-/** Rendered only after the client gate (auth + offline cache). */
-export const instant = false;
+import { HistoryScreen } from "@/ui/screens/review-screens";
 
 export default function Page() {
   return <HistoryScreen />;

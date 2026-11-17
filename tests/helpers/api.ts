@@ -1,45 +1,61 @@
 import { sql } from "drizzle-orm";
 import { vi } from "vitest";
 import { handle } from "@/server/api";
+import { tuning as lockoutTuning } from "@/server/auth/lockout";
 import { getDb } from "@/server/db/client";
+import { resetSettingsCache } from "@/server/domain/settings";
+import { fixedClock, setClock } from "@/server/domain/time";
 import { resetEnv } from "@/server/env";
 import { resetRateLimits } from "@/server/http/ratelimit";
-import { setPushSender, type PushMessage } from "@/server/push";
+import { type PushPayload, type SendResult, setPushSender } from "@/server/push";
 import { validateResponse } from "./contract";
-import { AGENT_TOKEN, INTERNAL_TOKEN, SETUP_CODE } from "./env";
+import { SETUP_CODE } from "./env";
 
-export interface Res<T = any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+export interface Res<T = any> {
   status: number;
   body: T;
   headers: Headers;
   cookies: string[];
 }
 
-type As = "agent" | "user" | "anon" | "internal";
+type As = "user" | "anon";
 
 export interface Client {
-  request<T = any>(method: string, path: string, opts?: { body?: unknown; headers?: Record<string, string>; raw?: string }): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  get<T = any>(path: string, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  post<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  put<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  patch<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  del<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  request<T = any>(
+    method: string,
+    path: string,
+    opts?: { body?: unknown; headers?: Record<string, string>; raw?: string },
+  ): Promise<Res<T>>;
+  get<T = any>(path: string, headers?: Record<string, string>): Promise<Res<T>>;
+  post<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
+  put<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
+  patch<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
+  del<T = any>(path: string, body?: unknown, headers?: Record<string, string>): Promise<Res<T>>;
   cookieJar: Map<string, string>;
 }
 
 /** HTTP-level client: builds a Request, runs it through the real router and checks the response against openapi.yaml. */
-export function client(as: As, jar = new Map<string, string>()): Client {
-  async function request(method: string, path: string, opts: { body?: unknown; headers?: Record<string, string>; raw?: string } = {}) {
-    const headers: Record<string, string> = { "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile", ...(opts.headers ?? {}) };
-    if (as === "agent") headers.authorization = `Bearer ${AGENT_TOKEN}`;
-    if (as === "internal") headers["x-internal-token"] = INTERNAL_TOKEN;
+export function client(_as: As, jar = new Map<string, string>()): Client {
+  async function request(
+    method: string,
+    path: string,
+    opts: { body?: unknown; headers?: Record<string, string> | undefined; raw?: string } = {},
+  ) {
+    const headers: Record<string, string> = {
+      "user-agent": "Mozilla/5.0 (Linux; Android 16; SM-S948B) Chrome/141.0 Mobile",
+      // what a browser sends on the app's own requests (the router rejects cookie writes from other origins)
+      origin: "https://agenda.lemydev.com",
+      ...(opts.headers ?? {}),
+    };
     if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
     const body = opts.raw ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body));
-    if (body !== undefined) headers["content-type"] = "application/json";
-    const res = await handle(new Request(`https://agenda.lemydev.com${path}`, { method, headers, body }));
+    if (body !== undefined) headers["content-type"] ??= "application/json";
+    const res = await handle(
+      new Request(`https://agenda.lemydev.com${path}`, { method, headers, ...(body === undefined ? {} : { body }) }),
+    );
     const cookies = res.headers.getSetCookie();
     for (const c of cookies) {
-      const [pair, ...attrs] = c.split(";");
+      const [pair = "", ...attrs] = c.split(";");
       const i = pair.indexOf("=");
       const name = pair.slice(0, i);
       const value = decodeURIComponent(pair.slice(i + 1));
@@ -62,9 +78,7 @@ export function client(as: As, jar = new Map<string, string>()): Client {
   };
 }
 
-export const agent = () => client("agent");
 export const anon = (jar?: Map<string, string>) => client("anon", jar);
-export const internal = () => client("internal");
 
 export const PIN = "482913";
 
@@ -76,26 +90,44 @@ export async function setupUser(pin = PIN) {
   return { user: c, recoveryCodes: r.body.recoveryCodes as string[], device: r.body.device };
 }
 
-const TABLES = [
-  "adjustment", "block", "plan_option", "proposal", "task", "habit_log", "habit", "sleep_log", "day", "change_log", "webhook_outbox",
-  "idempotency_key", "notification_log", "push_subscription", "passkey", "auth_attempt", "auth_lockout", "device",
-  "recovery_code", "pin_reset_code", "app_user",
-];
-
-export const pushes: PushMessage[] = [];
+/** Pushes "sent" during a test, with the endpoint and the send options. */
+export const pushes: Array<PushPayload & { endpoint: string; ttl: number; urgency: string }> = [];
+/** What the fake push service answers (tests override it to simulate failures). */
+export const pushService: { reply: (endpoint: string) => SendResult } = { reply: () => ({ ok: true }) };
 
 /** Clean slate between tests: empty tables, real clock at a fixed instant, captured pushes. */
 export async function resetAll(at = "2026-10-19T06:55:00-03:00") {
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date(at));
+  setNow(at);
   resetEnv();
+  resetSettingsCache();
+  lockoutTuning.globalDelayMs = 0;
   resetRateLimits();
   pushes.length = 0;
-  setPushSender(async (_sub, msg) => {
-    pushes.push(msg);
-    return { gone: false };
+  pushService.reply = () => ({ ok: true });
+  setPushSender(async (sub, payload, opts) => {
+    const r = pushService.reply(sub.endpoint);
+    if (r.ok) pushes.push({ ...payload, endpoint: sub.endpoint, ...opts });
+    return r;
   });
-  await getDb().execute(sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`));
+  await resetDb();
 }
 
-export const setNow = (at: string) => vi.setSystemTime(new Date(at));
+/**
+ * Empties every table (the guard already ensured this is a *_test database) and restores what migrations seed:
+ * the Inbox list.
+ */
+export async function resetDb() {
+  const db = getDb();
+  const rows = await db.execute<{ tablename: string }>(sql`select tablename from pg_tables where schemaname = 'public'`);
+  const tables = rows.map((r) => `"${r.tablename}"`).join(", ");
+  await db.execute(sql.raw(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`));
+  await db.execute(sql`INSERT INTO task_list (name, is_inbox, sort_order, updated_by) VALUES ('Inbox', true, 0, 'system')`);
+}
+
+/** Moves both clocks: the injectable one (Temporal, domain code) and Date (code not yet on Temporal). */
+export function setNow(at: string) {
+  const instant = Temporal.Instant.from(at);
+  setClock(fixedClock(instant));
+  vi.setSystemTime(instant.epochMilliseconds);
+}

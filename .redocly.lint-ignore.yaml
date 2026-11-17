@@ -1,0 +1,7 @@
+# This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
+# See https://redocly.com/docs/cli/ for more information.
+# Phase 6: /api/google/connect and /api/google/callback are browser redirects (302 only), so no 2xx by design.
+openapi.yaml:
+  operation-2xx-response:
+    - "#/paths/~1api~1google~1connect/get/responses"
+    - "#/paths/~1api~1google~1callback/get/responses"

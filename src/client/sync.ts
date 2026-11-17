@@ -3,9 +3,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { uuidv7 } from "uuidv7";
-import { api, ApiProblem } from "./api";
+import { todayLocal } from "@/ui/time";
+import { ApiProblem, api } from "./api";
 import { idb, type Optimistic, type OutboxItem } from "./db";
-import type { Adjustment, Day, Task } from "./types";
+import { putEvent } from "./event-cache";
+import { applyHabitLog } from "./habit-cache";
+import { putReminder } from "./reminder-cache";
+import { putTask, removeTask } from "./task-cache";
+import type { AgendaEvent, EventQuery, HabitProgress, HabitQuery, Reminder, ReminderQuery, Task, TaskList, TaskQuery } from "./types";
 
 // ---------- status store ----------
 
@@ -21,7 +26,7 @@ let state: SyncState = { online: true, syncing: false, pending: 0, conflicts: []
 const listeners = new Set<() => void>();
 const set = (patch: Partial<SyncState>) => {
   state = { ...state, ...patch };
-  listeners.forEach((l) => l());
+  for (const l of listeners) l();
 };
 const SERVER_STATE: SyncState = { online: true, syncing: false, pending: 0, conflicts: [], lastSync: null };
 
@@ -50,59 +55,76 @@ async function refreshCounts() {
 
 // ---------- optimistic edits ----------
 
-function patchDayBlock(day: Day, blockId: string, patch: Record<string, unknown>): Day {
-  return {
-    ...day,
-    options: day.options.map((o) => ({
-      ...o,
-      blocks: o.blocks.map((b) =>
-        b.id !== blockId
-          ? b
-          : {
-              ...b,
-              ...patch,
-              ...("status" in patch ? { statusAt: patch.status === "pending" ? null : new Date().toISOString() } : {}),
-              version: b.version + 1,
-            },
-      ),
-    })),
-  } as Day;
+type TaskListData = { tasks: Task[] };
+type ListsData = { lists: TaskList[] };
+
+const inboxIdOf = (qc: QueryClient) => qc.getQueryData<ListsData>(["lists"])?.lists.find((l) => l.isInbox)?.id ?? null;
+
+/** Applies an optimistic change to one fetched task list (key `["tasks", query]`). */
+function applyToTasks(qc: QueryClient, data: TaskListData, query: TaskQuery, o: Optimistic): TaskListData {
+  if (o.kind === "task-remove") return { tasks: removeTask(data.tasks, o.id) };
+  if (o.kind !== "task-put") return data;
+  return { tasks: putTask(data.tasks, o.task, query, todayLocal(), inboxIdOf(qc)) };
 }
 
-const patchTask = (t: Task, taskId: string, patch: Record<string, unknown>): Task =>
-  t.id !== taskId ? t : ({ ...t, ...patch, ...("done" in patch ? { doneAt: patch.done ? new Date().toISOString() : null } : {}), version: t.version + 1 } as Task);
+type ReminderListData = { reminders: Reminder[] };
 
-type AdjustmentList = { adjustments: Adjustment[] };
-/** A request sent offline shows up at once (newest first) until the server's copy replaces it. */
-const withAdjustment = (r: AdjustmentList, a: Adjustment): AdjustmentList =>
-  r.adjustments.some((x) => x.id === a.id) ? r : { adjustments: [a, ...r.adjustments] };
+function applyToReminders(data: ReminderListData, query: ReminderQuery, o: Optimistic): ReminderListData {
+  if (o.kind === "reminder-remove") return { reminders: data.reminders.filter((r) => r.id !== o.id) };
+  if (o.kind !== "reminder-put") return data;
+  return { reminders: putReminder(data.reminders, o.reminder, query) };
+}
 
-/** Applies one optimistic change to whatever is in the query cache. */
+type EventListData = { events: AgendaEvent[] };
+
+function applyToEvents(data: EventListData, query: EventQuery, o: Optimistic): EventListData {
+  if (o.kind === "event-remove") return { events: data.events.filter((e) => e.eventId !== o.eventId) };
+  if (o.kind !== "event-put") return data;
+  return { events: putEvent(data.events, o.event, query) };
+}
+
+type Kind = "tasks" | "reminders" | "events" | "habits";
+const kindOf = (o: Optimistic): Kind =>
+  o.kind.startsWith("reminder") ? "reminders" : o.kind.startsWith("event") ? "events" : o.kind.startsWith("habit") ? "habits" : "tasks";
+
+function applyTo(qc: QueryClient, kind: Kind, data: unknown, query: unknown, o: Optimistic): unknown {
+  if (kind === "reminders") return applyToReminders(data as ReminderListData, query as ReminderQuery, o);
+  if (kind === "events") return applyToEvents(data as EventListData, query as EventQuery, o);
+  if (kind === "habits")
+    return o.kind === "habit-log"
+      ? { habits: applyHabitLog((data as { habits: HabitProgress[] }).habits, query as HabitQuery, o, todayLocal()) }
+      : data;
+  return applyToTasks(qc, data as TaskListData, query as TaskQuery, o);
+}
+
+/** Applies one optimistic change to every cached query of its kind. */
 function applyOne(qc: QueryClient, o: Optimistic) {
-  if (o.kind === "adjustment") qc.setQueryData<AdjustmentList>(["adjustments", o.date], (r) => withAdjustment(r ?? { adjustments: [] }, o.adjustment));
-  if (o.kind === "block") qc.setQueryData<Day>(["day", o.date], (d) => (d ? patchDayBlock(d, o.blockId, o.patch) : d));
-  if (o.kind === "task") {
-    qc.setQueryData<Day>(["day", o.date], (d) => (d ? { ...d, tasks: d.tasks.map((t) => patchTask(t, o.taskId, o.patch)) } : d));
-    qc.setQueryData<{ tasks: Task[] }>(["tasks", o.date], (r) => (r ? { tasks: r.tasks.map((t) => patchTask(t, o.taskId, o.patch)) } : r));
+  const kind = kindOf(o);
+  for (const q of qc.getQueryCache().findAll({ queryKey: [kind] })) {
+    const data = q.state.data;
+    if (!data) continue;
+    qc.setQueryData(q.queryKey, applyTo(qc, kind, data, q.queryKey[1] ?? {}, o));
   }
 }
 
+let pendingQc: QueryClient | null = null;
+
 /** Queued (not yet sent) edits applied to freshly fetched data, so a refetch never "undoes" them. */
 export async function withPending<T>(key: unknown[], data: T): Promise<T> {
+  const kind = key[0];
+  if ((kind !== "tasks" && kind !== "reminders" && kind !== "events" && kind !== "habits") || !pendingQc) return data;
   const items = (await idb().outbox.orderBy("createdAt").toArray()).filter((i) => i.state === "pending" && i.optimistic);
   let out: unknown = data;
-  for (const { optimistic: o } of items) {
-    if (!o || key[1] !== o.date) continue;
-    if (key[0] === "adjustments" && o.kind === "adjustment") out = withAdjustment(out as AdjustmentList, o.adjustment);
-    if (o.kind === "adjustment") continue;
-    if (key[0] === "day") out = o.kind === "block" ? patchDayBlock(out as Day, o.blockId, o.patch) : { ...(out as Day), tasks: (out as Day).tasks.map((t) => patchTask(t, o.taskId, o.patch)) };
-    if (key[0] === "tasks" && o.kind === "task") out = { tasks: (out as { tasks: Task[] }).tasks.map((t) => patchTask(t, o.taskId, o.patch)) };
+  for (const i of items) {
+    if (!i.optimistic || kindOf(i.optimistic) !== kind) continue;
+    out = applyTo(pendingQc, kind, out, key[1] ?? {}, i.optimistic);
   }
   return out as T;
 }
 
 /** Re-applies queued edits to what is already in the query cache (after hydrating from IndexedDB). */
 export async function reapplyPending(qc: QueryClient) {
+  pendingQc = qc;
   const items = await idb().outbox.orderBy("createdAt").toArray();
   for (const i of items) if (i.optimistic && i.state === "pending") applyOne(qc, i.optimistic);
 }
@@ -139,15 +161,16 @@ export function flush(qc: QueryClient): Promise<void> {
             set({ online: false });
             break;
           }
-          // "Pedir ajuste" has nothing to merge: a 409 there (already answered, day closed) is just a rejection
-          const mergeable = !item.path.startsWith("/api/adjustments");
-          if ((e.problem.status === 409 || e.problem.status === 412) && mergeable) {
-            await idb().outbox.update(item.id, { state: "conflict", conflict: { code: e.problem.code, detail: e.problem.detail, current: e.problem.current } });
+          if (e.problem.status === 409 || e.problem.status === 412) {
+            await idb().outbox.update(item.id, {
+              state: "conflict",
+              conflict: { code: e.problem.code, detail: e.problem.message, current: e.problem.details?.current },
+            });
           } else {
             // rejected for good (validation, gone…): drop it and show the server's truth
             await idb().outbox.delete(item.id);
             for (const k of item.invalidate) await qc.invalidateQueries({ queryKey: JSON.parse(k) });
-            notifyRejected(item, REASON[e.problem.code ?? ""] ?? e.problem.detail ?? e.problem.title);
+            notifyRejected(item, REASON[e.problem.code ?? ""] ?? e.problem.message);
           }
         }
       }
@@ -169,9 +192,11 @@ export async function resolveConflict(qc: QueryClient, id: string, choice: "mine
     for (const k of item.invalidate) await qc.invalidateQueries({ queryKey: JSON.parse(k) });
   } else {
     const current = item.conflict?.current as { version?: number } | undefined;
-    const body = item.body && typeof item.body === "object" && current?.version ? { ...(item.body as object), version: current.version } : item.body;
+    const body =
+      item.body && typeof item.body === "object" && current?.version ? { ...(item.body as object), version: current.version } : item.body;
     // a fresh key: the old one is bound to the rejected request
-    const fresh = { ...item, body, id: uuidv7(), state: "pending" as const, conflict: undefined };
+    const { conflict: _resolved, ...rest } = item;
+    const fresh: OutboxItem = { ...rest, body, id: uuidv7(), state: "pending" };
     await idb().outbox.delete(id);
     await idb().outbox.add(fresh);
     void flush(qc);
@@ -179,10 +204,8 @@ export async function resolveConflict(qc: QueryClient, id: string, choice: "mine
   await refreshCounts();
 }
 
-const REASON: Record<string, string> = {
-  adjustment_resolved: "Agenbot ya respondió ese pedido.",
-  day_closed: "Ese día ya está cerrado.",
-};
+/** Friendly copy for rejection codes (filled per entity as they arrive). */
+const REASON: Record<string, string> = {};
 
 type RejectListener = (item: OutboxItem, reason: string) => void;
 const rejectListeners = new Set<RejectListener>();
@@ -190,10 +213,13 @@ export const onRejected = (l: RejectListener) => {
   rejectListeners.add(l);
   return () => void rejectListeners.delete(l);
 };
-const notifyRejected = (item: OutboxItem, reason: string) => rejectListeners.forEach((l) => l(item, reason));
+const notifyRejected = (item: OutboxItem, reason: string) => {
+  for (const l of rejectListeners) l(item, reason);
+};
 
 /** Wires connectivity events and a periodic retry. Call once on the client. */
 export function startSync(qc: QueryClient) {
+  pendingQc = qc;
   try {
     const last = localStorage.getItem("agenda:lastSync");
     if (last) set({ lastSync: Number(last) });

@@ -1,0 +1,2 @@
+ALTER TABLE "app_user" ADD COLUMN "missed_after_hours" smallint DEFAULT 12 NOT NULL;--> statement-breakpoint
+ALTER TABLE "app_user" ADD CONSTRAINT "app_user_missed_range" CHECK ("app_user"."missed_after_hours" BETWEEN 1 AND 168);

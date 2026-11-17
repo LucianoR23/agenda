@@ -4,19 +4,18 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { onAuthProblem } from "@/client/api";
-import { hydrateFromIdb, makeQueryClient, useAdjustments, useSession } from "@/client/queries";
+import { hydrateFromIdb, makeQueryClient, useSession, useTasks } from "@/client/queries";
 import { onRejected, resolveConflict, startSync, useSync } from "@/client/sync";
 import type { SessionState } from "@/client/types";
-import { Banner } from "./components/feedback";
 import { ConflictCompare } from "./components/extensions";
-import { BottomSheet, ToastHost, useToast } from "./components/overlay";
+import { Banner } from "./components/feedback";
 import { Sidebar, TabBar, tabFor } from "./components/navigation";
+import { BottomSheet, ToastHost, useToast } from "./components/overlay";
 import { TimelineSkeleton } from "./components/surfaces";
+import { onUpdateReady, registerServiceWorker } from "./pwa";
 import { SetupScreen, UnlockScreen } from "./screens/auth";
-import { readyCount } from "./screens/today/adjustments";
 import { applyTheme, readTheme } from "./theme";
-import { registerServiceWorker } from "./pwa";
-import { todayART } from "./time";
+import { ensureTemporal, setUserTimeZone, userTimeZone } from "./time";
 
 /** Client root: query cache hydrated from IndexedDB, sync engine, auth gate, navigation. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -24,7 +23,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     applyTheme(readTheme());
-    hydrateFromIdb(qc)
+    ensureTemporal()
+      .then(() => hydrateFromIdb(qc))
       .catch(() => {})
       .finally(() => setReady(true));
     const stop = startSync(qc);
@@ -58,6 +58,7 @@ function Gate({ children }: { children: ReactNode }) {
 
   let s: SessionState | undefined = session.data;
   if (s) {
+    setUserTimeZone(s.timezone);
     try {
       localStorage.setItem(LAST_SESSION, s.state);
     } catch {}
@@ -67,7 +68,8 @@ function Gate({ children }: { children: ReactNode }) {
     try {
       last = localStorage.getItem(LAST_SESSION);
     } catch {}
-    if (last === "unlocked") s = { state: "unlocked", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null };
+    if (last === "unlocked")
+      s = { state: "unlocked", passkeyEnabled: false, lockedUntil: null, device: null, vapidPublicKey: null, timezone: userTimeZone() };
   }
 
   if (!s) return <Splash />;
@@ -79,7 +81,7 @@ function Gate({ children }: { children: ReactNode }) {
 function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const active = tabFor(pathname);
-  const badges = { today: readyCount(useAdjustments(todayART()).data?.adjustments) };
+  const badges = { inbox: useTasks({ view: "inbox" }).data?.tasks.length };
   return (
     <div className="flex min-h-dvh">
       <div className="sticky top-0 hidden h-dvh md:flex">
@@ -103,16 +105,26 @@ function Frame({ children }: { children: ReactNode }) {
 function SyncBanners() {
   const sync = useSync();
   const toast = useToast();
-  useEffect(() => onRejected((item, reason) => toast({ icon: "sync_problem", message: `No se pudo guardar: ${reason}` })), [toast]);
-  if (sync.online) return null;
+  const [update, setUpdate] = useState<(() => void) | null>(null);
+  useEffect(() => onRejected((_item, reason) => toast({ icon: "sync_problem", message: `No se pudo guardar: ${reason}` })), [toast]);
+  useEffect(() => onUpdateReady((apply) => setUpdate(() => apply)), []);
   return (
-    <Banner kind="offline">
-      Sin conexión. Guardamos tus cambios{sync.pending ? ` (${sync.pending})` : ""} y los subimos cuando vuelvas.
-    </Banner>
+    <>
+      {update && (
+        <Banner kind="info" action="Actualizar" onAction={update}>
+          Hay una versión nueva de Agenda.
+        </Banner>
+      )}
+      {!sync.online && (
+        <Banner kind="offline">
+          Sin conexión. Guardamos tus cambios{sync.pending ? ` (${sync.pending})` : ""} y los subimos cuando vuelvas.
+        </Banner>
+      )}
+    </>
   );
 }
 
-const FIELD: Record<string, string> = { start: "Inicio", end: "Fin", status: "Estado", outcome: "Resultado", note: "Nota", title: "Título", done: "Hecho" };
+const FIELD: Record<string, string> = { title: "Título", done: "Hecho", note: "Nota" };
 
 /** Conflict sheet: never overwrite silently (mine vs server). */
 function Conflicts() {
@@ -124,13 +136,9 @@ function Conflicts() {
   const current = (c.conflict?.current ?? {}) as Record<string, unknown>;
   const field = Object.keys(body).find((k) => k !== "version" && k !== "force") ?? "";
   const why =
-    c.conflict?.code === "version_conflict"
-      ? "Cambió en el servidor mientras estabas sin conexión (Agenbot o otro dispositivo)."
-      : c.conflict?.code === "calendar_owned"
-        ? "Este horario lo maneja Google Calendar."
-        : c.conflict?.code === "day_closed"
-          ? "El día ya está cerrado."
-          : "Lo cambió otra parte antes que vos.";
+    c.conflict?.code === "VERSION_CONFLICT"
+      ? "Cambió en el servidor mientras estabas sin conexión (Sunday u otro dispositivo)."
+      : "Lo cambió otra parte antes que vos.";
   const fmt = (v: unknown) => (v === null || v === undefined ? "—" : String(v));
   return (
     <BottomSheet open onClose={() => void resolveConflict(qc, c.id, "server")} label="Conflicto">

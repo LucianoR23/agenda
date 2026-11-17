@@ -36,7 +36,11 @@ export function PinPad({
       <h1 className="text-headline text-text">{title}</h1>
       <div className="flex gap-3.5" role="img" aria-label={`${filled} de ${length} dígitos`}>
         {Array.from({ length }, (_, i) => (
-          <span key={i} className={cx("size-3.5 rounded-full", i < filled ? "bg-text" : "border-[1.5px] border-border2", error && "border-danger")} />
+          <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: one dot per PIN position
+            key={i}
+            className={cx("size-3.5 rounded-full", i < filled ? "bg-text" : "border-[1.5px] border-border2", error && "border-danger")}
+          />
         ))}
       </div>
       <p className="min-h-5 text-caption text-danger" aria-live="assertive">
@@ -44,7 +48,12 @@ export function PinPad({
       </p>
       <div className="grid grid-cols-[repeat(3,72px)] gap-x-7 gap-y-3.5">
         {DIGITS.map((d) => (
-          <button key={d} type="button" onClick={() => onDigit?.(d)} className={cx(key, "bg-surface text-[26px] font-medium text-text active:bg-raised")}>
+          <button
+            key={d}
+            type="button"
+            onClick={() => onDigit?.(d)}
+            className={cx(key, "bg-surface text-[26px] font-medium text-text active:bg-raised")}
+          >
             {d}
           </button>
         ))}
@@ -55,7 +64,11 @@ export function PinPad({
         ) : (
           <span />
         )}
-        <button type="button" onClick={() => onDigit?.("0")} className={cx(key, "bg-surface text-[26px] font-medium text-text active:bg-raised")}>
+        <button
+          type="button"
+          onClick={() => onDigit?.("0")}
+          className={cx(key, "bg-surface text-[26px] font-medium text-text active:bg-raised")}
+        >
           0
         </button>
         <button type="button" aria-label="Borrar" onClick={onBackspace} className={cx(key, "text-text2")}>

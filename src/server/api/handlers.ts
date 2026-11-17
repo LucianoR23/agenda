@@ -1,130 +1,33 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { generateOpenApiDocument, withoutExamples } from "@/contract/openapi";
+import { audit } from "../auth/audit";
 import * as auth from "../auth/auth";
+import * as tokens from "../auth/tokens";
+import * as calendars from "../calendar/service";
 import { getDb } from "../db/client";
-import { pushSubscription, webhookOutbox } from "../db/schema";
-import * as adjustments from "../domain/adjustments";
-import * as blocks from "../domain/blocks";
-import * as days from "../domain/days";
-import * as insights from "../domain/insights";
-import { dayOut, findDay } from "../domain/load";
-import { blockOut, habitLogOut, taskOut } from "../domain/serialize";
-import * as tracking from "../domain/tracking";
+import { one } from "../db/one";
+import { pushSubscription } from "../db/schema";
+import * as assistant from "../domain/assistant";
+import * as events from "../domain/events";
+import * as habits from "../domain/habits";
+import { overview } from "../domain/overview";
+import { applyPushAction } from "../domain/push-actions";
+import * as reminders from "../domain/reminders";
+import * as review from "../domain/review";
+import { getSettings, updateSettings } from "../domain/settings";
+import * as sleep from "../domain/sleep";
+import * as stats from "../domain/stats";
+import * as tasks from "../domain/tasks";
+import { formatInstant } from "../domain/time";
 import { env } from "../env";
-import { type Ctx, etag, type Handler, json } from "../http/context";
-import { addDays, isoLocal, isoLocalOrNull, localDate } from "../time";
-
-const dayResponse = async (ctx: Ctx, date: string, status = 200) => {
-  const d = (await findDay(ctx, date))!;
-  return json(status, await dayOut(ctx, d), etag(d.version));
-};
+import { type Handler, json, requireDevice } from "../http/context";
+import { sendNotice } from "../push";
 
 let openApiFull: unknown = null;
 let openApiCompact: unknown = null;
+let openApiSunday: unknown = null;
 
 export const handlers: Record<string, Handler> = {
-  // ---------- days ----------
-  getDay: async (ctx, { params }) => {
-    const out = await days.getDay(ctx, params.date);
-    return json(200, out, etag(out.version));
-  },
-  createOwnDay: async (ctx, { params, body }) => {
-    await days.createOwnDay(ctx, params.date, body.title);
-    return dayResponse(ctx, params.date, 201);
-  },
-  putDay: async (ctx, { params, query, body }) => days.putDayResponse(ctx, params.date, body, query.mode === "force"),
-  patchDay: async (ctx, { params, body }) => {
-    await days.patchDay(ctx, params.date, body);
-    return dayResponse(ctx, params.date);
-  },
-  chooseOption: async (ctx, { params, body }) => {
-    await days.choose(ctx, params.date, body.option, body.version);
-    return dayResponse(ctx, params.date);
-  },
-  shiftDay: async (ctx, { params, body }) => {
-    await days.shift(ctx, params.date, body.fromTime, body.minutes, body.version);
-    return dayResponse(ctx, params.date);
-  },
-  listDays: async (ctx, { query }) => json(200, { days: await insights.listDays(ctx, query.from, query.to) }),
-
-  // ---------- proposals ----------
-  listProposals: async (ctx, { params }) => json(200, { proposals: await days.listProposals(ctx, params.date) }),
-  acceptProposal: async (ctx, { params }) => {
-    await days.acceptProposal(ctx, params.date, params.id);
-    return dayResponse(ctx, params.date);
-  },
-  rejectProposal: async (ctx, { params }) => json(200, await days.rejectProposal(ctx, params.date, params.id)),
-
-  // ---------- adjustments ("Pedir ajuste") ----------
-  createAdjustment: async (ctx, { body }) => {
-    const a = await adjustments.createAdjustment(ctx, body);
-    return json(201, a, etag(a.version));
-  },
-  listAdjustments: async (ctx, { query }) => json(200, { adjustments: await adjustments.listAdjustments(ctx, query) }),
-  getAdjustment: async (ctx, { params }) => {
-    const a = await adjustments.getAdjustment(ctx, params.id);
-    return json(200, a, etag(a.version));
-  },
-  patchAdjustment: async (ctx, { params, body }) => {
-    const a = await adjustments.patchAdjustment(ctx, params.id, body);
-    return json(200, a, etag(a.version));
-  },
-  cancelAdjustment: async (ctx, { params }) => {
-    const a = await adjustments.cancelAdjustment(ctx, params.id);
-    return json(200, a, etag(a.version));
-  },
-
-  // ---------- blocks ----------
-  createBlock: async (ctx, { params, query, body }) => json(201, blockOut(await blocks.createBlock(ctx, params.date, query.option, body))),
-  patchBlock: async (ctx, { params, body }) => json(200, blockOut(await blocks.patchBlock(ctx, params.date, params.id, body))),
-  patchBlockByExternal: async (ctx, { params, body }) =>
-    json(200, { blocks: (await blocks.patchByExternal(ctx, params.date, params.externalId, body)).map(blockOut) }),
-  deleteBlock: async (ctx, { params }) => {
-    await blocks.deleteBlock(ctx, params.date, params.id);
-    return { status: 204 };
-  },
-  reorderBlocks: async (ctx, { params, body }) => json(200, { blocks: (await blocks.reorderBlocks(ctx, params.date, body.ids, body.version)).map(blockOut) }),
-
-  // ---------- habits & tasks ----------
-  listHabits: async (ctx, { query }) => json(200, { habits: await tracking.listHabits(ctx, query.date) }),
-  createHabit: async (ctx, { body }) => json(201, tracking.habitOut(await tracking.createHabit(ctx, body))),
-  patchHabit: async (ctx, { params, body }) => json(200, tracking.habitOut(await tracking.patchHabit(ctx, params.habit, body))),
-  listHabitLogs: async (ctx, { params, query }) => {
-    const h = await tracking.findHabit(ctx, params.habit);
-    const to = query.to ?? localDate(ctx.now);
-    const rows = await tracking.habitLogsOf(ctx, h.id, query.from ?? addDays(to, -29), to);
-    return json(200, { logs: rows.map((l) => habitLogOut(l, h.slug)) });
-  },
-  upsertHabitLog: async (ctx, { params, body }) => {
-    const r = await tracking.upsertHabitLog(ctx, params.habit, body);
-    return json(r.status, habitLogOut(r.row, r.slug));
-  },
-  listTasks: async (ctx, { query }) => json(200, { tasks: await tracking.listTasks(ctx, query.date, query.done) }),
-  createTask: async (ctx, { body }) => json(201, taskOut(await tracking.createTask(ctx, body))),
-  patchTask: async (ctx, { params, body }) => json(200, taskOut(await tracking.patchTask(ctx, params.id, body))),
-  deleteTask: async (ctx, { params }) => {
-    await tracking.deleteTask(ctx, params.id);
-    return { status: 204 };
-  },
-
-  // ---------- sleep ----------
-  listSleep: async (ctx, { query }) => json(200, { logs: await tracking.listSleep(ctx, query.from, query.to) }),
-  logSleepEvent: async (ctx, { body }) => {
-    const r = await tracking.sleepEvent(ctx, body);
-    return json(r.status, r.body);
-  },
-  upsertSleep: async (ctx, { params, body }) => {
-    const r = await tracking.upsertSleep(ctx, params.date, body);
-    return json(r.status, r.body);
-  },
-
-  // ---------- insights ----------
-  getMetrics: async (ctx, { query }) => json(200, await insights.metrics(ctx, query.range, query.anchor)),
-  getAgentContext: async (ctx, { query }) => json(200, await insights.agentContext(ctx, query.date)),
-  listChangelog: async (ctx, { query }) => json(200, await insights.listChangelog(ctx, query)),
-  exportData: async (ctx) =>
-    json(200, await insights.exportAll(ctx), { "Content-Disposition": `attachment; filename="agenda-${ctx.now.toISOString().slice(0, 10)}.json"` }),
-
   // ---------- ops ----------
   health: async (ctx) => {
     let db: "ok" | "down" = "ok";
@@ -133,56 +36,47 @@ export const handlers: Record<string, Handler> = {
     } catch {
       db = "down";
     }
-    return json(db === "ok" ? 200 : 503, { status: db === "ok" ? "ok" : "degraded", db, version: env().APP_VERSION, time: isoLocal(ctx.now) });
+    return json(db === "ok" ? 200 : 503, {
+      status: db === "ok" ? "ok" : "degraded",
+      db,
+      version: env().APP_VERSION,
+      time: formatInstant(ctx.now, ctx.tz),
+    });
   },
   openapi: async (_ctx, { query }) => {
     openApiFull ??= generateOpenApiDocument();
     openApiCompact ??= withoutExamples(openApiFull);
     return json(200, query.examples === "true" ? openApiFull : openApiCompact, { "Cache-Control": "public, max-age=300" });
   },
-  closeDay: async (ctx, { body }) => json(200, await days.closePastDays(ctx, body.date)),
-  webhookStatus: async (ctx) => {
-    const [last] = await ctx.db.select().from(webhookOutbox).orderBy(desc(webhookOutbox.createdAt)).limit(1);
-    const queued = await ctx.db.select({ id: webhookOutbox.id }).from(webhookOutbox).where(inArray(webhookOutbox.status, ["collecting", "pending"]));
-    const failed = await ctx.db
-      .select({ id: webhookOutbox.id })
-      .from(webhookOutbox)
-      .where(and(eq(webhookOutbox.status, "failed"), gte(webhookOutbox.createdAt, new Date(ctx.now.getTime() - 7 * 86_400_000))));
-    return json(200, {
-      configured: !!env().AGENT_WEBHOOK_URL,
-      lastDelivery: last
-        ? {
-            batchId: last.id,
-            date: last.date,
-            status: last.status,
-            attempts: last.attempts,
-            lastAttemptAt: isoLocalOrNull(last.lastAttemptAt),
-            lastResponseStatus: last.lastResponseStatus,
-            lastError: last.lastError,
-            sentAt: isoLocalOrNull(last.sentAt),
-          }
-        : null,
-      queued: queued.length,
-      failedLast7Days: failed.length,
-    });
+
+  openapiSunday: async () => {
+    openApiSunday ??= { ...withoutExamples(generateOpenApiDocument("sunday")), servers: [{ url: new URL(env().APP_ORIGIN).origin }] };
+    return json(200, openApiSunday, { "Cache-Control": "public, max-age=300" });
   },
+
+  // ---------- assistant ----------
+  getNow: async (ctx) => json(200, assistant.now(ctx)),
+  sendPushNotification: async (ctx, { body }) => json(200, await assistant.notify(ctx, body)),
 
   // ---------- push ----------
   pushSubscribe: async (ctx, { body }) => {
-    const values = {
-      deviceId: ctx.sessionDevice!.id,
-      endpoint: body.endpoint,
-      p256dh: body.keys.p256dh,
-      auth: body.keys.auth,
-      ...(body.callReminders !== undefined ? { callReminders: body.callReminders } : {}),
-      ...(body.sleepReminders !== undefined ? { sleepReminders: body.sleepReminders } : {}),
-    };
-    const [row] = await ctx.db
-      .insert(pushSubscription)
-      .values(values)
-      .onConflictDoUpdate({ target: pushSubscription.endpoint, set: values })
-      .returning();
-    return json(201, { id: row.id, deviceId: row.deviceId, endpoint: row.endpoint, callReminders: row.callReminders, sleepReminders: row.sleepReminders, createdAt: isoLocal(row.createdAt) });
+    const values = { deviceId: requireDevice(ctx).id, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth };
+    // subscribing again re-enables an endpoint that was disabled after failures
+    const reset = { failureCount: 0, lastError: null, disabledAt: null };
+    const row = one(
+      await ctx.db
+        .insert(pushSubscription)
+        .values(values)
+        .onConflictDoUpdate({ target: pushSubscription.endpoint, set: { ...values, ...reset } })
+        .returning(),
+      "push subscription upsert",
+    );
+    return json(201, {
+      id: row.id,
+      deviceId: row.deviceId,
+      endpoint: row.endpoint,
+      createdAt: formatInstant(row.createdAt, ctx.tz),
+    });
   },
   pushUnsubscribe: async (ctx, { body }) => {
     await ctx.db.delete(pushSubscription).where(eq(pushSubscription.endpoint, body.endpoint));
@@ -214,8 +108,143 @@ export const handlers: Record<string, Handler> = {
     return { status: 204 };
   },
   logout: async (ctx) => {
-    await auth.revokeDevice(ctx, ctx.sessionDevice!.id);
+    await auth.revokeDevice(ctx, requireDevice(ctx).id, "logout");
+    return { status: 204 };
+  },
+  reauth: async (ctx, { body }) => json(200, await auth.reauth(ctx, body.pin)),
+
+  // ---------- settings ----------
+  getSettings: async (ctx) => json(200, await getSettings(ctx.db)),
+  updateSettings: async (ctx, { body }) => {
+    const before = await getSettings(ctx.db);
+    const next = await updateSettings(ctx.db, body);
+    await audit(ctx, "settings_changed", { before, after: next });
+    return json(200, next);
+  },
+
+  // ---------- tasks ----------
+  listTaskLists: async (ctx) => json(200, { lists: await tasks.listLists(ctx) }),
+  createTaskList: async (ctx, { body }) => json(201, await tasks.createList(ctx, body)),
+  updateTaskList: async (ctx, { params, body }) => json(200, await tasks.updateList(ctx, params.id, body)),
+  deleteTaskList: async (ctx, { params }) => json(200, await tasks.deleteList(ctx, params.id)),
+  listTasks: async (ctx, { query }) => json(200, { tasks: await tasks.listTasks(ctx, query) }),
+  getTask: async (ctx, { params }) => json(200, await tasks.getTask(ctx, params.id)),
+  createTask: async (ctx, { body }) => {
+    const r = await tasks.createTask(ctx, body);
+    return json(r.created ? 201 : 200, r.reminder ? { ...r.task, reminder: r.reminder } : r.task);
+  },
+  updateTask: async (ctx, { params, body }) => json(200, await tasks.updateTask(ctx, params.id, body)),
+  completeTask: async (ctx, { params, body }) => json(200, await tasks.completeTask(ctx, params.id, body.version)),
+  reopenTask: async (ctx, { params, body }) => json(200, await tasks.reopenTask(ctx, params.id, body.nextId)),
+  deleteTask: async (ctx, { params }) => {
+    await tasks.deleteTask(ctx, params.id);
+    return { status: 204 };
+  },
+  reorderTasks: async (ctx, { body }) => json(200, { tasks: await tasks.reorderTasks(ctx, body.ids) }),
+  searchAgenda: async (ctx, { query }) => {
+    const includeDone = query.includeDone === "true";
+    const foundTasks = await tasks.searchTasks(ctx, query.q, includeDone, query.limit);
+    const foundReminders = await reminders.searchReminders(ctx, query.q, includeDone, query.limit);
+    const foundEvents = await events.searchEvents(ctx, query.q, query.limit);
+    return json(200, {
+      results: [
+        ...foundTasks.map((task) => ({ type: "task", task })),
+        ...foundReminders.map((reminder) => ({ type: "reminder", reminder })),
+        ...foundEvents.map((event) => ({ type: "event", event })),
+      ].slice(0, query.limit ?? 20),
+    });
+  },
+
+  // ---------- reminders ----------
+  listReminders: async (ctx, { query }) => json(200, { reminders: await reminders.listReminders(ctx, query) }),
+  getReminder: async (ctx, { params }) => json(200, await reminders.getReminder(ctx, params.id)),
+  createReminder: async (ctx, { body }) => {
+    const r = await reminders.createReminder(ctx, body);
+    return json(r.created ? 201 : 200, r.reminder);
+  },
+  updateReminder: async (ctx, { params, body }) => json(200, await reminders.updateReminder(ctx, params.id, body)),
+  snoozeReminder: async (ctx, { params, body }) => json(200, await reminders.snoozeReminder(ctx, params.id, body)),
+  doneReminder: async (ctx, { params }) => json(200, await reminders.doneReminder(ctx, params.id)),
+  deleteReminder: async (ctx, { params }) => {
+    await reminders.deleteReminder(ctx, params.id);
+    return { status: 204 };
+  },
+
+  // ---------- events ----------
+  getAgendaOverview: async (ctx, { query }) => json(200, await overview(ctx, query)),
+  listEvents: async (ctx, { query }) => json(200, { events: await events.listEvents(ctx, query) }),
+  getEvent: async (ctx, { params }) => json(200, await events.getEvent(ctx, params.id)),
+  createEvent: async (ctx, { body }) => {
+    const r = await events.createEvent(ctx, body);
+    return json(r.created ? 201 : 200, r.event);
+  },
+  updateEvent: async (ctx, { params, body }) => json(200, await events.updateEvent(ctx, params.id, body)),
+  deleteEvent: async (ctx, { params }) => {
+    await events.deleteEvent(ctx, params.id);
+    return { status: 204 };
+  },
+  remindExternalEvent: async (ctx, { params, body }) => json(201, await calendars.remindExternal(ctx, params.id, body)),
+
+  // ---------- habits ----------
+  listHabits: async (ctx, { query }) => json(200, { habits: await habits.listHabits(ctx, query) }),
+  createHabit: async (ctx, { body }) => json(201, await habits.createHabit(ctx, body)),
+  updateHabit: async (ctx, { params, body }) => json(200, await habits.updateHabit(ctx, params.habit, body)),
+  deleteHabit: async (ctx, { params }) => {
+    await habits.deleteHabit(ctx, params.habit);
+    return { status: 204 };
+  },
+  logHabit: async (ctx, { params, body }) => json(200, await habits.logHabit(ctx, params.habit, body)),
+  listHabitLogs: async (ctx, { params, query }) => json(200, { logs: await habits.listHabitLogs(ctx, params.habit, query) }),
+
+  // ---------- sleep ----------
+  listSleep: async (ctx, { query }) => json(200, { logs: await sleep.listSleep(ctx, query) }),
+  logSleepEvent: async (ctx, { body }) => sleep.sleepEvent(ctx, body),
+  upsertSleep: async (ctx, { params, body }) => sleep.upsertSleep(ctx, params.date, body),
+  deleteSleep: async (ctx, { params }) => {
+    await sleep.deleteSleep(ctx, params.date);
+    return { status: 204 };
+  },
+
+  // ---------- review, history, metrics ----------
+  getDayReview: async (ctx, { params }) => json(200, { review: await review.getReview(ctx, params.date) }),
+  saveDayReview: async (ctx, { params, body }) => review.saveReview(ctx, params.date, body),
+  getDaySummary: async (ctx, { query }) => json(200, await stats.daySummary(ctx, query)),
+  getHistory: async (ctx, { query }) => json(200, await stats.history(ctx, query)),
+  getMetrics: async (ctx, { query }) => json(200, await stats.metrics(ctx, query)),
+
+  // ---------- calendars ----------
+  getCalendars: async (ctx) => json(200, await calendars.calendarStatus(ctx)),
+  updateCalendar: async (ctx, { params, body }) => json(200, await calendars.updateCalendar(ctx, params.id, body)),
+  deleteCalendar: async (ctx, { params }) => {
+    await calendars.deleteCalendar(ctx, params.id);
+    return { status: 204 };
+  },
+  addIcalCalendar: async (ctx, { body }) => json(201, await calendars.addIcal(ctx, body)),
+  syncCalendars: async (ctx, { body }) => json(200, await calendars.syncNow(ctx, body)),
+  googleConnect: async (ctx) => calendars.googleConnect(ctx),
+  googleCallback: async (ctx, { query }) => calendars.googleCallback(ctx, query),
+  googleDisconnect: async (ctx) => {
+    await calendars.googleDisconnect(ctx);
+    return { status: 204 };
+  },
+
+  // ---------- push ----------
+  getVapidKey: async () => json(200, { publicKey: env().VAPID_PUBLIC_KEY ?? null }),
+  pushTest: async (ctx) => {
+    const r = await sendNotice(
+      ctx.db,
+      { title: "Notificación de prueba", body: "Si ves esto, las notificaciones andan. 🎉", url: "/ajustes" },
+      { kind: "test", source: "user" },
+    );
+    return json(200, { ok: r.ok, failed: r.failed });
+  },
+  pushAction: async (ctx, { body }) => json(200, await applyPushAction(ctx, body)),
+
+  // ---------- API tokens ----------
+  listTokens: async (ctx) => json(200, { tokens: await tokens.listTokens(ctx) }),
+  createToken: async (ctx, { body }) => json(201, await tokens.createToken(ctx, body)),
+  revokeToken: async (ctx, { params }) => {
+    await tokens.revokeToken(ctx, params.id);
     return { status: 204 };
   },
 };
-

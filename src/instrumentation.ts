@@ -1,6 +1,4 @@
-/** Runs once per server start: starts the background worker (Node runtime only; DISABLE_WORKER=1 turns it off). */
+/** Runs once per server start. Node-only work lives in instrumentation-node.ts (never bundled for the Edge runtime). */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.DISABLE_WORKER === "1") return;
-  const { startWorker } = await import("./server/worker");
-  startWorker();
+  if (process.env.NEXT_RUNTIME === "nodejs") await import("./instrumentation-node");
 }
