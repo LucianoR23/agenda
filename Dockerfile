@@ -18,8 +18,9 @@ FROM node:${NODE_VERSION} AS build
 ARG PNPM_VERSION
 WORKDIR /app
 RUN npm install -g pnpm@${PNPM_VERSION} --no-fund --no-audit
-ARG APP_VERSION=dev
-ENV NEXT_TELEMETRY_DISABLED=1 APP_VERSION=${APP_VERSION}
+# the commit, from Coolify ("Include Source Commit in Build") or CI: stamped into the build version (next.config.ts)
+ARG SOURCE_COMMIT=
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build && node scripts/build-cli.mjs
@@ -28,8 +29,7 @@ RUN pnpm build && node scripts/build-cli.mjs
 FROM node:${NODE_VERSION} AS runtime
 ARG PNPM_VERSION
 WORKDIR /app
-ARG APP_VERSION=dev
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 TZ=America/Buenos_Aires APP_VERSION=${APP_VERSION}
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 TZ=America/Buenos_Aires
 # pnpm available in the container terminal (`pnpm auth:reset-pin`), installed at build time (no network at runtime)
 RUN apk add --no-cache tzdata && npm install -g pnpm@${PNPM_VERSION} --no-fund --no-audit && npm cache clean --force \
   && addgroup -S agenda && adduser -S agenda -G agenda

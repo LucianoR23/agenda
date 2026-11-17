@@ -14,7 +14,7 @@
 ## Fresh start consequences
 - New VAPID keys → devices must re-subscribe (button in Ajustes; prompt on first open).
 - New DB → setup flow again (`SETUP_CODE`), re-create PIN, re-register passkeys, new recovery codes.
-- **Service worker:** v1 used cache name `agenda-v2` (confusing). v2 uses `agenda-<APP_VERSION>`; on `activate`, delete every cache that isn't the current one (including `agenda-v2`), `clients.claim()`. Ship with `skipWaiting` + an "actualizar" toast. Lemy should still clear site data once on each device at cutover.
+- **Service worker:** v1 used cache name `agenda-v2` (confusing). v2 uses `agenda-<version>` (APP_VERSION if set, else the build version `<package.json version>+<commit>`); on `activate`, delete every cache that isn't the current one (including `agenda-v2`), `clients.claim()`. Ship with `skipWaiting` + an "actualizar" toast. Lemy should still clear site data once on each device at cutover.
 
 ## Environment variables (v2)
 `DATABASE_URL`, `APP_ORIGIN=https://agenda.lemydev.com`, `TZ=America/Buenos_Aires`, `SESSION_SECRET`, `SETUP_CODE`, `WEBAUTHN_RP_ID=agenda.lemydev.com`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CORS_ALLOWED_ORIGINS=https://sunday.lemydev.com`, `TRUST_CF`, `PIN_REAUTH_DAYS=7`, `DEVICE_TRUST_DAYS=90`, `APP_VERSION`, `DISABLE_WORKER`, `SKIP_MIGRATIONS`, `LOG_LEVEL`.
