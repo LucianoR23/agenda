@@ -20,6 +20,12 @@ describe("service worker script", () => {
     expect(source).toContain('url.pathname.startsWith("/api/")');
   });
 
+  it('without APP_VERSION (or with the default "dev") it uses the build stamp, so every deploy differs', async () => {
+    vi.stubEnv("APP_VERSION", "dev");
+    vi.stubEnv("BUILD_STAMP", "20261117103000");
+    expect(await GET().text()).toContain('const VERSION = "agenda-build-20261117103000";');
+  });
+
   it("sanitizes the version it embeds", async () => {
     vi.stubEnv("APP_VERSION", '1.0"; alert(1); //');
     const source = await GET().text();
