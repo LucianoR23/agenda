@@ -21,6 +21,10 @@ secret iCal address of each calendar (section 5): nothing to set up in Google Cl
 | User support / developer email | your address |
 | Audience | **Internal** if the project is under the Workspace org (no verification, tokens don't expire). Otherwise **External** and then **Publish app → In production** (unverified is fine for one user: you'll see a "Google hasn't verified this app" warning → Advanced → Go to Agenda). **Never leave it in *Testing***: refresh tokens die after 7 days there. |
 | Data access → scopes | `https://www.googleapis.com/auth/calendar.readonly` only |
+| Branding → app home page | `https://agenda.lemydev.com` |
+| Branding → privacy policy | `https://agenda.lemydev.com/privacidad` (required to publish an *External* app; public page, `src/app/privacidad`) |
+| Branding → logo, terms of service | leave empty: uploading a logo forces Google's verification |
+| Authorized domains | `lemydev.com` |
 
 ## 3. OAuth client
 
