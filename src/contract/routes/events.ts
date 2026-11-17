@@ -13,6 +13,7 @@ import {
   EventQuery,
   EventSaved,
   ExternalRemind,
+  GoogleSettings,
   IcalCreate,
   SyncInput,
 } from "../events";
@@ -104,7 +105,13 @@ const source = {
   lastError: null,
 };
 const status = {
-  google: { configured: true, connected: true, needsReconnect: false, accountHint: "l…@empresa.com" },
+  google: {
+    configured: true,
+    connected: true,
+    needsReconnect: false,
+    accountHint: "l…@empresa.com",
+    copyEvents: { available: true, enabled: true, pending: 0, failed: 0, lastError: null },
+  },
   canAddIcal: true,
   sources: [source],
 };
@@ -484,7 +491,8 @@ export const calendarRoutes: RouteDef[] = [
     path: "/api/google/connect",
     tag: "Calendars",
     summary: "Start connecting Google Calendar (browser navigation)",
-    description: "Redirects to Google's consent screen (read-only scope, PKCE, signed state cookie).",
+    description:
+      "Redirects to Google's consent screen (scopes: read calendars, and manage only the calendar the app creates; PKCE, signed state cookie).",
     access: "user",
     responses: {
       302: { description: "To Google.", headers: ["Location", "Set-Cookie"] },
@@ -516,12 +524,39 @@ export const calendarRoutes: RouteDef[] = [
     exchanges: [{ name: "back", summary: "Back from Google", actor: "user", query: { code: "4/0Ab…", state: "s1" }, status: 302 }],
   },
   {
+    operationId: "updateGoogleSettings",
+    method: "patch",
+    path: "/api/google",
+    tag: "Calendars",
+    summary: "Turn copying events to Google on or off",
+    description:
+      "On: Agenda creates (or finds again) a calendar 'Agenda' in the connected Google account and copies its own events there, one way, without Google reminders. Off: stops copying; what's in Google stays.",
+    access: "user",
+    body: GoogleSettings,
+    responses: {
+      200: { description: "Status.", schema: CalendarStatus },
+      409: { description: "`CONFLICT`: not connected, or the connection lacks the permission (reconnect)." },
+    },
+    exchanges: [
+      { name: "on", summary: "Copiar mis eventos a Google", actor: "user", body: { copyEvents: true }, status: 200, response: status },
+      {
+        name: "noScope",
+        summary: "An older connection without the permission",
+        actor: "user",
+        body: { copyEvents: true },
+        status: 409,
+        response: errorBody("CONFLICT", "Volvé a conectar Google para darle a Agenda permiso de crear su calendario."),
+      },
+    ],
+  },
+  {
     operationId: "googleDisconnect",
     method: "delete",
     path: "/api/google",
     tag: "Calendars",
     summary: "Disconnect Google Calendar",
-    description: "Revokes the grant at Google and deletes the credential, the Google calendars and their events.",
+    description:
+      "Revokes the grant at Google and deletes the credential, the Google calendars and their events. The 'Agenda' calendar stays in Google.",
     access: "user",
     responses: { 204: { description: "Disconnected." } },
     exchanges: [{ name: "disconnect", summary: "Desconectar", actor: "user", status: 204 }],

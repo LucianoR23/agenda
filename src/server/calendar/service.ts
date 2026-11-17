@@ -14,8 +14,9 @@ import { env } from "../env";
 import { type Ctx, type HandlerResult, sourceOf } from "../http/context";
 import { ApiError, notFound } from "../http/errors";
 import { log } from "../log";
-import { authorizeUrl, exchangeCode, GoogleError, googleConfigured, listCalendars, pkce, revoke } from "./google";
+import { authorizeUrl, exchangeCode, GoogleError, googleConfigured, listCalendars, PUSH_SCOPE, pkce, revoke } from "./google";
 import { assertPublicHttps, fetchIcal, IcalError, parseIcal } from "./ical";
+import { pushBacklog, pushToGoogle } from "./push";
 import { canEncrypt, open, seal } from "./secretbox";
 import { applyIncoming, forgetGoogle, refreshGoogleCalendars, syncCalendars, windowAround } from "./sync";
 
@@ -49,12 +50,15 @@ function sourceOut(s: SourceRow, ctx: Pick<Ctx, "tz">) {
 export async function calendarStatus(ctx: Ctx) {
   const [cred] = await ctx.db.select().from(googleCredential).limit(1);
   const sources = await ctx.db.select().from(calendarSource).orderBy(asc(calendarSource.kind), asc(calendarSource.name));
+  const copying = Boolean(cred?.pushEnabled);
+  const backlog = copying ? await pushBacklog(ctx.db, ctx.now, ctx.tz) : { pending: 0, failed: 0, lastError: null };
   return {
     google: {
       configured: googleConfigured(),
       connected: Boolean(cred && !cred.invalidAt),
       needsReconnect: Boolean(cred?.invalidAt),
       accountHint: cred?.accountHint ?? null,
+      copyEvents: { available: Boolean(cred?.scopes.includes(PUSH_SCOPE)), enabled: copying, ...backlog },
     },
     canAddIcal: canEncrypt(),
     sources: sources.map((s) => sourceOut(s, ctx)),
@@ -173,12 +177,12 @@ export async function googleCallback(ctx: Ctx, q: { code?: string; state?: strin
     const { refreshToken, scopes } = await exchangeCode(q.code, st.v);
     const calendars = await listCalendars(refreshToken);
     const primary = calendars.find((c) => c.primary);
+    const accountHint = primary ? maskAccount(primary.id) : null;
+    // a reconnect (e.g. to grant the new permission) keeps "copy my events" and the "Agenda" calendar, same account only
+    const [old] = await ctx.db.select().from(googleCredential).limit(1);
+    const keep = old && old.accountHint === accountHint ? { pushEnabled: old.pushEnabled, agendaCalendarId: old.agendaCalendarId } : {};
     await ctx.db.delete(googleCredential);
-    await ctx.db.insert(googleCredential).values({
-      refreshTokenEnc: seal(refreshToken),
-      scopes,
-      accountHint: primary ? maskAccount(primary.id) : null,
-    });
+    await ctx.db.insert(googleCredential).values({ refreshTokenEnc: seal(refreshToken), scopes, accountHint, ...keep });
     await refreshGoogleCalendars(ctx.db, refreshToken);
     log.info("google connected", { calendars: calendars.length });
     // first sync after the commit, without holding the redirect
@@ -193,6 +197,24 @@ export async function googleCallback(ctx: Ctx, q: { code?: string; state?: strin
     }
     throw err;
   }
+}
+
+/** Ajustes → "Copiar mis eventos a Google". Turning it on copies right away (after the commit). */
+export async function updateGoogleSettings(ctx: Ctx, b: { copyEvents: boolean }) {
+  const [cred] = await ctx.db.select().from(googleCredential).limit(1);
+  if (b.copyEvents) {
+    if (!cred || cred.invalidAt) throw new ApiError(409, "CONFLICT", "Conectá Google Calendar primero.");
+    if (!cred.scopes.includes(PUSH_SCOPE))
+      throw new ApiError(409, "CONFLICT", "Volvé a conectar Google para darle a Agenda permiso de crear su calendario.");
+  }
+  if (cred) {
+    await ctx.db.update(googleCredential).set({ pushEnabled: b.copyEvents }).where(eq(googleCredential.id, cred.id));
+    if (b.copyEvents)
+      ctx.afterCommit.push(async () => {
+        void pushToGoogle(getDb(), ctx.now).catch((err) => log.error("google push failed", { err }));
+      });
+  }
+  return calendarStatus(ctx);
 }
 
 /** Desconectar: revoke at Google (best effort), then forget everything Google locally. */

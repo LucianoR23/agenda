@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <header className="flex flex-col gap-2">
         <span className="font-mono text-mono text-muted">AGENDA · POLÍTICA DE PRIVACIDAD</span>
         <h1 className="text-title">Privacidad</h1>
-        <p className="text-muted">Última actualización: 17 de noviembre de 2026.</p>
+        <p className="text-muted">Última actualización: 17 de noviembre de 2026 (calendario «Agenda»).</p>
       </header>
 
       <Section title="Qué es Agenda">
@@ -30,14 +30,20 @@ export default function PrivacyPage() {
       <Section title="Datos de Google Calendar">
         <ul className="flex list-disc flex-col gap-2 pl-5">
           <li>
-            Si el usuario conecta su cuenta de Google, Agenda pide solo el permiso de <strong>lectura</strong> de calendarios (
-            <code className="font-mono text-mono">calendar.readonly</code>). Nunca crea, modifica ni borra eventos en Google.
+            Si el usuario conecta su cuenta de Google, Agenda pide dos permisos: <strong>leer</strong> sus calendarios (
+            <code className="font-mono text-mono">calendar.readonly</code>) y <strong>crear un calendario propio</strong> llamado «Agenda» y
+            manejar solo los eventos de ese calendario (<code className="font-mono text-mono">calendar.app.created</code>). Nunca crea,
+            modifica ni borra eventos en ningún otro calendario.
           </li>
           <li>
             Lee la lista de calendarios y sus eventos (título, fecha y hora, lugar, descripción) para mostrárselos al usuario en su agenda
             y, si lo activa, avisarle antes de cada evento.
           </li>
-          <li>Guarda una copia de esos eventos y el token de acceso en su propio servidor. El token se guarda cifrado.</li>
+          <li>
+            Si el usuario activa “Copiar mis eventos a Google”, escribe en el calendario «Agenda» los eventos que él (o su asistente) creó
+            en Agenda, para que los vea en Google Calendar.
+          </li>
+          <li>Guarda una copia de los eventos leídos y el token de acceso en su propio servidor. El token se guarda cifrado.</li>
           <li>
             Sunday, el asistente personal del mismo usuario, puede consultar esos eventos a través de la API de Agenda para responderle
             sobre su agenda.
@@ -64,7 +70,8 @@ export default function PrivacyPage() {
       <Section title="Cómo borrar los datos">
         <p>
           En Agenda, <strong>Ajustes → Google Calendar → Desconectar</strong> revoca el acceso en Google y borra el token, los calendarios y
-          los eventos copiados. El acceso también se puede revocar desde{" "}
+          los eventos copiados en Agenda. El calendario «Agenda» queda en Google: el usuario lo borra desde Google Calendar si quiere. El
+          acceso también se puede revocar desde{" "}
           <a className="text-accent underline" href="https://myaccount.google.com/permissions" rel="noreferrer" target="_blank">
             la configuración de la cuenta de Google
           </a>

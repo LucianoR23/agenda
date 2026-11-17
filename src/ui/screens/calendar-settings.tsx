@@ -96,7 +96,10 @@ function Content({ status }: { status: CalendarStatus }) {
           {(g.connected || g.needsReconnect) && <SheetRow icon="close" label="Desconectar" onClick={() => setConfirm(true)} />}
         </RowGroup>
       )}
-      <p className="px-1 text-caption text-muted">Solo lectura: Agenda ve tus eventos pero nunca los cambia.</p>
+      <p className="px-1 text-caption text-muted">
+        Agenda lee tus calendarios y nunca los cambia. Si activás la copia, solo escribe en su propio calendario «Agenda».
+      </p>
+      {g.connected && <CopyEvents copy={g.copyEvents} />}
 
       {google.length > 0 && (
         <>
@@ -149,6 +152,56 @@ function Content({ status }: { status: CalendarStatus }) {
           </Button>
         </div>
       </BottomSheet>
+    </>
+  );
+}
+
+/** "Copiar mis eventos a Google": the switch, or the reconnect a connection without the permission needs. */
+function CopyEvents({ copy }: { copy: CalendarStatus["google"]["copyEvents"] }) {
+  const direct = useDirect();
+  const toast = useToast();
+  const set = (copyEvents: boolean) =>
+    void direct("PATCH", "/api/google", { copyEvents }, [["calendars"]])
+      .then(() =>
+        toast({
+          icon: "check_circle",
+          message: copyEvents ? "Copiando tus eventos al calendario «Agenda» de Google" : "Ya no se copian tus eventos a Google",
+        }),
+      )
+      .catch((e) => toast({ icon: "info", message: (e as Error).message }));
+  const state = !copy.enabled
+    ? "Tus eventos de Agenda (también los que crea Sunday) en un calendario «Agenda» de tu Google, sin avisos de Google. Se editan desde Agenda."
+    : copy.failed > 0
+      ? `${copy.failed} sin copiar${copy.lastError ? `: ${copy.lastError}` : ""}. Se reintenta solo.`
+      : copy.pending > 0
+        ? `Copiando… (${copy.pending} pendientes)`
+        : "Al día. Si lo apagás, lo que ya está en Google queda.";
+  return (
+    <>
+      <SectionLabel>Copiar a Google</SectionLabel>
+      {copy.available ? (
+        <>
+          <RowGroup>
+            <SheetRow
+              icon="sync"
+              label="Copiar mis eventos a Google"
+              trailing={<Toggle checked={copy.enabled} onChange={set} label="Copiar mis eventos a Google" />}
+            />
+          </RowGroup>
+          <p className={copy.failed > 0 ? "px-1 text-caption text-danger" : "px-1 text-caption text-muted"}>{state}</p>
+        </>
+      ) : (
+        <Banner
+          kind="info"
+          title="Falta un permiso"
+          action="Volver a conectar"
+          onAction={() => {
+            window.location.href = "/api/google/connect";
+          }}
+        >
+          Para copiar tus eventos a Google, volvé a conectar y aceptá el permiso de crear el calendario «Agenda».
+        </Banner>
+      )}
     </>
   );
 }

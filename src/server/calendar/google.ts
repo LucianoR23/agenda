@@ -4,8 +4,9 @@ import { randomToken } from "../auth/crypto";
 import { env } from "../env";
 
 /**
- * Google Calendar, read-only, over plain `fetch` (docs/v2/06): OAuth 2.0 with PKCE, token refresh and revocation,
- * `calendarList.list` and `events.list`. Responses are validated with Zod (loose objects: Google adds fields), so a
+ * Google Calendar over plain `fetch` (docs/v2/06): OAuth 2.0 with PKCE, token refresh and revocation,
+ * `calendarList.list` and `events.list` to read; `calendars.insert` and events insert/update/delete only in the
+ * "Agenda" calendar the app creates (scope `calendar.app.created`). Responses are validated with Zod (loose objects: Google adds fields), so a
  * surprising answer fails with a clear error instead of bad data. Tests replace the transport with `setGoogleFetch`.
  */
 
@@ -14,6 +15,8 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const API = "https://www.googleapis.com/calendar/v3";
 export const SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+/** Create one calendar and manage only the calendars and events the app created (copying Agenda's events). */
+export const PUSH_SCOPE = "https://www.googleapis.com/auth/calendar.app.created";
 const TIMEOUT_MS = 20_000;
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -62,13 +65,13 @@ export function pkce() {
   return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
 }
 
-/** The consent URL: offline access (refresh token), consent every time (Google only returns it then), one scope. */
+/** The consent URL: offline access (refresh token), consent every time (Google only returns it then), both scopes. */
 export function authorizeUrl(state: string, challenge: string): string {
   const q = new URLSearchParams({
     client_id: credentials().id,
     redirect_uri: redirectUri(),
     response_type: "code",
-    scope: SCOPE,
+    scope: `${SCOPE} ${PUSH_SCOPE}`,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "false",
@@ -184,10 +187,23 @@ export async function revoke(refreshToken: string): Promise<boolean> {
 
 // ---------- Calendar API ----------
 
-async function getJson(path: string, refreshToken: string, query: Record<string, string>): Promise<unknown> {
-  const url = `${API}${path}?${new URLSearchParams(query)}`;
+async function request(
+  method: string,
+  path: string,
+  refreshToken: string,
+  opts: { query?: Record<string, string>; body?: unknown } = {},
+): Promise<Response> {
+  const url = `${API}${path}${opts.query ? `?${new URLSearchParams(opts.query)}` : ""}`;
   const send = async () =>
-    call(url, { headers: { Authorization: `Bearer ${await accessToken(refreshToken)}`, Accept: "application/json" } });
+    call(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${await accessToken(refreshToken)}`,
+        Accept: "application/json",
+        ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+    });
   let res = await send();
   if (res.status === 401) {
     // the cached access token died early: refresh once
@@ -195,7 +211,11 @@ async function getJson(path: string, refreshToken: string, query: Record<string,
     res = await send();
   }
   if (!res.ok) throw await errorFor(res);
-  return res.json();
+  return res;
+}
+
+async function getJson(path: string, refreshToken: string, query: Record<string, string>): Promise<unknown> {
+  return (await request("GET", path, refreshToken, { query })).json();
 }
 
 const CalendarListEntry = z.looseObject({
@@ -203,6 +223,7 @@ const CalendarListEntry = z.looseObject({
   summary: z.string().optional(),
   summaryOverride: z.string().optional(),
   backgroundColor: z.string().optional(),
+  description: z.string().optional(),
   primary: z.boolean().optional(),
   selected: z.boolean().optional(),
   deleted: z.boolean().optional(),
@@ -216,6 +237,7 @@ export interface GoogleCalendar {
   primary: boolean;
   /** Shown in Google Calendar's own sidebar: a good default for "enabled". */
   selected: boolean;
+  description: string | null;
 }
 
 export async function listCalendars(refreshToken: string): Promise<GoogleCalendar[]> {
@@ -235,6 +257,7 @@ export async function listCalendars(refreshToken: string): Promise<GoogleCalenda
         color: c.backgroundColor ?? null,
         primary: c.primary ?? false,
         selected: c.selected ?? false,
+        description: c.description ?? null,
       });
     }
     pageToken = page.nextPageToken;
@@ -286,4 +309,51 @@ export async function listEvents(
     if (++pages > 40) throw new GoogleError("bad_response", "Demasiadas páginas de eventos en Google.");
   } while (pageToken);
   return out;
+}
+
+// ---------- the "Agenda" calendar (scope calendar.app.created) ----------
+
+const Created = z.looseObject({ id: z.string().min(1) });
+
+/** A new secondary calendar owned by the app. */
+export async function createCalendar(refreshToken: string, c: { summary: string; description: string; timeZone: string }): Promise<string> {
+  const res = await request("POST", "/calendars", refreshToken, { body: c });
+  return parse(Created, await res.json(), "calendars.insert").id;
+}
+
+/** What Agenda writes for each event (Google's `Event` resource, the fields Agenda owns). */
+export interface GoogleEventBody {
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start: { date: string } | { dateTime: string; timeZone: string };
+  end: { date: string } | { dateTime: string; timeZone: string };
+  recurrence?: string[];
+  reminders: { useDefault: false; overrides: [] };
+  extendedProperties: { private: Record<string, string> };
+  status: "confirmed";
+}
+
+const eventPath = (calendarId: string, id?: string) =>
+  `/calendars/${encodeURIComponent(calendarId)}/events${id ? `/${encodeURIComponent(id)}` : ""}`;
+
+/** events.insert with Agenda's own id (idempotent: a second insert answers 409). */
+export async function insertEvent(refreshToken: string, calendarId: string, e: GoogleEventBody): Promise<void> {
+  await request("POST", eventPath(calendarId), refreshToken, { body: e });
+}
+
+/** events.update: replaces the event (a cancelled one comes back with `status: confirmed`). */
+export async function updateEvent(refreshToken: string, calendarId: string, e: GoogleEventBody): Promise<void> {
+  await request("PUT", eventPath(calendarId, e.id), refreshToken, { body: e });
+}
+
+/** events.delete; an event that's already gone counts as deleted. */
+export async function deleteEvent(refreshToken: string, calendarId: string, id: string): Promise<void> {
+  try {
+    await request("DELETE", eventPath(calendarId, id), refreshToken);
+  } catch (err) {
+    if (err instanceof GoogleError && (err.status === 404 || err.status === 410)) return;
+    throw err;
+  }
 }

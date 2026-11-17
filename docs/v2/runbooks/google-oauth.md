@@ -1,7 +1,8 @@
 # Runbook — Google Calendar (OAuth, read-only)
 
 One login with the **work** Google account sees both calendars (the personal one is shared into it with full
-details). Agenda only reads: scope `calendar.readonly`. Plan B, if the Workspace admin blocks third-party apps, is the
+details). Agenda reads with scope `calendar.readonly`; with `calendar.app.created` it can also create its own calendar
+"Agenda" and copy your events there (it can't touch any other calendar). Plan B, if the Workspace admin blocks third-party apps, is the
 secret iCal address of each calendar (section 5): nothing to set up in Google Cloud for that.
 
 ## 1. Google Cloud project
@@ -20,7 +21,7 @@ secret iCal address of each calendar (section 5): nothing to set up in Google Cl
 | App name | `Agenda` |
 | User support / developer email | your address |
 | Audience | **Internal** if the project is under the Workspace org (no verification, tokens don't expire). Otherwise **External** and then **Publish app → In production** (unverified is fine for one user: you'll see a "Google hasn't verified this app" warning → Advanced → Go to Agenda). **Never leave it in *Testing***: refresh tokens die after 7 days there. |
-| Data access → scopes | `https://www.googleapis.com/auth/calendar.readonly` only |
+| Data access → scopes | `https://www.googleapis.com/auth/calendar.readonly` and `https://www.googleapis.com/auth/calendar.app.created` (Add or remove scopes → paste each one) |
 | Branding → app home page | `https://agenda.lemydev.com` |
 | Branding → privacy policy | `https://agenda.lemydev.com/privacidad` (required to publish an *External* app; public page, `src/app/privacidad`) |
 | Branding → logo, terms of service | leave empty: uploading a logo forces Google's verification |
@@ -76,3 +77,15 @@ calendar in Agenda and add the new address.
 **Ajustes → Google Calendar → Desconectar**: the grant is revoked at Google and the credential, the Google calendars,
 their events and the reminders attached to them are deleted. Also possible from Google's side:
 <https://myaccount.google.com/permissions>.
+
+## 7. Copy Agenda's events to Google
+
+1. Google Cloud Console → **Data access** (OAuth consent screen) → **Add or remove scopes** → add
+   `https://www.googleapis.com/auth/calendar.app.created` (manually, under "Manually add scopes") → **Update** → **Save**.
+2. In Agenda: **Ajustes → Google Calendar**. If it says "Falta un permiso", tap **Volver a conectar** and accept the
+   new permission (Google shows "ver, editar … los calendarios que esta app cree" or similar).
+3. Turn on **Copiar mis eventos a Google**. Within a minute a calendar **"Agenda"** appears in your Google Calendar with
+   your events from the last week on (recurring ones complete), without Google notifications (Agenda notifies).
+4. Edit them in Agenda (or through Sunday): a change made in Google is overwritten by the next change in Agenda.
+
+Turning it off or disconnecting leaves the "Agenda" calendar in Google; delete it there if you no longer want it.

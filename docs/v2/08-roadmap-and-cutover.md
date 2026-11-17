@@ -94,15 +94,16 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 > **Decision (2026-11-17):** Lemy wants Sunday to warn "ya tenés un evento a esa hora" and his events to show up in Google Calendar. Overlaps don't need Google writes (Google events are already synced), so they ship first (10a). Google writes (10b): a dedicated **"Agenda" calendar** in Lemy's Google account with the `calendar.app.created` scope (the app can only touch the calendar it created), **one-way** (Agenda → Google; edits made in Google are overwritten by the next change in Agenda), events copied **without Google reminders** (Agenda's pushes already notify), and on disconnect the calendar **stays** in Google.
 
 ### 10a — Overlaps
-- [ ] `createEvent` / `updateEvent` return `conflicts` (timed events overlapping, local + Google/iCal, recurring expanded; never blocks); a task with a time too
-- [ ] `checkAvailability` (`GET /api/availability`), Sunday operation #38; Sunday guide updated (hand it to the sunday repo again)
-- [ ] Event editor warns "Se superpone con …" from the cached day
+- [x] `createEvent` / `updateEvent` return `conflicts` (timed events overlapping, local + Google/iCal, recurring expanded; never blocks); a task with a time too
+- [x] `checkAvailability` (`GET /api/availability`), Sunday operation #38; Sunday guide updated (hand it to the sunday repo again)
+- [x] Event editor warns "Se superpone con …" from the cached day
 
 ### 10b — Agenda calendar in Google
-- [ ] Scope `calendar.app.created` (optional: reading keeps working without it; Ajustes asks to reconnect)
-- [ ] Switch "Copiar mis eventos a Google": creates the "Agenda" calendar, backfills from 7 days ago, excluded from the read sync
-- [ ] Outbox: create/update/delete of local events pushed by the worker, idempotent (Google event id derived from ours), retried
-- [ ] `/privacidad`, `06`, `02`, Google runbook updated
+- [x] Scope `calendar.app.created` (optional: reading keeps working without it; Ajustes asks to reconnect, which keeps the setting)
+- [x] Switch "Copiar mis eventos a Google": creates (or finds again) the "Agenda" calendar, backfills from 7 days ago, excluded from the read sync
+- [x] Outbox (`google_event_push`, migration `0005`): create/update/delete of local events pushed by the worker, idempotent (Google event id derived from ours), backoff, calendar re-created if deleted in Google
+- [x] `/privacidad`, `06`, `02`, Google runbook (§7) updated
+- [ ] Lemy: scope added in Google Cloud, reconnected, switch on, events visible in Google
 
 ## Later (stage 2, don't start)
 `/sunday` screen with chat/voice/orb over Open WebUI's API; wake word in the PWA; Android APK.
