@@ -136,7 +136,7 @@ test("events: Calendario agenda and week, editor with a reminder, shown on Hoy",
   await shot(page, "12-calendario-agenda");
 
   // a second event at the same hour: the editor warns before saving (then it's discarded)
-  await page.getByRole("button", { name: "Nuevo evento" }).click();
+  await page.getByRole("button", { name: "Nuevo evento", exact: true }).click();
   await page.getByRole("textbox", { name: "Título" }).fill("Llamada");
   await page.getByRole("button", { name: /^Empieza/ }).click();
   await page.getByRole("button", { name: hh, exact: true }).click();
