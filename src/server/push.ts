@@ -5,6 +5,7 @@ import { sign, unsign } from "./auth/crypto";
 import type { DbLike } from "./db/client";
 import { type ItemSource, notificationLog, pushSubscription } from "./db/schema";
 import { env } from "./env";
+import { log } from "./log";
 
 /** What the service worker receives (see public/sw.js → push). */
 export interface PushPayload {
@@ -28,7 +29,17 @@ export interface SendOptions {
 }
 
 type Sub = typeof pushSubscription.$inferSelect;
-export type SendResult = { ok: true } | { ok: false; gone: boolean; error: string };
+export type SendResult =
+  | { ok: true }
+  | {
+      ok: false;
+      gone: boolean;
+      error: string;
+      /** The push service's HTTP status, when it answered. */
+      status?: number;
+      /** The start of its response body (FCM, Mozilla and Apple explain the rejection there). */
+      detail?: string;
+    };
 export type PushSender = (sub: Sub, payload: PushPayload, opts: Required<SendOptions>) => Promise<SendResult>;
 
 /** Consecutive failures after which a subscription is disabled (re-subscribing enables it again). */
@@ -45,8 +56,65 @@ const webPushSender: PushSender = async (sub, payload, opts) => {
     });
     return { ok: true };
   } catch (err) {
-    const status = (err as { statusCode?: number }).statusCode;
-    return { ok: false, gone: status === 404 || status === 410, error: status ? `HTTP ${status}` : (err as Error).message };
+    const { statusCode: status, body } = err as { statusCode?: number; body?: unknown };
+    return {
+      ok: false,
+      gone: status === 404 || status === 410,
+      error: status ? `HTTP ${status}` : (err as Error).message,
+      ...(status ? { status } : {}),
+      ...(typeof body === "string" && body.trim() ? { detail: body.trim().slice(0, 200) } : {}),
+    };
+  }
+};
+
+/**
+ * Why a push failed, from the push service's status (RFC 8030 / the services' docs):
+ * - `expired` 404/410: the subscription is gone (uninstalled, permission revoked, expired). Deleting it is right.
+ * - `vapid` 401/403: the push service rejected our VAPID signature: keys changed or don't match the subscription
+ *   (subscribed with another VAPID_PUBLIC_KEY), or a bad VAPID_SUBJECT.
+ * - `too_large` 413: the payload is over the service's limit (~4 KB).
+ * - `rate_limited` 429, `push_service` 5xx: the service's side; retried with the next push.
+ * - `network`: no answer at all (DNS, timeout); `not_configured`: VAPID_* missing on the server.
+ */
+export type PushFailureCause =
+  | "expired"
+  | "vapid"
+  | "too_large"
+  | "rate_limited"
+  | "push_service"
+  | "rejected"
+  | "network"
+  | "not_configured";
+
+export function pushFailureCause(r: { status?: number; error: string }): PushFailureCause {
+  const status = r.status ?? Number(/^HTTP (\d{3})/.exec(r.error)?.[1] ?? 0);
+  if (status === 404 || status === 410) return "expired";
+  if (status === 401 || status === 403) return "vapid";
+  if (status === 413) return "too_large";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "push_service";
+  if (status) return "rejected";
+  return r.error === "VAPID not configured" ? "not_configured" : "network";
+}
+
+const HINT: Record<PushFailureCause, string> = {
+  expired: "subscription expired or revoked: deleted",
+  vapid: "VAPID rejected: check VAPID_PUBLIC_KEY/PRIVATE_KEY/SUBJECT (a key change needs every device to subscribe again)",
+  too_large: "payload too large for the push service",
+  rate_limited: "push service rate limit",
+  push_service: "push service error",
+  rejected: "push service rejected the request",
+  network: "push service unreachable",
+  not_configured: "VAPID keys not configured",
+};
+
+/** The push service's host (fcm.googleapis.com, updates.push.services.mozilla.com, web.push.apple.com…), never the
+ * endpoint itself: its path is the subscription's capability URL. */
+const serviceOf = (endpoint: string) => {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "invalid endpoint";
   }
 };
 
@@ -59,7 +127,8 @@ export const setPushSender = (s: PushSender | null) => {
 
 /**
  * Sends to every enabled subscription. 404/410 → the subscription is deleted. Other errors → failure_count + 1 and
- * the error kept; at MAX_FAILURES in a row it's disabled. Any success resets the count.
+ * the error kept; at MAX_FAILURES in a row it's disabled. Any success resets the count. Every failure is logged with
+ * the status, its cause and what was done (never the endpoint or keys).
  */
 export async function sendPush(db: DbLike, payload: PushPayload, opts: SendOptions = {}) {
   const options = { ttl: opts.ttl ?? 3600, urgency: opts.urgency ?? "normal" };
@@ -79,6 +148,20 @@ export async function sendPush(db: DbLike, payload: PushPayload, opts: SendOptio
     }
     failed++;
     errors.push(r.error);
+    const cause = pushFailureCause(r);
+    const action = r.gone ? "deleted" : sub.failureCount + 1 >= MAX_FAILURES ? "disabled" : "kept";
+    log.warn("push failed", {
+      status: r.status ?? null,
+      cause,
+      hint: HINT[cause],
+      action,
+      failures: r.gone ? null : sub.failureCount + 1,
+      pushService: serviceOf(sub.endpoint),
+      subscription: sub.id,
+      type: payload.type,
+      bytes: Buffer.byteLength(JSON.stringify(payload)),
+      ...(r.detail ? { detail: r.detail } : {}),
+    });
     if (r.gone) {
       await db.delete(pushSubscription).where(eq(pushSubscription.id, sub.id));
       continue;
@@ -87,7 +170,7 @@ export async function sendPush(db: DbLike, payload: PushPayload, opts: SendOptio
       .update(pushSubscription)
       .set({
         failureCount: sql`${pushSubscription.failureCount} + 1`,
-        lastError: r.error,
+        lastError: `${r.error} (${cause})`,
         disabledAt: sql`CASE WHEN ${pushSubscription.failureCount} + 1 >= ${MAX_FAILURES} THEN now() ELSE NULL END`,
       })
       .where(and(eq(pushSubscription.id, sub.id), isNull(pushSubscription.disabledAt)));

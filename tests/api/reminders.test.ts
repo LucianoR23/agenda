@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeDb, getDb } from "@/server/db/client";
 import { pushSubscription, reminder, reminderDelivery } from "@/server/db/schema";
 import { now } from "@/server/domain/time";
 import { dispatchReminders } from "@/server/jobs/reminders";
-import { actionToken, MAX_FAILURES } from "@/server/push";
+import { log } from "@/server/log";
+import { actionToken, MAX_FAILURES, pushFailureCause } from "@/server/push";
 import { anon, pushes, pushService, resetAll, setNow, setupUser } from "../helpers/api";
 
 beforeEach(() => resetAll("2026-11-16T08:00:00-03:00")); // Monday 08:00
@@ -120,12 +121,58 @@ describe("dispatcher", () => {
     expect(subs.map((s) => s.endpoint)).toEqual(["https://push.test/laptop"]);
     expect(subs[0]?.failureCount).toBe(MAX_FAILURES);
     expect(subs[0]?.disabledAt).not.toBeNull();
+    expect(subs[0]?.lastError).toBe("HTTP 500 (push_service)");
     // subscribing again re-enables it
     pushService.reply = () => ({ ok: true });
     await subscribe(user, "https://push.test/laptop");
     expect((await user.post("/api/push/test", {})).body).toEqual({ ok: 1, failed: 0 });
     const [again] = await getDb().select().from(pushSubscription);
     expect(again).toMatchObject({ failureCount: 0, disabledAt: null });
+  });
+
+  it("logs why a push failed: status, cause and what was done, never the endpoint", async () => {
+    const warn = vi.spyOn(log, "warn");
+    const { user } = await withReminder({ title: "A", fireAt: "2026-11-16T09:00:00-03:00" });
+    await subscribe(user, "https://fcm.googleapis.com/fcm/send/secret-capability");
+    pushService.reply = (endpoint) =>
+      endpoint.includes("fcm")
+        ? { ok: false, gone: false, error: "HTTP 403", status: 403, detail: "the key in the authorization header does not correspond" }
+        : { ok: false, gone: true, error: "HTTP 410", status: 410 };
+    setNow("2026-11-16T09:00:05-03:00");
+    await tick();
+    const failures = warn.mock.calls.filter(([msg]) => msg === "push failed").map(([, data]) => data);
+    expect(failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 410, cause: "expired", action: "deleted", pushService: "push.test" }),
+        expect.objectContaining({
+          status: 403,
+          cause: "vapid",
+          action: "kept",
+          failures: 1,
+          pushService: "fcm.googleapis.com",
+          detail: "the key in the authorization header does not correspond",
+          type: "reminder",
+        }),
+      ]),
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("secret-capability");
+    warn.mockRestore();
+  });
+});
+
+describe("push failure causes", () => {
+  it("maps the push service's status", () => {
+    const cause = (status?: number, error = status ? `HTTP ${status}` : "getaddrinfo ENOTFOUND") =>
+      pushFailureCause(status ? { status, error } : { error });
+    expect([404, 410].map((s) => cause(s))).toEqual(["expired", "expired"]);
+    expect([401, 403].map((s) => cause(s))).toEqual(["vapid", "vapid"]);
+    expect(cause(413)).toBe("too_large");
+    expect(cause(429)).toBe("rate_limited");
+    expect(cause(502)).toBe("push_service");
+    expect(cause(400)).toBe("rejected");
+    expect(cause()).toBe("network");
+    expect(pushFailureCause({ error: "VAPID not configured" })).toBe("not_configured");
+    expect(pushFailureCause({ error: "HTTP 413" })).toBe("too_large"); // from the message when there's no status
   });
 });
 
