@@ -570,9 +570,18 @@ export async function reopenTask(ctx: Ctx, id: string, nextId?: string) {
   return getTask(ctx, id);
 }
 
-/** Soft delete (offline clients need the tombstone; purged after 30 days). */
+/**
+ * Soft delete (offline clients need the tombstone; purged after 30 days). A completed task can't be deleted: it's
+ * history (Historial, Métricas, Auditoría). Reopening it first is the explicit way out.
+ */
 export async function deleteTask(ctx: Ctx, id: string) {
-  await findTask(ctx, id, true);
+  const t = await findTask(ctx, id, true);
+  if (t.status === "done")
+    throw new ApiError(
+      409,
+      "CONFLICT",
+      "Esa tarea ya está completada: queda en el historial y no se borra. Si se marcó por error, reabrila (reopenTask).",
+    );
   await ctx.db
     .update(task)
     .set({ deletedAt: toDate(ctx.now), updatedBy: sourceOf(ctx.caller) })

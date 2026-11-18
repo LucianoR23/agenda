@@ -353,9 +353,11 @@ function HabitEditor({ habit: h, onDone }: { habit: HabitProgress | null; onDone
       )}
       {h && confirm && (
         <div className="flex flex-col gap-2 rounded-lg bg-danger-soft p-3.5">
-          <p className="text-body-sm text-text">Se borra "{h.name}" con todo su historial. Para conservarlo, archivalo.</p>
+          <p className="text-body-sm text-text">
+            Solo se borra un hábito que nunca marcaste. Si ya tiene días cumplidos, archivalo: su historial queda.
+          </p>
           <Button variant="danger" onClick={() => void run("DELETE", `/api/habits/${h.id}`, undefined, "Hábito borrado")}>
-            Borrar con su historial
+            Borrar "{h.name}"
           </Button>
         </div>
       )}

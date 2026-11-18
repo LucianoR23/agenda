@@ -196,10 +196,15 @@ export const reminderRoutes: RouteDef[] = [
     path: "/api/reminders/{id}",
     tag: "Reminders",
     summary: "Cancel a reminder",
+    description: "A reminder already marked Listo (`status: done`) stays: 409 `CONFLICT`.",
     access: "user",
     token: "write",
     params: idParam,
-    responses: { 204: { description: "Cancelled." }, 404: { description: "`NOT_FOUND`." } },
+    responses: {
+      204: { description: "Cancelled." },
+      404: { description: "`NOT_FOUND`." },
+      409: { description: "`CONFLICT`: already done (history is never deleted)." },
+    },
     exchanges: [{ name: "cancel", summary: "Cancel", actor: "user", params: { id: contador.id }, status: 204 }],
   },
 ];

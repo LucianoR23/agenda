@@ -234,18 +234,21 @@ function ReminderEditor({ reminder: r, onDone }: { reminder: Reminder; onDone: (
             Listo
           </Button>
         )}
-        <Button
-          variant="danger"
-          icon="delete"
-          className="flex-1"
-          onClick={() => {
-            actions.cancel(r);
-            toast({ icon: "delete", message: `"${r.title}" cancelado` });
-            onDone();
-          }}
-        >
-          Cancelar recordatorio
-        </Button>
+        {/* one already done is history */}
+        {r.status !== "done" && (
+          <Button
+            variant="danger"
+            icon="delete"
+            className="flex-1"
+            onClick={() => {
+              actions.cancel(r);
+              toast({ icon: "delete", message: `"${r.title}" cancelado` });
+              onDone();
+            }}
+          >
+            Cancelar recordatorio
+          </Button>
+        )}
       </div>
     </div>
   );

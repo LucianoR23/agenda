@@ -8,6 +8,7 @@ import { getDb } from "../db/client";
 import { one } from "../db/one";
 import { pushSubscription } from "../db/schema";
 import * as assistant from "../domain/assistant";
+import { listAudit } from "../domain/audit";
 import * as events from "../domain/events";
 import * as habits from "../domain/habits";
 import { overview } from "../domain/overview";
@@ -115,6 +116,7 @@ export const handlers: Record<string, Handler> = {
 
   // ---------- settings ----------
   getSettings: async (ctx) => json(200, await getSettings(ctx.db)),
+  getAudit: async (ctx, { query }) => json(200, await listAudit(ctx, query)),
   updateSettings: async (ctx, { body }) => {
     const before = await getSettings(ctx.db);
     const next = await updateSettings(ctx.db, body);

@@ -35,11 +35,11 @@ Full descriptions live in the contract (they become the tool descriptions).
 | `createTask` | POST `/api/tasks` | write | title, notes, dueDate (date or date-time), dueTime, priority, `list` (name) or listId, tags, rrule, `reminderAt`, `clientId`. Returns the task (+ `reminder`). |
 | `updateTask` | PATCH `/api/tasks/{id}` | write | Reschedule, rename, move (`list`), cancel. |
 | `completeTask` / `reopenTask` | POST `/api/tasks/{id}/complete`, `/reopen` | write | Done (recurring → `next`) and undo. |
-| `deleteTask` | DELETE `/api/tasks/{id}` | write | Soft delete. |
+| `deleteTask` | DELETE `/api/tasks/{id}` | write | Soft delete; a completed task answers 409 (history). |
 | `listTaskLists` / `createTaskList` | GET/POST `/api/lists` | read/write | List names for `list`. |
 | `listReminders` / `getReminder` | GET `/api/reminders?view`, `/api/reminders/{id}` | read | `view=upcoming` / `recent`. |
 | `createReminder` | POST `/api/reminders` | write | title, body, fireAt, rrule, urgent, taskId, `clientId`. |
-| `updateReminder` / `snoozeReminder` / `doneReminder` / `deleteReminder` | `/api/reminders/{id}[/snooze\|/done]` | write | Move, postpone (minutes or until), Listo, cancel. |
+| `updateReminder` / `snoozeReminder` / `doneReminder` / `deleteReminder` | `/api/reminders/{id}[/snooze\|/done]` | write | Move, postpone (minutes or until), Listo, cancel (not once done: 409). |
 | `listEvents` / `getEvent` | GET `/api/events?from&to&includeExternal`, `/api/events/{id}` | read | Local + Google (≤ 92 days); Google ones `readOnly: true`. |
 | `checkAvailability` | GET `/api/availability?from&to` | read | Is a slot free: `free`, `busy` (timed, Google included), `allDay` as context. ≤ 31 days. |
 | `createEvent` / `updateEvent` / `deleteEvent` | `/api/events[/{id}]` | write | Local events only; Google → 409 `READ_ONLY_EVENT`. `clientId` on create. Create/update return `conflicts` (timed events overlapping it; never blocks). |

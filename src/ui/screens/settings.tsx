@@ -68,7 +68,7 @@ export function SettingsScreen() {
         <SettingsRow
           icon="calendar_month"
           title="Google Calendar"
-          subtitle="Ver tus eventos de Google (solo lectura)"
+          subtitle="Tus eventos de Google, y los de Agenda en Google"
           href="/ajustes/calendario"
         />
         <SettingsRow icon="key" title="Tokens de API" subtitle="Acceso de Sunday a tu agenda" href="/ajustes/tokens" />
@@ -115,6 +115,9 @@ export function SettingsScreen() {
 
       <SectionLabel>Acerca de</SectionLabel>
       <About />
+      <RowGroup>
+        <SettingsRow icon="notes" title="Auditoría" subtitle="Registro de todo lo que cambió" href="/ajustes/auditoria" />
+      </RowGroup>
     </div>
   );
 }

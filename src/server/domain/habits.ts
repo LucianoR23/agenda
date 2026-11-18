@@ -237,9 +237,23 @@ export async function updateHabit(ctx: Ctx, ref: string, b: HabitPatch) {
   return getHabit(ctx, h.id);
 }
 
-/** Delete (soft): the history goes with it. To keep the history, archive (`active: false`). */
+/**
+ * Delete (soft), only for a habit never checked. One with history is archived instead (`active: false`): what was
+ * done stays.
+ */
 export async function deleteHabit(ctx: Ctx, ref: string) {
   const h = await find(ctx, ref, true);
+  const [logged] = await ctx.db
+    .select({ id: habitLog.id })
+    .from(habitLog)
+    .where(and(eq(habitLog.habitId, h.id), isNull(habitLog.deletedAt)))
+    .limit(1);
+  if (logged)
+    throw new ApiError(
+      409,
+      "CONFLICT",
+      "Ese hábito ya tiene días cumplidos: no se borra, se archiva (active: false) y su historial queda.",
+    );
   await ctx.db
     .update(habit)
     .set({ deletedAt: toDate(ctx.now), updatedBy: sourceOf(ctx.caller) })

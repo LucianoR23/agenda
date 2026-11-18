@@ -40,7 +40,8 @@ This is the target shape; refine names/types in the plan and ask before deviatin
 - `day_review`: `date` PK, `mood smallint 1..5 null`, `note text`, `highlights text[]`, `moved_task_ids uuid[]`, `created_at`, `updated_at`.
 
 ## Infra tables (port from v1)
-- `idempotency_key` (header `Idempotency-Key`, 24 h TTL), `change_log` (for offline delta sync), `notification_log` (generic push log incl. non-reminder pushes like Sunday automations), `audit_event` (auth/token events; prune > 90 days).
+- **Completed things are history** (decided 2026-11-17): a completed task, a reminder marked Listo and a habit with checked days can't be deleted (409; tasks can be reopened, habits archived).
+- `idempotency_key` (header `Idempotency-Key`, 24 h TTL), `change_log` (offline delta sync and Ajustes → Auditoría: one row per write with actor, token, changed fields and `label`, the item's title at that moment; never pruned), `notification_log` (generic push log incl. non-reminder pushes like Sunday automations), `audit_event` (auth/token events; prune > 90 days).
 
 ## Seeds
 - Inbox list. `app_user` row created by the setup flow (`SETUP_CODE`), not by migration.

@@ -1,4 +1,4 @@
-import { orNull, Timestamp, Uuid } from "./common";
+import { ItemSource, orNull, Timestamp, Uuid } from "./common";
 import { z } from "./zod";
 
 // ---------- auth ----------
@@ -183,3 +183,55 @@ export const TokenCreated = z
     token: z.string().openapi({ description: "The secret (`agd_…`). Shown only in this response.", example: "agd_x7Kp…" }),
   })
   .openapi("TokenCreated");
+
+// ---------- audit ----------
+
+export const AuditKind = z
+  .enum(["task", "reminder", "event", "habit", "sleep", "review"])
+  .openapi("AuditKind", { description: "Filter: tasks (and lists), reminders, events, habits (and their checks), sleep, day reviews." });
+
+export const AuditQuery = z
+  .strictObject({
+    kind: AuditKind.optional(),
+    before: Uuid.optional().openapi({ description: "The `next` of the previous page (older entries)." }),
+    limit: z.coerce.number().int().min(1).max(100).optional().openapi({ description: "Default 50." }),
+  })
+  .openapi("AuditQuery");
+
+export const AuditEntry = z
+  .strictObject({
+    id: Uuid,
+    at: Timestamp,
+    entity: z.enum(["task", "task_list", "reminder", "event", "habit", "habit_log", "sleep_log", "day_review"]),
+    entityId: z.string(),
+    action: z
+      .enum([
+        "created",
+        "edited",
+        "completed",
+        "cancelled",
+        "reopened",
+        "rescheduled",
+        "archived",
+        "restored",
+        "checked",
+        "unchecked",
+        "deleted",
+      ])
+      .openapi({ description: "What happened, derived from the change (a status change to done = completed, …)." }),
+    label: z
+      .string()
+      .nullable()
+      .openapi({ description: "The item's title or name at that moment (null for very old entries of purged items)." }),
+    actor: ItemSource,
+    tokenName: z.string().nullable().openapi({ description: "The API token's name when Sunday (or another token) did it." }),
+    fields: z.array(z.string()).openapi({ description: "Fields that changed (edits)." }),
+  })
+  .openapi("AuditEntry");
+
+export const AuditPage = z
+  .strictObject({
+    entries: z.array(AuditEntry),
+    next: Uuid.nullable().openapi({ description: "Pass as `before` for older entries; null at the end." }),
+  })
+  .openapi("AuditPage");

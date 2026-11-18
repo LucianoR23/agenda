@@ -93,7 +93,7 @@ body.
 | `updateTask` [write] | `PATCH /api/tasks/{id}` `{title, notes, dueDate, dueTime, list, listId, priority, tags, rrule, status}` | Only the fields that change. `dueDate: null` clears date/time/recurrence. `status: "cancelled"` = won't do it. |
 | `completeTask` [write] | `POST /api/tasks/{id}/complete` | Recurring → response `next` (the next occurrence). |
 | `reopenTask` [write] | `POST /api/tasks/{id}/reopen` | Undo a completion. |
-| `deleteTask` [write] | `DELETE /api/tasks/{id}` | Only on explicit request. |
+| `deleteTask` [write] | `DELETE /api/tasks/{id}` | Only on explicit request. A completed task can't be deleted (409): it stays in Lemy's history. |
 | `listTaskLists` / `createTaskList` [read/write] | `GET/POST /api/lists` `{name*}` | |
 
 **Reminders** (a push at a moment)
@@ -105,7 +105,7 @@ body.
 | `createReminder` [write] | `POST /api/reminders` `{title*, fireAt*, body, rrule, urgent, taskId, clientId}` | `fireAt` in the future. `urgent` ignores quiet hours. |
 | `updateReminder` [write] | `PATCH /api/reminders/{id}` `{title, body, fireAt, rrule, urgent, taskId}` | A new time re-arms one that fired. |
 | `snoozeReminder` [write] | `POST /api/reminders/{id}/snooze` `{minutes \| until}` | Default: Lemy's snooze setting. |
-| `doneReminder` / `deleteReminder` [write] | `POST /api/reminders/{id}/done`, `DELETE /api/reminders/{id}` | Listo (completes a linked task) / cancel. |
+| `doneReminder` / `deleteReminder` [write] | `POST /api/reminders/{id}/done`, `DELETE /api/reminders/{id}` | Listo (completes a linked task) / cancel. One already done can't be cancelled (409). |
 
 **Events**
 

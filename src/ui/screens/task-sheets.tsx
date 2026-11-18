@@ -426,18 +426,21 @@ export function TaskEditor({ task, lists, onDone }: { task: Task; lists: TaskLis
             Completar
           </Button>
         )}
-        <Button
-          variant="danger"
-          icon="delete"
-          className="flex-1"
-          onClick={() => {
-            actions.remove(task);
-            toast({ icon: "delete", message: `"${task.title}" borrada` });
-            onDone();
-          }}
-        >
-          Borrar
-        </Button>
+        {/* a completed task is history: it can be reopened, not deleted */}
+        {task.status !== "done" && (
+          <Button
+            variant="danger"
+            icon="delete"
+            className="flex-1"
+            onClick={() => {
+              actions.remove(task);
+              toast({ icon: "delete", message: `"${task.title}" borrada` });
+              onDone();
+            }}
+          >
+            Borrar
+          </Button>
+        )}
       </div>
     </div>
   );
