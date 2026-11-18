@@ -173,10 +173,22 @@ async function write(refreshToken: string, calendarId: string, e: EventRow, copi
 class CalendarGone extends Error {}
 
 let running: Promise<PushReport> | null = null;
+let queued: Promise<PushReport> | null = null;
 
-/** One pass (the worker runs it every minute; enabling the switch runs one right away). Never overlaps itself. */
+/**
+ * One pass (the worker runs it every minute; enabling the switch runs one right away). Never overlaps itself: called
+ * while a pass runs, it queues one more that starts when that one ends (so it sees what changed meanwhile); callers
+ * in between share that queued pass.
+ */
 export function pushToGoogle(db: DbLike, now: Temporal.Instant): Promise<PushReport> {
-  running ??= runPush(db, now).finally(() => {
+  if (running) {
+    queued ??= running.then(() => {
+      queued = null;
+      return pushToGoogle(db, now);
+    });
+    return queued;
+  }
+  running = runPush(db, now).finally(() => {
     running = null;
   });
   return running;
