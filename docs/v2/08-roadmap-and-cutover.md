@@ -105,5 +105,21 @@ One phase at a time: plan → Lemy approves → implement → gate (`typecheck`,
 - [x] `/privacidad`, `06`, `02`, Google runbook (§7) updated
 - [ ] Lemy: scope added in Google Cloud, reconnected, switch on, events visible in Google
 
+## Phase 11 — Audit, recurring events, Sunday inside Agenda
+
+> **Decisions (2026-11-17):** Lemy wants a record of everything, and what was completed is history: a completed task, a done reminder and a habit with checked days can't be deleted. Recurring events get "solo este / este y los siguientes / toda la serie" (Sunday asks which). Sunday screen per `agenda-sunday-screen.md` (from the sunday repo): own tab, model selector, VAD `@ricky0123/vad-web` (Silero), orb with three.js (WebGPU renderer, WebGL2 fallback).
+
+### 11a — Audit
+- [x] `change_log.label` (migration `0006`, backfilled); never pruned
+- [x] `GET /api/audit` (app only) + Ajustes → Auditoría
+- [x] Completed task / done reminder / habit with history: delete → 409; the app hides "Borrar" there
+
+### 11b — Recurring events: one occurrence or from one on
+- [ ] Delete (and edit) "solo este", "este y los siguientes", "toda la serie"; Google copy follows (EXDATE/UNTIL)
+
+### 11c — Sunday screen
+- [ ] Proxy `/api/sunday/*` (session only, `SUNDAY_API_KEY`), text chat with tool chips, model selector, own tab
+- [ ] Voice loop (Silero VAD, STT, sentence TTS queue, barge-in), `/sunday?call=1`, three.js orb
+
 ## Later (stage 2, don't start)
 `/sunday` screen with chat/voice/orb over Open WebUI's API; wake word in the PWA; Android APK.

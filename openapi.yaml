@@ -188,6 +188,97 @@ components:
         - expiresAt
         - createdAt
       additionalProperties: false
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        entity:
+          type: string
+          enum:
+            - task
+            - task_list
+            - reminder
+            - event
+            - habit
+            - habit_log
+            - sleep_log
+            - day_review
+        entityId:
+          type: string
+        action:
+          type: string
+          enum:
+            - created
+            - edited
+            - completed
+            - cancelled
+            - reopened
+            - rescheduled
+            - archived
+            - restored
+            - checked
+            - unchecked
+            - deleted
+          description: What happened, derived from the change (a status change to done = completed, …).
+        label:
+          type:
+            - string
+            - "null"
+          description: The item's title or name at that moment (null for very old entries of purged items).
+        actor:
+          $ref: "#/components/schemas/ItemSource"
+        tokenName:
+          type:
+            - string
+            - "null"
+          description: The API token's name when Sunday (or another token) did it.
+        fields:
+          type: array
+          items:
+            type: string
+          description: Fields that changed (edits).
+      required:
+        - id
+        - at
+        - entity
+        - entityId
+        - action
+        - label
+        - actor
+        - tokenName
+        - fields
+      additionalProperties: false
+    AuditKind:
+      type: string
+      enum:
+        - task
+        - reminder
+        - event
+        - habit
+        - sleep
+        - review
+      description: "Filter: tasks (and lists), reminders, events, habits (and their checks), sleep, day reviews."
+    AuditPage:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        next:
+          allOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type:
+                - string
+                - "null"
+              description: Pass as `before` for older entries; null at the end.
+      required:
+        - entries
+        - next
+      additionalProperties: false
     Availability:
       type: object
       properties:
@@ -4305,6 +4396,94 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/audit:
+    get:
+      operationId: getAudit
+      tags:
+        - Settings
+      summary: "Auditoría: every change, newest first"
+      description: |-
+        What was created, edited, completed, cancelled, archived or deleted, by whom (Lemy, Sunday, the system) and when. Never pruned; each entry keeps the item's title at that moment.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/AuditKind"
+          required: false
+          description: "Filter: tasks (and lists), reminders, events, habits (and their checks), sleep, day reviews."
+          name: kind
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/Uuid"
+              - description: The `next` of the previous page (older entries).
+          required: false
+          description: The `next` of the previous page (older entries).
+          name: before
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            description: Default 50.
+          required: false
+          description: Default 50.
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: A page.
+          content:
+            application/json:
+              examples:
+                page:
+                  summary: Latest changes
+                  value:
+                    entries:
+                      - id: 019a0a6e-1c00-7000-8000-00000000005a
+                        at: 2026-10-19T10:32:00.000-03:00
+                        entity: task
+                        entityId: 019a0a6e-1c00-7000-8000-000000000014
+                        action: completed
+                        label: Llamar al contador
+                        actor: sunday
+                        tokenName: sunday
+                        fields:
+                          - status
+                      - id: 019a0a6e-1c00-7000-8000-00000000005b
+                        at: 2026-10-19T09:05:00.000-03:00
+                        entity: task
+                        entityId: 019a0a6e-1c00-7000-8000-000000000015
+                        action: deleted
+                        label: Comprar pintura
+                        actor: user
+                        tokenName: null
+                        fields: []
+                    next: null
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/tokens:
     get:
       operationId: listTokens
@@ -6001,9 +6180,9 @@ paths:
         - sunday
       summary: Delete a task
       description: |-
-        Soft delete. If it was done, prefer completeTask.
+        Soft delete of an open or cancelled task. A completed task can't be deleted (409 `CONFLICT`): it's history. If it was done, prefer completeTask.
 
-        Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled.
+        Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled. A completed task can't be deleted (409): tell Lemy it stays in his history.
 
         **Actors:** user, API token with `write`.
       security:
@@ -6044,6 +6223,20 @@ paths:
           description: "`NOT_FOUND`."
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: the task is completed (history is never deleted)."
+          content:
+            application/json:
+              examples:
+                done:
+                  summary: A completed task
+                  value:
+                    error:
+                      code: CONFLICT
+                      message: "Esa tarea ya está completada: queda en el historial y no se borra. Si se marcó por error, reabrila (reopenTask)."
+                      requestId: req_01JA9X7Q2M8K
               schema:
                 $ref: "#/components/schemas/Error"
         "429":
@@ -7047,7 +7240,9 @@ paths:
         - sunday
       summary: Cancel a reminder
       description: |-
-        Cancel a reminder Lemy no longer wants.
+        A reminder already marked Listo (`status: done`) stays: 409 `CONFLICT`.
+
+        Cancel a reminder Lemy no longer wants. One already done can't be deleted (409): it stays in his history.
 
         **Actors:** user, API token with `write`.
       security:
@@ -7086,6 +7281,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: already done (history is never deleted)."
           content:
             application/json:
               schema:
@@ -9400,7 +9601,7 @@ paths:
         - Habits
       summary: Delete a habit and its history
       description: |-
-        To keep the history, archive it instead (`active: false`).
+        Only a habit never checked. One with checked days answers 409 `CONFLICT`: archive it (`active: false`), its history stays.
 
         **Actors:** user.
       security:
@@ -9440,6 +9641,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: it has checked days; archive it instead."
           content:
             application/json:
               schema:

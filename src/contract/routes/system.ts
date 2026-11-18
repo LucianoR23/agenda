@@ -4,6 +4,8 @@ import * as ex from "../examples";
 import type { RouteDef } from "../route-def";
 import {
   ApiToken,
+  AuditPage,
+  AuditQuery,
   ChangePinInput,
   Device,
   DeviceRename,
@@ -501,6 +503,54 @@ const securityRoutes: RouteDef[] = [
           quietEnd: "07:00",
           defaultSnoozeMinutes: 10,
           missedAfterHours: 12,
+        },
+      },
+    ],
+  },
+  {
+    operationId: "getAudit",
+    method: "get",
+    path: "/api/audit",
+    tag: "Settings",
+    summary: "Auditoría: every change, newest first",
+    description:
+      "What was created, edited, completed, cancelled, archived or deleted, by whom (Lemy, Sunday, the system) and when. Never pruned; each entry keeps the item's title at that moment.",
+    access: "user",
+    query: AuditQuery,
+    responses: { 200: { description: "A page.", schema: AuditPage } },
+    exchanges: [
+      {
+        name: "page",
+        summary: "Latest changes",
+        actor: "user",
+        query: { kind: "task" },
+        status: 200,
+        response: {
+          entries: [
+            {
+              id: ex.uid(90),
+              at: "2026-10-19T10:32:00.000-03:00",
+              entity: "task",
+              entityId: ex.uid(20),
+              action: "completed",
+              label: "Llamar al contador",
+              actor: "sunday",
+              tokenName: "sunday",
+              fields: ["status"],
+            },
+            {
+              id: ex.uid(91),
+              at: "2026-10-19T09:05:00.000-03:00",
+              entity: "task",
+              entityId: ex.uid(21),
+              action: "deleted",
+              label: "Comprar pintura",
+              actor: "user",
+              tokenName: null,
+              fields: [],
+            },
+          ],
+          next: null,
         },
       },
     ],

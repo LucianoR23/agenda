@@ -172,10 +172,15 @@ export const habitRoutes: RouteDef[] = [
     path: "/api/habits/{habit}",
     tag: "Habits",
     summary: "Delete a habit and its history",
-    description: "To keep the history, archive it instead (`active: false`).",
+    description:
+      "Only a habit never checked. One with checked days answers 409 `CONFLICT`: archive it (`active: false`), its history stays.",
     access: "user",
     params: habitParam,
-    responses: { 204: { description: "Deleted." }, 404: { description: "`NOT_FOUND`." } },
+    responses: {
+      204: { description: "Deleted." },
+      404: { description: "`NOT_FOUND`." },
+      409: { description: "`CONFLICT`: it has checked days; archive it instead." },
+    },
     exchanges: [{ name: "delete", summary: "Delete", actor: "user", params: { habit: "gym" }, status: 204 }],
   },
   {

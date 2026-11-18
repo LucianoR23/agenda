@@ -23,6 +23,8 @@ export const changeLog = pgTable(
     actor: itemSourceEnum().notNull(),
     tokenId: uuid().references(() => apiToken.id, { onDelete: "set null" }),
     diff: jsonb().$type<{ before?: unknown; after?: unknown; fields?: FieldDiff }>(),
+    /** The item's title/name when it changed (Ajustes → Auditoría reads it after the item is purged). */
+    label: text(),
     requestId: text(),
     at: at().notNull().defaultNow(),
   },

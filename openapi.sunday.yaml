@@ -2611,9 +2611,9 @@ paths:
         - Tasks
       summary: Delete a task
       description: |-
-        Soft delete. If it was done, prefer completeTask.
+        Soft delete of an open or cancelled task. A completed task can't be deleted (409 `CONFLICT`): it's history. If it was done, prefer completeTask.
 
-        Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled.
+        Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled. A completed task can't be deleted (409): tell Lemy it stays in his history.
       security:
         - apiToken:
             - write
@@ -2646,6 +2646,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: the task is completed (history is never deleted)."
           content:
             application/json:
               schema:
@@ -3224,9 +3230,9 @@ paths:
         - Reminders
       summary: Cancel a reminder
       description: |-
-        Cancel a reminder
+        A reminder already marked Listo (`status: done`) stays: 409 `CONFLICT`.
 
-        Cancel a reminder Lemy no longer wants.
+        Cancel a reminder Lemy no longer wants. One already done can't be deleted (409): it stays in his history.
       security:
         - apiToken:
             - write
@@ -3259,6 +3265,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: "`NOT_FOUND`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: already done (history is never deleted)."
           content:
             application/json:
               schema:

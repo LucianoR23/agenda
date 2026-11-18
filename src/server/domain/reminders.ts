@@ -276,9 +276,10 @@ export async function doneReminder(ctx: Ctx, id: string) {
   return reminderOut(row, ctx);
 }
 
-/** Cancel (soft delete). */
+/** Cancel (soft delete). A reminder already marked Listo stays: it's history. */
 export async function deleteReminder(ctx: Ctx, id: string) {
-  await find(ctx, id, true);
+  const r = await find(ctx, id, true);
+  if (r.status === "done") throw new ApiError(409, "CONFLICT", "Ese recordatorio ya está hecho: queda en el historial y no se borra.");
   await ctx.db
     .update(reminder)
     .set({ status: "cancelled", deletedAt: toDate(ctx.now), updatedBy: sourceOf(ctx.caller) })

@@ -74,7 +74,7 @@ export const SUNDAY_GUIDE: Record<SundayOperation, string> = {
   completeTask: "When Lemy says he did it. A recurring task returns `next`, its next occurrence: mention when it comes back.",
   reopenTask: "Undo a completion ('no, no la terminé').",
   deleteTask:
-    "Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled.",
+    "Only when Lemy asks to delete or forget it. If it was done, use completeTask; if he won't do it, updateTask with status cancelled. A completed task can't be deleted (409): tell Lemy it stays in his history.",
   listTaskLists: "The lists and their names, to pick `list` for createTask/updateTask.",
   createTaskList: "Only when Lemy asks for a new list.",
   listReminders: "view=upcoming for the pending ones ('¿qué recordatorios tengo?'), view=recent for what already fired. Without view: all.",
@@ -84,7 +84,7 @@ export const SUNDAY_GUIDE: Record<SundayOperation, string> = {
   updateReminder: "Change the time or text of a reminder. A new future time re-arms one that already fired.",
   snoozeReminder: "'Recordámelo en media hora' about an existing reminder: `minutes`, or `until` a time.",
   doneReminder: "Lemy confirms he did what the reminder asked (the linked task is completed too).",
-  deleteReminder: "Cancel a reminder Lemy no longer wants.",
+  deleteReminder: "Cancel a reminder Lemy no longer wants. One already done can't be deleted (409): it stays in his history.",
   listEvents:
     "Calendar only (Lemy's events plus Google Calendar) for a range up to 92 days. Google events have `readOnly: true`: they can't be changed here, only get a reminder with remindExternalEvent.",
   checkAvailability:

@@ -375,12 +375,30 @@ const taskRoutes: RouteDef[] = [
     path: "/api/tasks/{id}",
     tag: "Tasks",
     summary: "Delete a task",
-    description: "Soft delete. If it was done, prefer completeTask.",
+    description:
+      "Soft delete of an open or cancelled task. A completed task can't be deleted (409 `CONFLICT`): it's history. If it was done, prefer completeTask.",
     access: "user",
     token: "write",
     params: idParam,
-    responses: { 204: { description: "Deleted." }, 404: { description: "`NOT_FOUND`." } },
-    exchanges: [{ name: "delete", summary: "Delete", actor: "user", params: { id: contador.id }, status: 204 }],
+    responses: {
+      204: { description: "Deleted." },
+      404: { description: "`NOT_FOUND`." },
+      409: { description: "`CONFLICT`: the task is completed (history is never deleted)." },
+    },
+    exchanges: [
+      { name: "delete", summary: "Delete", actor: "user", params: { id: contador.id }, status: 204 },
+      {
+        name: "done",
+        summary: "A completed task",
+        actor: "user",
+        params: { id: contador.id },
+        status: 409,
+        response: errorBody(
+          "CONFLICT",
+          "Esa tarea ya está completada: queda en el historial y no se borra. Si se marcó por error, reabrila (reopenTask).",
+        ),
+      },
+    ],
   },
   {
     operationId: "reorderTasks",
