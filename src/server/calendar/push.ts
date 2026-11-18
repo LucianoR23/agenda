@@ -70,7 +70,11 @@ function pendingWhere(now: Temporal.Instant, tz: string): SQL {
   const live = and(
     isNull(event.deletedAt),
     sql`${googleEventPush.pushedVersion} IS DISTINCT FROM ${event.version}`,
-    or(isNotNull(event.rrule), gte(sql`coalesce(${event.endsAt}, ${event.startsAt})`, toDate(since)), gte(event.endDate, sinceDate)),
+    or(
+      isNotNull(event.rrule),
+      sql`coalesce(${event.endsAt}, ${event.startsAt}) >= ${toDate(since).toISOString()}::timestamptz`,
+      gte(event.endDate, sinceDate),
+    ),
   );
   const removed = and(
     isNotNull(event.deletedAt),
