@@ -91,7 +91,7 @@ export const SUNDAY_GUIDE: Record<SundayOperation, string> = {
     "'¿Tengo algo el jueves a las 15?', or before proposing a time: whether a slot is free, and what's there if not. Times can omit the offset.",
   getEvent: "Fetch one of Lemy's own events by id.",
   createEvent:
-    "Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar. If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.",
+    "Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda (Agenda copies it to an 'Agenda' calendar in Lemy's Google Calendar if he turned that on; always edit it here, never in Google). If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.",
   updateEvent:
     "Move or edit one of Lemy's own events (the whole series if it repeats). A Google Calendar event answers READ_ONLY_EVENT: tell Lemy to change it in Google Calendar. Like createEvent, mention any `conflicts` in the response.",
   deleteEvent: "Delete one of Lemy's own events. Google Calendar events can't be deleted here.",

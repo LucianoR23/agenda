@@ -161,11 +161,31 @@ export const CalendarStatus = z
       connected: z.boolean(),
       needsReconnect: z.boolean().openapi({ description: "Google rejected the stored grant: connect again." }),
       accountHint: z.string().nullable(),
+      copyEvents: z
+        .strictObject({
+          available: z.boolean().openapi({
+            description: "The connection has the permission to create the 'Agenda' calendar (older connections: reconnect).",
+          }),
+          enabled: z.boolean().openapi({ description: "Local events are being copied to the 'Agenda' calendar in Google." }),
+          pending: z.int().openapi({ description: "Events waiting to be copied (or deleted) in Google." }),
+          failed: z.int().openapi({ description: "Of those, how many failed last time (retried with backoff)." }),
+          lastError: z.string().nullable(),
+        })
+        .openapi("GoogleCopyStatus", { description: "Copying Agenda's events to a calendar of its own in Google (one way)." }),
     }),
     canAddIcal: z.boolean().openapi({ description: "ENCRYPTION_KEY is set (iCal URLs are stored encrypted)." }),
     sources: z.array(CalendarSource),
   })
   .openapi("CalendarStatus");
+
+export const GoogleSettings = z
+  .strictObject({
+    copyEvents: z.boolean().openapi({
+      description:
+        "Copy local events to an 'Agenda' calendar in Lemy's Google account (created on first use; kept when turned off or disconnected).",
+    }),
+  })
+  .openapi("GoogleSettings");
 
 export const CalendarPatch = z
   .strictObject({

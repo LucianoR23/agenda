@@ -114,7 +114,7 @@ body.
 | `listEvents` [read] | `GET /api/events?from*&to*&includeExternal` | ≤ 92 days. Google ones: `source: "google"`, `readOnly: true`, use `externalEventId`. |
 | `checkAvailability` [read] | `GET /api/availability?from*&to*` | Is a slot free? `free`, `busy` (timed events overlapping [from, to), Google included) and `allDay` (that day's all-day events, as context). ≤ 31 days. |
 | `getEvent` [read] | `GET /api/events/{id}` | Local events. |
-| `createEvent` [write] | `POST /api/events` `{title*, startsAt, endsAt, allDay, startDate, endDate, location, notes, rrule, reminderOffsets, clientId}` | Timed (`startsAt` [+ `endsAt`]) or all-day (`allDay: true`, `startDate` [+ exclusive `endDate`]). `reminderOffsets: [60, 15]` = pushes 60 and 15 min before. Created in Agenda, not in Google. The response adds `conflicts` (overlapping events): mention them. |
+| `createEvent` [write] | `POST /api/events` `{title*, startsAt, endsAt, allDay, startDate, endDate, location, notes, rrule, reminderOffsets, clientId}` | Timed (`startsAt` [+ `endsAt`]) or all-day (`allDay: true`, `startDate` [+ exclusive `endDate`]). `reminderOffsets: [60, 15]` = pushes 60 and 15 min before. Created in Agenda; if Lemy turned on the copy, it also shows up in an "Agenda" calendar in his Google Calendar (one way: always change it through Agenda). The response adds `conflicts` (overlapping events): mention them. |
 | `updateEvent` / `deleteEvent` [write] | `PATCH/DELETE /api/events/{id}` | Local only; Google → 409 `READ_ONLY_EVENT` (tell Lemy to change it in Google Calendar). `updateEvent` returns `conflicts` too. |
 | `remindExternalEvent` [write] | `POST /api/external-events/{id}/remind` `{minutesBefore \| at}` | "Avisame 10 min antes de la daily" for a Google event. |
 

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { DbLike } from "../db/client";
-import { calendarSource, externalEvent, googleCredential, reminder } from "../db/schema";
+import { calendarSource, externalEvent, googleCredential, googleEventPush, reminder } from "../db/schema";
 import { materializeEventReminders } from "../domain/event-reminders";
 import { getSettings } from "../domain/settings";
 import { fromDate, toDate, toInstant } from "../domain/time";
@@ -205,7 +205,7 @@ export async function googleRefreshToken(db: DbLike): Promise<string | null> {
 }
 
 /** Google said the grant is dead: mark it, tell Lemy once. */
-async function markInvalid(db: DbLike, now: Temporal.Instant) {
+export async function markInvalid(db: DbLike, now: Temporal.Instant) {
   const [c] = await db
     .update(googleCredential)
     .set({ invalidAt: toDate(now) })
@@ -224,10 +224,12 @@ async function markInvalid(db: DbLike, now: Temporal.Instant) {
 
 /**
  * Keeps calendar_source in step with the account's calendar list: new calendars appear (enabled when Google shows
- * them in its own sidebar), renamed ones update, removed ones go (with their events).
+ * them in its own sidebar), renamed ones update, removed ones go (with their events). The "Agenda" calendar the app
+ * writes to is never read back (it would show every event twice).
  */
 export async function refreshGoogleCalendars(db: DbLike, refreshToken: string) {
-  const calendars = await listCalendars(refreshToken);
+  const [cred] = await db.select({ agendaCalendarId: googleCredential.agendaCalendarId }).from(googleCredential).limit(1);
+  const calendars = (await listCalendars(refreshToken)).filter((c) => c.id !== cred?.agendaCalendarId);
   const existing = await db.select().from(calendarSource).where(eq(calendarSource.kind, "google"));
   const ids = new Set(calendars.map((c) => c.id));
   for (const c of calendars) {
@@ -335,9 +337,14 @@ async function runSync(db: DbLike, now: Temporal.Instant, force: boolean): Promi
   return report;
 }
 
-/** Disconnecting: the credential and every Google calendar (events and their reminders cascade). */
+/**
+ * Disconnecting: the credential and every Google calendar (events and their reminders cascade). The "Agenda"
+ * calendar stays in Google; what was copied is forgotten here, so a new connection copies everything again (into the
+ * same calendar, found by its marker).
+ */
 export async function forgetGoogle(db: DbLike) {
   await db.delete(calendarSource).where(eq(calendarSource.kind, "google"));
+  await db.delete(googleEventPush);
   await db.delete(googleCredential);
   backoff.clear();
 }

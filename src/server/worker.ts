@@ -1,3 +1,4 @@
+import { pushToGoogle } from "./calendar/push";
 import { syncCalendars } from "./calendar/sync";
 import { getDb } from "./db/client";
 import { materializeEventReminders } from "./domain/event-reminders";
@@ -24,6 +25,14 @@ export const JOBS: Job[] = [
     due: every(1),
     run: async (now) => {
       void syncCalendars(getDb(), now).catch((err) => log.error("calendar sync failed", { err }));
+    },
+  },
+  // local events -> the "Agenda" calendar in Google (when turned on); detached like the sync
+  {
+    name: "google-push",
+    due: every(1),
+    run: async (now) => {
+      void pushToGoogle(getDb(), now).catch((err) => log.error("google push failed", { err }));
     },
   },
   { name: "prune", due: dailyAt("04:00"), run: (now) => prune(getDb(), now) },

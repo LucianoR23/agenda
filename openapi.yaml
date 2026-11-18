@@ -307,11 +307,14 @@ components:
               type:
                 - string
                 - "null"
+            copyEvents:
+              $ref: "#/components/schemas/GoogleCopyStatus"
           required:
             - configured
             - connected
             - needsReconnect
             - accountHint
+            - copyEvents
           additionalProperties: false
         canAddIcal:
           type: boolean
@@ -935,6 +938,42 @@ components:
           allOf:
             - $ref: "#/components/schemas/Timestamp"
             - description: "Any moment (all-day events: e.g. that day 09:00)."
+      additionalProperties: false
+    GoogleCopyStatus:
+      type: object
+      properties:
+        available:
+          type: boolean
+          description: "The connection has the permission to create the 'Agenda' calendar (older connections: reconnect)."
+        enabled:
+          type: boolean
+          description: Local events are being copied to the 'Agenda' calendar in Google.
+        pending:
+          type: integer
+          description: Events waiting to be copied (or deleted) in Google.
+        failed:
+          type: integer
+          description: Of those, how many failed last time (retried with backoff).
+        lastError:
+          type:
+            - string
+            - "null"
+      required:
+        - available
+        - enabled
+        - pending
+        - failed
+        - lastError
+      additionalProperties: false
+      description: Copying Agenda's events to a calendar of its own in Google (one way).
+    GoogleSettings:
+      type: object
+      properties:
+        copyEvents:
+          type: boolean
+          description: Copy local events to an 'Agenda' calendar in Lemy's Google account (created on first use; kept when turned off or disconnected).
+      required:
+        - copyEvents
       additionalProperties: false
     HabitCreate:
       type: object
@@ -7585,7 +7624,7 @@ paths:
       description: |-
         Timed (`startsAt` + optional `endsAt`) or all-day (`allDay: true`, `startDate` + optional exclusive `endDate`). Optional RRULE and `reminderOffsets` (minutes before: pushes are scheduled automatically). The response lists the events it overlaps in `conflicts`.
 
-        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar. If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.
+        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda (Agenda copies it to an 'Agenda' calendar in Lemy's Google Calendar if he turned that on; always edit it here, never in Google). If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.
 
         **Actors:** user, API token with `write`.
       security:
@@ -8342,6 +8381,12 @@ paths:
                       connected: true
                       needsReconnect: false
                       accountHint: l…@empresa.com
+                      copyEvents:
+                        available: true
+                        enabled: true
+                        pending: 0
+                        failed: 0
+                        lastError: null
                     canAddIcal: true
                     sources:
                       - id: 019a0a6e-1c00-7000-8000-000000000046
@@ -8654,6 +8699,12 @@ paths:
                       connected: true
                       needsReconnect: false
                       accountHint: l…@empresa.com
+                      copyEvents:
+                        available: true
+                        enabled: true
+                        pending: 0
+                        failed: 0
+                        lastError: null
                     canAddIcal: true
                     sources:
                       - id: 019a0a6e-1c00-7000-8000-000000000046
@@ -8709,7 +8760,7 @@ paths:
         - Calendars
       summary: Start connecting Google Calendar (browser navigation)
       description: |-
-        Redirects to Google's consent screen (read-only scope, PKCE, signed state cookie).
+        Redirects to Google's consent screen (scopes: read calendars, and manage only the calendar the app creates; PKCE, signed state cookie).
 
         **Actors:** user.
       security:
@@ -8840,13 +8891,119 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /api/google:
+    patch:
+      operationId: updateGoogleSettings
+      tags:
+        - Calendars
+      summary: Turn copying events to Google on or off
+      description: |-
+        On: Agenda creates (or finds again) a calendar 'Agenda' in the connected Google account and copies its own events there, one way, without Google reminders. Off: stops copying; what's in Google stays.
+
+        **Actors:** user.
+      security:
+        - session: []
+      x-actors:
+        - user
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            examples:
+              on:
+                summary: Copiar mis eventos a Google
+                value:
+                  copyEvents: true
+              noScope:
+                summary: An older connection without the permission
+                value:
+                  copyEvents: true
+            schema:
+              $ref: "#/components/schemas/GoogleSettings"
+      responses:
+        "200":
+          description: Status.
+          content:
+            application/json:
+              examples:
+                on:
+                  summary: Copiar mis eventos a Google
+                  value:
+                    google:
+                      configured: true
+                      connected: true
+                      needsReconnect: false
+                      accountHint: l…@empresa.com
+                      copyEvents:
+                        available: true
+                        enabled: true
+                        pending: 0
+                        failed: 0
+                        lastError: null
+                    canAddIcal: true
+                    sources:
+                      - id: 019a0a6e-1c00-7000-8000-000000000046
+                        kind: google
+                        name: Trabajo
+                        color: "#4285f4"
+                        enabled: true
+                        reminderMinutes: null
+                        lastSyncedAt: 2026-11-16T08:10:00.000-03:00
+                        lastError: null
+              schema:
+                $ref: "#/components/schemas/CalendarStatus"
+        "400":
+          description: "`VALIDATION_ERROR` (details.fields)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "`UNAUTHORIZED` (no/invalid credentials) or `DEVICE_LOCKED` (unlock with PIN)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`FORBIDDEN` (API tokens can't call this) or `ORIGIN_NOT_ALLOWED` (cookie write from another origin)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONFLICT`: not connected, or the connection lacks the permission (reconnect). `IDEMPOTENCY_IN_PROGRESS`."
+          content:
+            application/json:
+              examples:
+                noScope:
+                  summary: An older connection without the permission
+                  value:
+                    error:
+                      code: CONFLICT
+                      message: Volvé a conectar Google para darle a Agenda permiso de crear su calendario.
+                      requestId: req_01JA9X7Q2M8K
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: "`UNSUPPORTED_MEDIA_TYPE`: send `Content-Type: application/json`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: "`IDEMPOTENCY_KEY_REUSE`: same `Idempotency-Key`, different body."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: googleDisconnect
       tags:
         - Calendars
       summary: Disconnect Google Calendar
       description: |-
-        Revokes the grant at Google and deletes the credential, the Google calendars and their events.
+        Revokes the grant at Google and deletes the credential, the Google calendars and their events. The 'Agenda' calendar stays in Google.
 
         **Actors:** user.
       security:

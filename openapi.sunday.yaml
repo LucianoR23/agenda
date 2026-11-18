@@ -3602,7 +3602,7 @@ paths:
       description: |-
         Timed (`startsAt` + optional `endsAt`) or all-day (`allDay: true`, `startDate` + optional exclusive `endDate`). Optional RRULE and `reminderOffsets` (minutes before: pushes are scheduled automatically). The response lists the events it overlaps in `conflicts`.
 
-        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda, not in Google Calendar. If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.
+        Something with a time slot or a whole day ('turno con el dentista el miércoles a las 10'). Times can omit the offset. `reminderOffsets: [60]` pushes 1 h before. Always send a `clientId`. It's created in the agenda (Agenda copies it to an 'Agenda' calendar in Lemy's Google Calendar if he turned that on; always edit it here, never in Google). If the response's `conflicts` isn't empty, tell Lemy ('ojo, a esa hora ya tenés la daily') and offer to move it; don't move it on your own.
       security:
         - apiToken:
             - write

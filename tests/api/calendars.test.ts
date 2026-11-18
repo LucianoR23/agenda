@@ -2,25 +2,37 @@ import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setGoogleFetch } from "@/server/calendar/google";
 import { setIcalFetch } from "@/server/calendar/ical";
+import { pushToGoogle } from "@/server/calendar/push";
 import { resetSyncState, syncCalendars } from "@/server/calendar/sync";
 import { closeDb, getDb } from "@/server/db/client";
-import { googleCredential } from "@/server/db/schema";
+import { googleCredential, googleEventPush } from "@/server/db/schema";
 import { now } from "@/server/domain/time";
 import { log } from "@/server/log";
 import { pushes, resetAll, setNow, setupUser } from "../helpers/api";
 
 const REFRESH = "1//refresh-token-secret";
 
-/** A tiny Google: OAuth token endpoint, revoke, calendarList and events (paginated), with switches for failures. */
+/**
+ * A tiny Google: OAuth token endpoint, revoke, calendarList and events (paginated), plus the writes Agenda makes to
+ * its own calendar (calendars.insert, events insert/update/delete), with switches for failures.
+ */
+type FakeCalendar = { id: string; summary: string; primary?: boolean; selected?: boolean; backgroundColor?: string; description?: string };
 const google = {
-  calendars: [] as Array<{ id: string; summary: string; primary?: boolean; selected?: boolean; backgroundColor?: string }>,
+  calendars: [] as FakeCalendar[],
   events: new Map<string, Array<Record<string, unknown>>>(),
+  /** What Agenda wrote, per calendar id → event id → body. */
+  written: new Map<string, Map<string, Record<string, unknown>>>(),
+  created: [] as Array<Record<string, unknown>>,
   pageSize: 100,
   invalidGrant: false,
   forbidden: false,
+  grantPush: true,
+  rejectTitle: "",
   revoked: [] as string[],
   calls: [] as string[],
 };
+const PUSH = "https://www.googleapis.com/auth/calendar.app.created";
+const READ = "https://www.googleapis.com/auth/calendar.readonly";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -36,7 +48,7 @@ async function fakeGoogle(url: string, init?: RequestInit): Promise<Response> {
         access_token: "ya29.a",
         expires_in: 3600,
         refresh_token: REFRESH,
-        scope: "https://www.googleapis.com/auth/calendar.readonly",
+        scope: google.grantPush ? `${READ} ${PUSH}` : READ,
       });
     }
     if (google.invalidGrant || form.get("refresh_token") !== REFRESH) return json(400, { error: "invalid_grant" });
@@ -49,6 +61,37 @@ async function fakeGoogle(url: string, init?: RequestInit): Promise<Response> {
   if (google.invalidGrant) return json(401, { error: { message: "Invalid Credentials" } });
   if (google.forbidden) return json(403, { error: { message: "Forbidden", errors: [{ reason: "forbidden" }] } });
   if (u.pathname.endsWith("/users/me/calendarList")) return json(200, { items: google.calendars });
+  const method = init?.method ?? "GET";
+  const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+  if (u.pathname.endsWith("/calendar/v3/calendars") && method === "POST") {
+    const id = `agenda-${google.created.length + 1}@group.calendar.google.com`;
+    google.created.push({ id, ...body });
+    google.calendars.push({ id, summary: String(body.summary), description: String(body.description), selected: true });
+    google.written.set(id, new Map());
+    return json(200, { id, ...body });
+  }
+  const w = /\/calendars\/([^/]+)\/events(?:\/([^/]+))?$/.exec(u.pathname);
+  if (w && method !== "GET") {
+    const cal = google.written.get(decodeURIComponent(w[1] ?? ""));
+    if (!cal) return json(404, { error: { message: "Not Found" } });
+    const id = w[2] ? decodeURIComponent(w[2]) : String(body.id);
+    if (body.summary === google.rejectTitle && google.rejectTitle)
+      return json(400, { error: { message: "Invalid recurrence rule", errors: [{ reason: "invalid" }] } });
+    if (method === "POST") {
+      if (cal.has(id)) return json(409, { error: { message: "The requested identifier already exists." } });
+      cal.set(id, body);
+      return json(200, body);
+    }
+    if (method === "PUT") {
+      if (!cal.has(id)) return json(404, { error: { message: "Not Found" } });
+      cal.set(id, body);
+      return json(200, body);
+    }
+    if (method === "DELETE") {
+      if (!cal.delete(id)) return json(410, { error: { message: "Resource has been deleted" } });
+      return new Response(null, { status: 204 });
+    }
+  }
   const m = /\/calendars\/([^/]+)\/events$/.exec(u.pathname);
   if (m) {
     const all = google.events.get(decodeURIComponent(m[1] ?? "")) ?? [];
@@ -74,7 +117,19 @@ const timed = (id: string, summary: string, start: string, end: string, extra: R
 beforeEach(async () => {
   await resetAll("2026-11-16T08:00:00-03:00");
   resetSyncState();
-  Object.assign(google, { calendars: [], events: new Map(), pageSize: 100, invalidGrant: false, forbidden: false, revoked: [], calls: [] });
+  Object.assign(google, {
+    calendars: [],
+    events: new Map(),
+    written: new Map(),
+    created: [],
+    pageSize: 100,
+    invalidGrant: false,
+    forbidden: false,
+    grantPush: true,
+    rejectTitle: "",
+    revoked: [],
+    calls: [],
+  });
   google.calendars = [
     { id: "lemy@empresa.com", summary: "lemy@empresa.com", primary: true, selected: true, backgroundColor: "#4285f4" },
     { id: "personal@gmail.com", summary: "Personal", selected: true },
@@ -99,7 +154,7 @@ async function connect() {
   expect(go.status).toBe(302);
   const to = new URL(go.headers.get("location") ?? "");
   expect(to.origin + to.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
-  expect(to.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/calendar.readonly");
+  expect(to.searchParams.get("scope")).toBe(`${READ} ${PUSH}`);
   expect(to.searchParams.get("code_challenge_method")).toBe("S256");
   expect(to.searchParams.get("access_type")).toBe("offline");
   const back = await user.get(`/api/google/callback?code=good-code&state=${to.searchParams.get("state")}&scope=x`);
@@ -117,7 +172,13 @@ describe("Google Calendar", () => {
     const info = vi.spyOn(log, "info");
     const user = await connect();
     const status = (await user.get("/api/calendars")).body;
-    expect(status.google).toEqual({ configured: true, connected: true, needsReconnect: false, accountHint: "l…@empresa.com" });
+    expect(status.google).toEqual({
+      configured: true,
+      connected: true,
+      needsReconnect: false,
+      accountHint: "l…@empresa.com",
+      copyEvents: { available: true, enabled: false, pending: 0, failed: 0, lastError: null },
+    });
     expect(status.sources.map((s: { name: string; enabled: boolean }) => [s.name, s.enabled])).toEqual([
       ["Feriados", false],
       ["lemy@empresa.com", true],
@@ -223,6 +284,124 @@ describe("Google Calendar", () => {
     expect(status.google.connected).toBe(false);
     expect(status.sources).toEqual([]);
     expect(await titles(user)).toEqual([]);
+  });
+});
+
+describe("copying Agenda's events to Google", () => {
+  const agendaCalendar = () => {
+    const [id] = [...google.written.keys()];
+    return { id: id ?? "", events: google.written.get(id ?? "") ?? new Map() };
+  };
+  const push = () => pushToGoogle(getDb(), now());
+
+  it("creates the 'Agenda' calendar, copies events one way (no Google reminders), never reads it back", async () => {
+    const user = await connect();
+    const dentist = await user.post("/api/events", {
+      title: "Dentista",
+      location: "Av. Santa Fe 1234",
+      notes: "Llevar estudios",
+      startsAt: "2026-11-18T10:00:00-03:00",
+      endsAt: "2026-11-18T11:00:00-03:00",
+      reminderOffsets: [60],
+    });
+    const birthday = await user.post("/api/events", {
+      title: "Cumple de mamá",
+      allDay: true,
+      startDate: "2026-11-20",
+      rrule: "FREQ=YEARLY",
+    });
+    await user.post("/api/events", { title: "Viejo", startsAt: "2026-10-01T10:00:00-03:00" }); // older than a week: stays local
+    const off = await push();
+    expect(off).toEqual({ pushed: 0, failed: 0 }); // nothing until it's turned on
+    expect(google.created).toEqual([]);
+
+    const on = await user.patch("/api/google", { copyEvents: true });
+    expect(on.status).toBe(200);
+    expect(on.body.google.copyEvents).toMatchObject({ available: true, enabled: true });
+    await push();
+    expect(google.created).toMatchObject([{ summary: "Agenda", timeZone: "America/Buenos_Aires" }]);
+    expect(String(google.created[0]?.description)).toContain("[agenda:agenda.lemydev.com]");
+    const cal = agendaCalendar();
+    expect([...cal.events.keys()].sort()).toEqual([dentist.body.id, birthday.body.id].map((id: string) => id.replace(/-/g, "")).sort());
+    expect(cal.events.get(dentist.body.id.replace(/-/g, ""))).toMatchObject({
+      summary: "Dentista",
+      description: "Llevar estudios",
+      location: "Av. Santa Fe 1234",
+      start: { dateTime: "2026-11-18T13:00:00.000Z", timeZone: "America/Buenos_Aires" },
+      end: { dateTime: "2026-11-18T14:00:00.000Z", timeZone: "America/Buenos_Aires" },
+      reminders: { useDefault: false, overrides: [] },
+      extendedProperties: { private: { agendaEventId: dentist.body.id } },
+    });
+    expect(cal.events.get(birthday.body.id.replace(/-/g, ""))).toMatchObject({
+      start: { date: "2026-11-20" },
+      end: { date: "2026-11-21" },
+      recurrence: ["RRULE:FREQ=YEARLY"],
+    });
+    expect((await user.get("/api/calendars")).body.google.copyEvents).toMatchObject({ pending: 0, failed: 0 });
+
+    // the read sync skips it: no "Agenda" source, no event twice
+    await syncCalendars(getDb(), now(), { force: true });
+    const status = (await user.get("/api/calendars")).body;
+    expect(status.sources.map((s: { name: string }) => s.name)).not.toContain("Agenda");
+    expect(await titles(user)).toEqual(["Daily", "Cumple", "Dentista", "Cumple de mamá"]);
+
+    // edits and deletes follow; nothing pending = no calls
+    await user.patch(`/api/events/${dentist.body.id}`, { title: "Dentista (Dr. Pérez)" });
+    await user.del(`/api/events/${birthday.body.id}`);
+    expect(await push()).toEqual({ pushed: 2, failed: 0 });
+    expect([...cal.events.values()].map((e) => e.summary)).toEqual(["Dentista (Dr. Pérez)"]);
+    google.calls = [];
+    expect(await push()).toEqual({ pushed: 0, failed: 0 });
+    expect(google.calls.filter((c) => c.includes("/events"))).toEqual([]);
+  });
+
+  it("an older connection lacks the permission: 409 until Lemy reconnects (which keeps the setting)", async () => {
+    google.grantPush = false;
+    const user = await connect();
+    expect((await user.get("/api/calendars")).body.google.copyEvents.available).toBe(false);
+    const r = await user.patch("/api/google", { copyEvents: true });
+    expect(r.status).toBe(409);
+    expect(r.body.error.message).toMatch(/Volvé a conectar/);
+
+    google.grantPush = true;
+    const go = new URL((await user.get("/api/google/connect")).headers.get("location") ?? "");
+    await user.get(`/api/google/callback?code=good-code&state=${go.searchParams.get("state")}`);
+    expect((await user.patch("/api/google", { copyEvents: true })).status).toBe(200);
+    // reconnecting again keeps it on and keeps the calendar
+    await push();
+    const go2 = new URL((await user.get("/api/google/connect")).headers.get("location") ?? "");
+    await user.get(`/api/google/callback?code=good-code&state=${go2.searchParams.get("state")}`);
+    const [cred] = await getDb().select().from(googleCredential);
+    expect(cred).toMatchObject({ pushEnabled: true, agendaCalendarId: agendaCalendar().id });
+  });
+
+  it("a rejected event backs off; a deleted calendar is created again; disconnecting leaves it in Google", async () => {
+    const user = await connect();
+    await user.patch("/api/google", { copyEvents: true });
+    await push(); // the pass the switch started (creates the calendar)
+    await user.post("/api/events", { title: "Bien", startsAt: "2026-11-18T10:00:00-03:00" });
+    google.rejectTitle = "Mala";
+    await user.post("/api/events", { title: "Mala", startsAt: "2026-11-18T12:00:00-03:00" });
+    expect(await push()).toMatchObject({ failed: 1 });
+    expect((await user.get("/api/calendars")).body.google.copyEvents).toMatchObject({ pending: 1, failed: 1 });
+    google.calls = [];
+    await push(); // backing off: not retried right away
+    expect(google.calls.filter((c) => c.includes("/events"))).toEqual([]);
+
+    // Lemy deleted "Agenda" in Google: the next passes create it again and copy everything
+    google.rejectTitle = "";
+    google.written.clear();
+    google.calendars = google.calendars.filter((c) => !c.description);
+    setNow("2026-11-16T09:00:00-03:00");
+    await user.post("/api/events", { title: "Nuevo", startsAt: "2026-11-19T10:00:00-03:00" });
+    await push();
+    await push();
+    expect(google.created).toHaveLength(2);
+    expect([...agendaCalendar().events.values()].map((e) => e.summary).sort()).toEqual(["Bien", "Mala", "Nuevo"]);
+
+    expect((await user.del("/api/google")).status).toBe(204);
+    expect(agendaCalendar().events.size).toBe(3); // still in Google
+    expect(await getDb().select().from(googleEventPush)).toEqual([]);
   });
 });
 

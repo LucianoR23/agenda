@@ -232,6 +232,7 @@ export const handlers: Record<string, Handler> = {
   addIcalCalendar: async (ctx, { body }) => json(201, await calendars.addIcal(ctx, body)),
   syncCalendars: async (ctx, { body }) => json(200, await calendars.syncNow(ctx, body)),
   googleConnect: async (ctx) => calendars.googleConnect(ctx),
+  updateGoogleSettings: async (ctx, { body }) => json(200, await calendars.updateGoogleSettings(ctx, body)),
   googleCallback: async (ctx, { query }) => calendars.googleCallback(ctx, query),
   googleDisconnect: async (ctx) => {
     await calendars.googleDisconnect(ctx);

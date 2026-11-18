@@ -86,11 +86,32 @@ export const googleCredential = pgTable(
     accountHint: text(),
     /** Google rejected the refresh token (`invalid_grant`): connect again. */
     invalidAt: at(),
+    /** Copy local events to the "Agenda" calendar in Google (needs the calendar.app.created scope). */
+    pushEnabled: boolean().notNull().default(false),
+    /** The "Agenda" calendar the app created in Google (kept across reconnects; excluded from the read sync). */
+    agendaCalendarId: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [check("google_credential_singleton", sql`${t.singleton}`)],
 );
+
+/**
+ * Where each local event stands in the "Agenda" calendar in Google. Kept apart from `event` because every UPDATE of
+ * an event bumps its version (trigger): pending = the event's version differs from `pushedVersion`.
+ */
+export const googleEventPush = pgTable("google_event_push", {
+  eventId: uuid()
+    .primaryKey()
+    .references(() => event.id, { onDelete: "cascade" }),
+  /** The event version last written to Google; null = never written. */
+  pushedVersion: integer(),
+  pushedAt: at(),
+  lastError: text(),
+  attempts: integer().notNull().default(0),
+  /** Backoff after a failure: not retried before this. */
+  nextAttemptAt: at(),
+});
 
 /** A synced Google/iCal event instance (recurring events are expanded). Read-only through the API. */
 export const externalEvent = pgTable(
